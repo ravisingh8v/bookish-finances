@@ -14,13 +14,224 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      book_members: {
+        Row: {
+          book_id: string
+          id: string
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_members_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "expense_books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          book_id: string | null
+          color: string
+          created_at: string
+          created_by: string | null
+          icon: string
+          id: string
+          is_default: boolean
+          name: string
+        }
+        Insert: {
+          book_id?: string | null
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          icon?: string
+          id?: string
+          is_default?: boolean
+          name: string
+        }
+        Update: {
+          book_id?: string | null
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          icon?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "expense_books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expense_books: {
+        Row: {
+          color: string
+          created_at: string
+          created_by: string
+          currency: string
+          description: string | null
+          icon: string
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string
+          created_at?: string
+          created_by: string
+          currency?: string
+          description?: string | null
+          icon?: string
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string
+          created_at?: string
+          created_by?: string
+          currency?: string
+          description?: string | null
+          icon?: string
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      expenses: {
+        Row: {
+          amount: number
+          book_id: string
+          category_id: string | null
+          created_at: string
+          created_by: string
+          date: string
+          expense_type: string
+          id: string
+          notes: string | null
+          paid_by: string
+          payment_method: string | null
+          tags: string[] | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          book_id: string
+          category_id?: string | null
+          created_at?: string
+          created_by: string
+          date?: string
+          expense_type?: string
+          id?: string
+          notes?: string | null
+          paid_by: string
+          payment_method?: string | null
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          book_id?: string
+          category_id?: string | null
+          created_at?: string
+          created_by?: string
+          date?: string
+          expense_type?: string
+          id?: string
+          notes?: string | null
+          paid_by?: string
+          payment_method?: string | null
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "expense_books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          email: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          email?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      is_book_member: {
+        Args: { _book_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_book_owner: {
+        Args: { _book_id: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       [_ in never]: never
