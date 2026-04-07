@@ -47,14 +47,14 @@ CREATE OR REPLACE FUNCTION public.is_book_owner(_user_id UUID, _book_id UUID)
 RETURNS BOOLEAN LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
 AS $$ SELECT EXISTS (SELECT 1 FROM public.book_members WHERE user_id = _user_id AND book_id = _book_id AND role = 'owner') $$;
 
-CREATE POLICY "Members can view their books" ON public.expense_books FOR SELECT TO authenticated USING (public.is_book_member(auth.uid(), id));
-CREATE POLICY "Users can create books" ON public.expense_books FOR INSERT TO authenticated WITH CHECK (auth.uid() = created_by);
-CREATE POLICY "Owners can update books" ON public.expense_books FOR UPDATE TO authenticated USING (public.is_book_owner(auth.uid(), id));
-CREATE POLICY "Owners can delete books" ON public.expense_books FOR DELETE TO authenticated USING (public.is_book_owner(auth.uid(), id));
+-- CREATE POLICY "Members can view their books" ON public.expense_books FOR SELECT TO authenticated USING (public.is_book_member(auth.uid(), id));
+-- CREATE POLICY "Users can create books" ON public.expense_books FOR INSERT TO authenticated WITH CHECK (auth.uid() = created_by);
+-- CREATE POLICY "Owners can update books" ON public.expense_books FOR UPDATE TO authenticated USING (public.is_book_owner(auth.uid(), id));
+-- CREATE POLICY "Owners can delete books" ON public.expense_books FOR DELETE TO authenticated USING (public.is_book_owner(auth.uid(), id));
 
-CREATE POLICY "Members can view book members" ON public.book_members FOR SELECT TO authenticated USING (public.is_book_member(auth.uid(), book_id));
-CREATE POLICY "Can manage members" ON public.book_members FOR INSERT TO authenticated WITH CHECK (public.is_book_owner(auth.uid(), book_id) OR auth.uid() = user_id);
-CREATE POLICY "Can remove members" ON public.book_members FOR DELETE TO authenticated USING (public.is_book_owner(auth.uid(), book_id) OR auth.uid() = user_id);
+-- CREATE POLICY "Members can view book members" ON public.book_members FOR SELECT TO authenticated USING (public.is_book_member(auth.uid(), book_id));
+-- CREATE POLICY "Can manage members" ON public.book_members FOR INSERT TO authenticated WITH CHECK (public.is_book_owner(auth.uid(), book_id) OR auth.uid() = user_id);
+-- CREATE POLICY "Can remove members" ON public.book_members FOR DELETE TO authenticated USING (public.is_book_owner(auth.uid(), book_id) OR auth.uid() = user_id);
 
 CREATE TABLE public.categories (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
