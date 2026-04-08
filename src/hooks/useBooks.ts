@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 
 export function useBooks() {
@@ -11,8 +11,9 @@ export function useBooks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("expense_books")
-        .select("*, book_members(user_id, role)")
-        .order("created_at", { ascending: false });
+        .select("*,  book_members!inner(user_id,role)")
+        .order("created_at", { ascending: false })
+        .eq("book_members.user_id", user!.id);
       if (error) throw error;
       return data;
     },
@@ -55,9 +56,11 @@ export function useBooks() {
   });
 
   // Helper: check if current user is owner of a book
-  const isBookOwner = (book: { book_members: { user_id: string; role: string }[] }) => {
+  const isBookOwner = (book: {
+    book_members: { user_id: string; role: string }[];
+  }) => {
     return book.book_members?.some(
-      (m) => m.user_id === user?.id && m.role === "owner"
+      (m) => m.user_id === user?.id && m.role === "owner",
     );
   };
 
