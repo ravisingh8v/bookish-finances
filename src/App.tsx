@@ -29,6 +29,7 @@ const App = () => (
             <Route path="/books/:bookId" element={<BookDetail />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
