@@ -15,6 +15,7 @@ export function useBooks() {
         .order("created_at", { ascending: false })
         .eq("book_members.user_id", user!.id);
       if (error) throw error;
+      console.log(data);
       return data;
     },
     enabled: !!user,

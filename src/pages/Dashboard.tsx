@@ -18,9 +18,10 @@ export default function Dashboard() {
       const { data: expenses } = await supabase
         .from("expenses")
         .select(
-          "amount, expense_type, expense_books!inner(id,name,book_members!inner(user_id,role))",
+          "amount , expense_type,  expense_books!inner(id,name,book_members!inner(user_id,role))",
         )
-        .eq("expense_books.book_members.user_id", user.id);
+        .eq("expense_books.book_members.user_id", user.id)
+        .eq("paid_by", user.id);
       const totalExpense =
         expenses
           ?.filter((e) => e.expense_type === "debit")

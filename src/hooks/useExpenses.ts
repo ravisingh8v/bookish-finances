@@ -1,5 +1,5 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 
 export interface Expense {
@@ -18,7 +18,10 @@ export interface Expense {
   created_at: string;
   updated_at: string;
   categories: { name: string; icon: string; color: string } | null;
-  creator_profile?: { display_name: string | null; email: string | null } | null;
+  creator_profile?: {
+    display_name: string | null;
+    email: string | null;
+  } | null;
   payer_profile?: { display_name: string | null; email: string | null } | null;
 }
 
@@ -33,7 +36,7 @@ export function useExpenses(bookId: string) {
         .from("expenses")
         .select("*, categories(name, icon, color)")
         .eq("book_id", bookId)
-        .order("date", { ascending: false });
+        .order("created_at", { ascending: false });
       if (error) throw error;
 
       // Fetch profiles for all unique user ids (created_by + paid_by)
