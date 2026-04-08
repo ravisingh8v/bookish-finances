@@ -20,7 +20,13 @@ export function useBooks() {
   });
 
   const createBook = useMutation({
-    mutationFn: async (book: { name: string; description?: string; currency?: string; color?: string; icon?: string }) => {
+    mutationFn: async (book: {
+      name: string;
+      description?: string;
+      currency?: string;
+      color?: string;
+      icon?: string;
+    }) => {
       const { data, error } = await supabase
         .from("expense_books")
         .insert({ ...book, created_by: user!.id })
@@ -29,7 +35,9 @@ export function useBooks() {
       if (error) throw error;
 
       // Add creator as owner
-      await supabase.from("book_members").insert({ book_id: data.id, user_id: user!.id, role: "owner" });
+      await supabase
+        .from("book_members")
+        .insert({ book_id: data.id, user_id: user!.id, role: "owner" });
       return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
@@ -37,11 +45,27 @@ export function useBooks() {
 
   const deleteBook = useMutation({
     mutationFn: async (bookId: string) => {
-      const { error } = await supabase.from("expense_books").delete().eq("id", bookId);
+      const { error } = await supabase
+        .from("expense_books")
+        .delete()
+        .eq("id", bookId);
       if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
   });
 
-  return { books: booksQuery.data ?? [], isLoading: booksQuery.isLoading, createBook, deleteBook };
+  // Helper: check if current user is owner of a book
+  const isBookOwner = (book: { book_members: { user_id: string; role: string }[] }) => {
+    return book.book_members?.some(
+      (m) => m.user_id === user?.id && m.role === "owner"
+    );
+  };
+
+  return {
+    books: booksQuery.data ?? [],
+    isLoading: booksQuery.isLoading,
+    createBook,
+    deleteBook,
+    isBookOwner,
+  };
 }

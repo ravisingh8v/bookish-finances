@@ -1,0 +1,3 @@
+
+ALTER TABLE public.expense_books ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.book_members ENABLE ROW LEVEL SECURITY;
