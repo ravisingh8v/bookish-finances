@@ -528,7 +528,7 @@ export default function BookDetail() {
                           </p>
                           {canDelete && (
                             <>
-                              <DropdownMenu modal dir="rtl">
+                              <DropdownMenu modal>
                                 <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none">
                                   <EllipsisVertical className="h-4 w-4" />
                                 </DropdownMenuTrigger>
