@@ -1,9 +1,26 @@
-import { LayoutDashboard, BookOpen, BarChart3, Settings, LogOut, Plus } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
-import { useLocation, useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel, SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
+  SidebarGroupLabel,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  BarChart3,
+  BookOpen,
+  LayoutDashboard,
+  LogOut,
+  Settings,
+} from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
@@ -21,12 +38,20 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarContent>
-        <div className={`px-4 py-5 ${collapsed ? "px-2" : ""}`}>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">E</span>
+        <div
+          className={`px-4 py-5 ${collapsed ? "px-2 pl-2" : ""} flex justify-between`}
+        >
+          <div className="flex items-center gap-2 flex-nowrap">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-nowrap flex-shrink-0">
+              <span className="text-primary-foreground font-bold text-sm text-nowrap">
+                BF
+              </span>
             </div>
-            {!collapsed && <span className="font-display font-bold text-lg">ExpenseFlow</span>}
+            {!collapsed && (
+              <span className="font-display font-bold text-lg text-nowrap">
+                Bookish Finance
+              </span>
+            )}
           </div>
         </div>
 
@@ -37,7 +62,12 @@ export function AppSidebar() {
               {mainItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
-                    <NavLink to={item.url} end={item.url === "/"} className="hover:bg-muted/50" activeClassName="bg-primary/10 text-primary font-medium">
+                    <NavLink
+                      to={item.url}
+                      end={item.url === "/"}
+                      className="hover:bg-muted/50"
+                      activeClassName="bg-primary/10 text-primary font-medium"
+                    >
                       <item.icon className="mr-2 h-4 w-4" />
                       {!collapsed && <span>{item.title}</span>}
                     </NavLink>
@@ -48,8 +78,13 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="p-3">
-        <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-destructive" onClick={() => signOut()}>
+      <SidebarFooter className={`p-3 ${collapsed ? "pl-0" : ""}`}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground hover:bg-red-50 hover:text-destructive"
+          onClick={() => signOut()}
+        >
           <LogOut className="h-4 w-4 mr-2" />
           {!collapsed && "Sign Out"}
         </Button>

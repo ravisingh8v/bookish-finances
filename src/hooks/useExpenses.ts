@@ -34,7 +34,7 @@ export function useExpenses(bookId: string) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("expenses")
-        .select("*, categories(name, icon, color)")
+        .select(`*, categories(name, icon, color)`)
         .eq("book_id", bookId)
         .order("created_at", { ascending: false });
       if (error) throw error;

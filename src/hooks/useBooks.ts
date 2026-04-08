@@ -11,11 +11,12 @@ export function useBooks() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("expense_books")
-        .select("*,  book_members!inner(user_id,role)")
+        .select(
+          "*, members:book_members(user_id, role), my_access:book_members!inner(user_id, role)",
+        )
         .order("created_at", { ascending: false })
-        .eq("book_members.user_id", user!.id);
+        .eq("my_access.user_id", user!.id);
       if (error) throw error;
-      console.log(data);
       return data;
     },
     enabled: !!user,
@@ -58,9 +59,9 @@ export function useBooks() {
 
   // Helper: check if current user is owner of a book
   const isBookOwner = (book: {
-    book_members: { user_id: string; role: string }[];
+    members: { user_id: string; role: string }[];
   }) => {
-    return book.book_members?.some(
+    return book.members?.some(
       (m) => m.user_id === user?.id && m.role === "owner",
     );
   };

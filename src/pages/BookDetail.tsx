@@ -1,14 +1,7 @@
-import { useState } from "react";
-import { useParams, Link, Navigate } from "react-router-dom";
-import { DashboardLayout } from "@/components/DashboardLayout";
-import { useExpenses, useCategories } from "@/hooks/useExpenses";
-import { useBookMembers } from "@/hooks/useBookMembers";
-import { useAuth } from "@/hooks/useAuth";
 import { BookMembers } from "@/components/BookMembers";
-import { Card, CardContent } from "@/components/ui/card";
+import { DashboardLayout } from "@/components/DashboardLayout";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +9,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -24,40 +19,73 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/hooks/useAuth";
+import { useBookMembers } from "@/hooks/useBookMembers";
+import { useCategories, useExpenses } from "@/hooks/useExpenses";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuPortal,
+  DropdownMenuTrigger,
+} from "@radix-ui/react-dropdown-menu";
+import { useQuery } from "@tanstack/react-query";
+import { motion } from "framer-motion";
 import {
   ArrowLeft,
+  Edit,
+  EllipsisVertical,
+  Loader2,
   Plus,
+  Search,
+  ShieldAlert,
   Trash2,
   TrendingDown,
   TrendingUp,
-  Loader2,
-  Search,
   Users,
-  ShieldAlert,
 } from "lucide-react";
+import { useState } from "react";
+import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { motion } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
 
-const PAYMENT_METHODS = ["cash", "card", "upi", "bank_transfer", "wallet", "other"];
+const PAYMENT_METHODS = [
+  "cash",
+  "card",
+  "upi",
+  "bank_transfer",
+  "wallet",
+  "other",
+];
 const EXPENSE_TYPES = [
-  { value: "debit", label: "Expense", icon: TrendingDown, color: "text-destructive" },
+  {
+    value: "debit",
+    label: "Expense",
+    icon: TrendingDown,
+    color: "text-destructive",
+  },
   { value: "credit", label: "Income", icon: TrendingUp, color: "text-success" },
 ];
 
 function getInitials(name?: string | null) {
   if (!name) return "?";
-  return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
 }
 
 const getCurrencySymbol = (c: string) =>
-  ({ INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" }[c] ?? c + " ");
+  ({ INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" })[c] ?? c + " ";
 
 export default function BookDetail() {
   const { bookId } = useParams<{ bookId: string }>();
   const { user } = useAuth();
-  const { expenses, isLoading, createExpense, deleteExpense } = useExpenses(bookId!);
+  const { expenses, isLoading, createExpense, deleteExpense } = useExpenses(
+    bookId!,
+  );
   const { data: categories } = useCategories();
   const { members, isOwner, currentUserRole } = useBookMembers(bookId!);
   const [open, setOpen] = useState(false);
@@ -99,42 +127,68 @@ export default function BookDetail() {
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <ShieldAlert className="h-12 w-12 text-muted-foreground" />
           <h2 className="text-xl font-display font-bold">Access Denied</h2>
-          <p className="text-muted-foreground">You don't have access to this book or it doesn't exist.</p>
-          <Link to="/books"><Button variant="outline">Back to Books</Button></Link>
+          <p className="text-muted-foreground">
+            You don't have access to this book or it doesn't exist.
+          </p>
+          <Link to="/books">
+            <Button variant="outline">Back to Books</Button>
+          </Link>
         </div>
       </DashboardLayout>
     );
   }
 
   const resetForm = () => {
-    setTitle(""); setAmount(""); setDate(new Date().toISOString().split("T")[0]);
-    setCategoryId(""); setExpenseType("debit"); setPaymentMethod("cash"); setNotes("");
+    setTitle("");
+    setAmount("");
+    setDate(new Date().toISOString().split("T")[0]);
+    setCategoryId("");
+    setExpenseType("debit");
+    setPaymentMethod("cash");
+    setNotes("");
   };
 
   const handleCreate = async () => {
-    if (!title.trim()) { toast.error("Title is required"); return; }
-    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) { toast.error("Valid amount is required"); return; }
+    if (!title.trim()) {
+      toast.error("Title is required");
+      return;
+    }
+    if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
+      toast.error("Valid amount is required");
+      return;
+    }
     try {
       await createExpense.mutateAsync({
-        title: title.trim(), amount: Number(amount), date,
-        category_id: categoryId || undefined, expense_type: expenseType,
-        payment_method: paymentMethod, notes: notes.trim() || undefined,
+        title: title.trim(),
+        amount: Number(amount),
+        date,
+        category_id: categoryId || undefined,
+        expense_type: expenseType,
+        payment_method: paymentMethod,
+        notes: notes.trim() || undefined,
       });
       toast.success("Expense added!");
       setOpen(false);
       resetForm();
-    } catch (e: any) { toast.error(e.message); }
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const filtered = expenses.filter((e) => {
-    if (search && !e.title.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !e.title.toLowerCase().includes(search.toLowerCase()))
+      return false;
     if (filterType !== "all" && e.expense_type !== filterType) return false;
     if (filterMember !== "all" && e.created_by !== filterMember) return false;
     return true;
   });
 
-  const totalIncome = expenses.filter((e) => e.expense_type === "credit").reduce((s, e) => s + Number(e.amount), 0);
-  const totalExpense = expenses.filter((e) => e.expense_type === "debit").reduce((s, e) => s + Number(e.amount), 0);
+  const totalIncome = expenses
+    .filter((e) => e.expense_type === "credit")
+    .reduce((s, e) => s + Number(e.amount), 0);
+  const totalExpense = expenses
+    .filter((e) => e.expense_type === "debit")
+    .reduce((s, e) => s + Number(e.amount), 0);
   const cur = getCurrencySymbol(book?.currency ?? "INR");
 
   return (
@@ -142,54 +196,137 @@ export default function BookDetail() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3">
-          <Link to="/books"><Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button></Link>
+          <Link to="/books">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-display font-bold truncate">{book?.name ?? "Loading..."}</h1>
-            {book?.description && <p className="text-muted-foreground text-sm truncate">{book.description}</p>}
+            <h1 className="text-2xl font-display font-bold truncate">
+              {book?.name ?? "Loading..."}
+            </h1>
+            {book?.description && (
+              <p className="text-muted-foreground text-sm truncate">
+                {book.description}
+              </p>
+            )}
           </div>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setShowMembers(!showMembers)}>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setShowMembers(!showMembers)}
+          >
             <Users className="h-4 w-4" />
             <span className="hidden sm:inline">{members.length}</span>
           </Button>
           {canEdit && (
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Add</Button></DialogTrigger>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add
+                </Button>
+              </DialogTrigger>
               <DialogContent className="max-h-[90vh] overflow-y-auto">
-                <DialogHeader><DialogTitle>Add Expense</DialogTitle></DialogHeader>
+                <DialogHeader>
+                  <DialogTitle>Add Expense</DialogTitle>
+                </DialogHeader>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-2">
                     {EXPENSE_TYPES.map((t) => (
-                      <button key={t.value} onClick={() => setExpenseType(t.value)}
+                      <button
+                        key={t.value}
+                        onClick={() => setExpenseType(t.value)}
                         className={`p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2
-                          ${expenseType === t.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/30"}`}>
-                        <t.icon className="h-4 w-4" />{t.label}
+                          ${expenseType === t.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/30"}`}
+                      >
+                        <t.icon className="h-4 w-4" />
+                        {t.label}
                       </button>
                     ))}
                   </div>
-                  <div className="space-y-2"><Label>Title</Label><Input placeholder="What did you spend on?" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+                  <div className="space-y-2">
+                    <Label>Title</Label>
+                    <Input
+                      placeholder="What did you spend on?"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                    />
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label>Amount</Label><Input type="number" placeholder="0.00" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
-                    <div className="space-y-2"><Label>Date</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>
+                    <div className="space-y-2">
+                      <Label>Amount</Label>
+                      <Input
+                        type="number"
+                        placeholder="0.00"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Date</Label>
+                      <Input
+                        type="date"
+                        value={date}
+                        onChange={(e) => setDate(e.target.value)}
+                      />
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Category</Label>
                       <Select value={categoryId} onValueChange={setCategoryId}>
-                        <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                        <SelectContent>{categories?.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {categories?.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
                     <div className="space-y-2">
                       <Label>Payment</Label>
-                      <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{PAYMENT_METHODS.map((m) => <SelectItem key={m} value={m}>{m.replace("_", " ").replace(/\b\w/g, (c) => c.toUpperCase())}</SelectItem>)}</SelectContent>
+                      <Select
+                        value={paymentMethod}
+                        onValueChange={setPaymentMethod}
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PAYMENT_METHODS.map((m) => (
+                            <SelectItem key={m} value={m}>
+                              {m
+                                .replace("_", " ")
+                                .replace(/\b\w/g, (c) => c.toUpperCase())}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
                   </div>
-                  <div className="space-y-2"><Label>Notes (optional)</Label><Textarea placeholder="Any additional details..." value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} /></div>
-                  <Button className="w-full" onClick={handleCreate} disabled={createExpense.isPending}>
-                    {createExpense.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  <div className="space-y-2">
+                    <Label>Notes (optional)</Label>
+                    <Textarea
+                      placeholder="Any additional details..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      rows={2}
+                    />
+                  </div>
+                  <Button
+                    className="w-full"
+                    onClick={handleCreate}
+                    disabled={createExpense.isPending}
+                  >
+                    {createExpense.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : null}
                     Add {expenseType === "credit" ? "Income" : "Expense"}
                   </Button>
                 </div>
@@ -203,28 +340,50 @@ export default function BookDetail() {
           <div className="flex-1 space-y-6 min-w-0">
             {/* Summary Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Card className="glass"><CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Income</p>
-                <p className="text-xl font-display font-bold text-success">{cur}{totalIncome.toLocaleString()}</p>
-              </CardContent></Card>
-              <Card className="glass"><CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Expenses</p>
-                <p className="text-xl font-display font-bold text-destructive">{cur}{totalExpense.toLocaleString()}</p>
-              </CardContent></Card>
-              <Card className="glass"><CardContent className="p-4">
-                <p className="text-sm text-muted-foreground">Balance</p>
-                <p className="text-xl font-display font-bold">{cur}{(totalIncome - totalExpense).toLocaleString()}</p>
-              </CardContent></Card>
+              <Card className="glass">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Income</p>
+                  <p className="text-xl font-display font-bold text-success">
+                    {cur}
+                    {totalIncome.toLocaleString()}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="glass">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Expenses</p>
+                  <p className="text-xl font-display font-bold text-destructive">
+                    {cur}
+                    {totalExpense.toLocaleString()}
+                  </p>
+                </CardContent>
+              </Card>
+              <Card className="glass">
+                <CardContent className="p-4">
+                  <p className="text-sm text-muted-foreground">Balance</p>
+                  <p className="text-xl font-display font-bold">
+                    {cur}
+                    {(totalIncome - totalExpense).toLocaleString()}
+                  </p>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Filters */}
             <div className="flex flex-col sm:flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search expenses..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+                <Input
+                  placeholder="Search expenses..."
+                  className="pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               </div>
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-full sm:w-36"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="w-full sm:w-36">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Types</SelectItem>
                   <SelectItem value="debit">Expenses</SelectItem>
@@ -233,12 +392,16 @@ export default function BookDetail() {
               </Select>
               {members.length > 1 && (
                 <Select value={filterMember} onValueChange={setFilterMember}>
-                  <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-full sm:w-44">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Members</SelectItem>
                     {members.map((m) => (
                       <SelectItem key={m.user_id} value={m.user_id}>
-                        {m.profile?.display_name || m.profile?.email || "Unknown"}
+                        {m.profile?.display_name ||
+                          m.profile?.email ||
+                          "Unknown"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -248,55 +411,173 @@ export default function BookDetail() {
 
             {/* Expense List */}
             {isLoading ? (
-              <div className="space-y-3">{[1, 2, 3].map((i) => <div key={i} className="h-20 rounded-xl bg-muted animate-pulse" />)}</div>
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div
+                    key={i}
+                    className="h-20 rounded-xl bg-muted animate-pulse"
+                  />
+                ))}
+              </div>
             ) : filtered.length === 0 ? (
-              <Card className="glass"><CardContent className="p-8 text-center">
-                <p className="text-muted-foreground">{expenses.length === 0 ? "No expenses yet. Add your first one!" : "No matching expenses found."}</p>
-              </CardContent></Card>
+              <Card className="glass">
+                <CardContent className="p-8 text-center">
+                  <p className="text-muted-foreground">
+                    {expenses.length === 0
+                      ? "No expenses yet. Add your first one!"
+                      : "No matching expenses found."}
+                  </p>
+                </CardContent>
+              </Card>
             ) : (
               <div className="space-y-2">
                 {filtered.map((expense, i) => {
                   const canDelete = isOwner || expense.created_by === user?.id;
                   return (
-                    <motion.div key={expense.id} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.03 }}>
-                      <Card className="glass hover:shadow-md transition-shadow group">
+                    <motion.div
+                      key={expense.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.03 }}
+                    >
+                      <Card className="glass hover:shadow-md transition-shadow group overflow-hidden">
+                        <span
+                          className={`absolute right-0 top-[0px] rounded-l-full px-2 font-[500] text-sm`}
+                          style={{
+                            backgroundColor: expense.categories.color
+                              ? expense.categories.color + 20
+                              : "#0000080",
+                            color: expense.categories.color
+                              ? expense.categories.color
+                              : "#00000",
+                            // color: `color-contrast(${expense.categories.color} vs white, black)`,
+                            // filter: "invert()",
+                          }}
+                        >
+                          {expense.categories?.name ?? "Uncategorized"}
+                        </span>
                         <CardContent className="p-4 flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                            style={{ backgroundColor: (expense.categories?.color ?? "#6B7280") + "20", color: expense.categories?.color ?? "#6B7280" }}>
-                            {expense.expense_type === "credit" ? <TrendingUp className="h-5 w-5" /> : <TrendingDown className="h-5 w-5" />}
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                            style={{
+                              backgroundColor:
+                                (expense.categories?.color ?? "#6B7280") + "20",
+                              color: expense.categories?.color ?? "#6B7280",
+                            }}
+                          >
+                            {expense.expense_type === "credit" ? (
+                              <TrendingUp className="h-5 w-5" />
+                            ) : (
+                              <TrendingDown className="h-5 w-5" />
+                            )}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">{expense.title}</p>
+                            <p className="font-medium truncate">
+                              {expense.title}
+                            </p>
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
-                              <span>{expense.categories?.name ?? "Uncategorized"}</span>
-                              <span>•</span>
-                              <span>{new Date(expense.date).toLocaleDateString()}</span>
-                              {expense.payment_method && <><span>•</span><span className="capitalize">{expense.payment_method}</span></>}
+                              {/* <span>
+                                {expense.categories?.name ?? "Uncategorized"}
+                              </span>
+                              <span>•</span> */}
+
+                              {expense.payment_method && (
+                                <>
+                                  <span className="capitalize">
+                                    {expense.payment_method}
+                                  </span>
+                                  <span>•</span>
+                                </>
+                              )}
+                              <span>
+                                {new Date(expense.date).toLocaleDateString()}
+                              </span>
                             </div>
                             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 mt-0.5">
                               <span className="inline-flex items-center gap-1">
                                 <span className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold">
-                                  {getInitials(expense.creator_profile?.display_name)}
+                                  {getInitials(
+                                    expense.creator_profile?.display_name,
+                                  )}
                                 </span>
-                                Added by {expense.creator_profile?.display_name || "Unknown"}
+                                Added by{" "}
+                                {expense.created_by === user!.id
+                                  ? "You"
+                                  : expense.creator_profile?.display_name ||
+                                    "Unknown"}
                               </span>
-                              {expense.paid_by !== expense.created_by && expense.payer_profile && (
-                                <>
-                                  <span>•</span>
-                                  <span>Paid by {expense.payer_profile.display_name || "Unknown"}</span>
-                                </>
-                              )}
+                              {expense.paid_by !== expense.created_by &&
+                                expense.payer_profile && (
+                                  <>
+                                    <span>•</span>
+                                    <span>
+                                      Paid by{" "}
+                                      {expense.payer_profile.display_name ||
+                                        "Unknown"}
+                                    </span>
+                                  </>
+                                )}
                             </div>
                           </div>
-                          <p className={`font-display font-bold text-lg shrink-0 ${expense.expense_type === "credit" ? "text-success" : "text-destructive"}`}>
-                            {expense.expense_type === "credit" ? "+" : "-"}{cur}{Number(expense.amount).toLocaleString()}
+                          <p
+                            className={`font-display font-bold text-lg shrink-0 ${expense.expense_type === "credit" ? "text-success" : "text-destructive"}`}
+                          >
+                            {expense.expense_type === "credit" ? "+" : "-"}
+                            {cur}
+                            {Number(expense.amount).toLocaleString()}
                           </p>
                           {canDelete && (
-                            <Button variant="ghost" size="icon"
-                              className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:text-destructive"
-                              onClick={() => { if (confirm("Delete this expense?")) deleteExpense.mutate(expense.id); }}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            <>
+                              <DropdownMenu modal dir="rtl">
+                                <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none">
+                                  <EllipsisVertical className="h-4 w-4" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuPortal>
+                                  <DropdownMenuContent
+                                    className="DropdownMenuContent p-1 bg-white text-gray-700 text-sm font-[500] z-[999]"
+                                    sideOffset={5}
+                                  >
+                                    <DropdownMenuItem
+                                      className="DropdownMenuItem p-2 rounded hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
+                                      onClick={() => {
+                                        if (confirm("Delete this expense?"))
+                                          deleteExpense.mutate(expense.id);
+                                      }}
+                                    >
+                                      <div className="flex gap-2 items-center">
+                                        <div>
+                                          <Trash2 className="h-4 w-4" />
+                                        </div>
+                                        <div>Delete</div>
+                                      </div>
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      disabled
+                                      className="DropdownMenuItem  p-2 rounded text-gray-400 focus-visible:outline-none cursor-not-allowed"
+                                    >
+                                      <div className="flex gap-2 items-center">
+                                        <div>
+                                          <Edit className="h-4 w-4" />
+                                        </div>
+                                        <div>Edit</div>
+                                      </div>
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenuPortal>
+                              </DropdownMenu>
+
+                              {/* <Button
+                                variant="ghost"
+                                size="icon"
+                                className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:bg-red-50 hover:text-destructive"
+                                onClick={() => {
+                                  if (confirm("Delete this expense?"))
+                                    deleteExpense.mutate(expense.id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button> */}
+                            </>
                           )}
                         </CardContent>
                       </Card>

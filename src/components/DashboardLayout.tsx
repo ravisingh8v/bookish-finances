@@ -1,14 +1,19 @@
-import { ReactNode } from "react";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { Loader2 } from "lucide-react";
+import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { Loader2 } from "lucide-react";
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { session, loading, profile } = useAuth();
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-background"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
   if (!session) return <Navigate to="/auth" replace />;
 
   return (
@@ -23,10 +28,14 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
               <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
                 {profile?.display_name?.[0]?.toUpperCase() ?? "U"}
               </div>
-              <span className="text-sm font-medium hidden sm:block">{profile?.display_name ?? "User"}</span>
+              <span className="text-sm font-medium hidden sm:block">
+                {profile?.display_name ?? "User"}
+              </span>
             </div>
           </header>
-          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">{children}</main>
+          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
+            {children}
+          </main>
         </div>
       </div>
     </SidebarProvider>
