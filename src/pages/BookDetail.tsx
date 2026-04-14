@@ -348,29 +348,26 @@ export default function BookDetail() {
             {/* Summary Cards */}
             <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <Card className="glass">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Income</p>
-                  <p className="text-xl font-display font-bold text-success">
-                    {cur}
-                    {totalIncome.toLocaleString()}
+                <CardContent className="p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Income</p>
+                  <p className="text-base sm:text-xl font-display font-bold text-success truncate">
+                    {cur}{totalIncome.toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
               <Card className="glass">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Expenses</p>
-                  <p className="text-xl font-display font-bold text-destructive">
-                    {cur}
-                    {totalExpense.toLocaleString()}
+                <CardContent className="p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Expenses</p>
+                  <p className="text-base sm:text-xl font-display font-bold text-destructive truncate">
+                    {cur}{totalExpense.toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
               <Card className="glass">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Balance</p>
-                  <p className="text-xl font-display font-bold">
-                    {cur}
-                    {(totalIncome - totalExpense).toLocaleString()}
+                <CardContent className="p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Balance</p>
+                  <p className="text-base sm:text-xl font-display font-bold truncate">
+                    {cur}{(totalIncome - totalExpense).toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
