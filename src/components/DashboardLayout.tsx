@@ -40,6 +40,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             {children}
           </main>
         </div>
+        </div>
       </div>
     </SidebarProvider>
   );
