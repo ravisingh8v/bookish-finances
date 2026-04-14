@@ -18,6 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { useBookMembers } from "@/hooks/useBookMembers";
@@ -195,43 +201,43 @@ export default function BookDetail() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link to="/books">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-display font-bold truncate">
+            <h1 className="text-lg sm:text-2xl font-display font-bold truncate">
               {book?.name ?? "Loading..."}
             </h1>
             {book?.description && (
-              <p className="text-muted-foreground text-sm truncate">
+              <p className="text-muted-foreground text-xs sm:text-sm truncate">
                 {book.description}
               </p>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setShowMembers(!showMembers)}
-          >
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">{members.length}</span>
-          </Button>
-          {canEdit && (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Add Expense</DialogTitle>
-                </DialogHeader>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => setShowMembers(!showMembers)}
+            >
+              <Users className="h-4 w-4" />
+            </Button>
+            {canEdit && (
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button size="icon" className="h-9 w-9 sm:h-auto sm:w-auto sm:px-4 sm:gap-2">
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Add</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">
+                  <DialogHeader>
+                    <DialogTitle>Add Expense</DialogTitle>
+                  </DialogHeader>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-2">
                     {EXPENSE_TYPES.map((t) => (
@@ -331,39 +337,37 @@ export default function BookDetail() {
                   </Button>
                 </div>
               </DialogContent>
-            </Dialog>
-          )}
+              </Dialog>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Main content */}
           <div className="flex-1 space-y-6 min-w-0">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <Card className="glass">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Income</p>
-                  <p className="text-xl font-display font-bold text-success">
-                    {cur}
-                    {totalIncome.toLocaleString()}
+                <CardContent className="p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Income</p>
+                  <p className="text-base sm:text-xl font-display font-bold text-success truncate">
+                    {cur}{totalIncome.toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
               <Card className="glass">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Expenses</p>
-                  <p className="text-xl font-display font-bold text-destructive">
-                    {cur}
-                    {totalExpense.toLocaleString()}
+                <CardContent className="p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Expenses</p>
+                  <p className="text-base sm:text-xl font-display font-bold text-destructive truncate">
+                    {cur}{totalExpense.toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
               <Card className="glass">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Balance</p>
-                  <p className="text-xl font-display font-bold">
-                    {cur}
-                    {(totalIncome - totalExpense).toLocaleString()}
+                <CardContent className="p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground">Balance</p>
+                  <p className="text-base sm:text-xl font-display font-bold truncate">
+                    {cur}{(totalIncome - totalExpense).toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
@@ -588,12 +592,12 @@ export default function BookDetail() {
             )}
           </div>
 
-          {/* Members sidebar */}
+          {/* Members sidebar - desktop only */}
           {showMembers && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="w-full lg:w-72 shrink-0"
+              className="hidden lg:block w-72 shrink-0"
             >
               <Card className="glass sticky top-4">
                 <CardContent className="p-4">
@@ -603,6 +607,18 @@ export default function BookDetail() {
             </motion.div>
           )}
         </div>
+
+        {/* Members sheet - mobile only */}
+        <Sheet open={showMembers} onOpenChange={setShowMembers}>
+          <SheetContent side="bottom" className="lg:hidden max-h-[80vh] overflow-y-auto rounded-t-2xl">
+            <SheetHeader>
+              <SheetTitle>Members</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4">
+              <BookMembers bookId={bookId!} />
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </DashboardLayout>
   );

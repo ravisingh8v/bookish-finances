@@ -109,14 +109,24 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
     @apply bg-background text-foreground font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   h1, h2, h3, h4, h5, h6 {
     @apply font-display;
+  }
+
+  /* Prevent hover styles from sticking on touch devices */
+  @media (hover: none) {
+    .group:hover .group-hover\:opacity-100 {
+      opacity: 1;
+    }
   }
 }
 
@@ -127,5 +137,9 @@
 
   .glass-strong {
     @apply bg-card/95 backdrop-blur-2xl border border-border/60;
+  }
+
+  .touch-target {
+    @apply min-h-[44px] min-w-[44px];
   }
 }

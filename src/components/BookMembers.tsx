@@ -151,7 +151,7 @@ export function BookMembers({ bookId }: { bookId: string }) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 opacity-0 group-hover:opacity-100"
+                      className="h-7 w-7 sm:opacity-0 sm:group-hover:opacity-100"
                     >
                       <MoreVertical className="h-3.5 w-3.5" />
                     </Button>
