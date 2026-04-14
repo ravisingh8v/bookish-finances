@@ -19,7 +19,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex flex-col w-full">
+        <OfflineStatusBar />
+        <div className="flex flex-1">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center border-b border-border px-4 gap-4 bg-card/50 backdrop-blur-sm sticky top-0 z-30">
