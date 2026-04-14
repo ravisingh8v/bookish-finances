@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
+import { useOfflineSync } from "./useOfflineSync";
 
 export interface Expense {
   id: string;
@@ -28,6 +29,7 @@ export interface Expense {
 export function useExpenses(bookId: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { isOnline, queueAction } = useOfflineSync();
 
   const expensesQuery = useQuery({
     queryKey: ["expenses", bookId],
@@ -70,6 +72,15 @@ export function useExpenses(bookId: string) {
       notes?: string;
       tags?: string[];
     }) => {
+      if (!isOnline) {
+        await queueAction({
+          type: "create_expense",
+          payload: { ...expense, book_id: bookId },
+          userId: user?.id,
+        });
+        return { id: crypto.randomUUID(), ...expense, offline: true };
+      }
+
       const { data, error } = await supabase
         .from("expenses")
         .insert({
@@ -89,6 +100,15 @@ export function useExpenses(bookId: string) {
 
   const deleteExpense = useMutation({
     mutationFn: async (expenseId: string) => {
+      if (!isOnline) {
+        await queueAction({
+          type: "delete_expense",
+          payload: { expenseId },
+          userId: user?.id,
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from("expenses")
         .delete()
