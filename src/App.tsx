@@ -4,6 +4,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
+import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Books from "./pages/Books";
@@ -22,16 +23,18 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/auth" element={<Auth />} />
-            <Route path="/books" element={<Books />} />
-            <Route path="/books/:bookId" element={<BookDetail />} />
-            <Route path="/analytics" element={<Analytics />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/reset-password" element={<ResetPassword />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <OfflineSyncProvider>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/auth" element={<Auth />} />
+              <Route path="/books" element={<Books />} />
+              <Route path="/books/:bookId" element={<BookDetail />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </OfflineSyncProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>

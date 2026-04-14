@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
+import { OfflineStatusBar } from "./OfflineStatusBar";
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { session, loading, profile } = useAuth();
