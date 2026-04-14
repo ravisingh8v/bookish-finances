@@ -594,12 +594,12 @@ export default function BookDetail() {
             )}
           </div>
 
-          {/* Members sidebar */}
+          {/* Members sidebar - desktop only */}
           {showMembers && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="w-full lg:w-72 shrink-0"
+              className="hidden lg:block w-72 shrink-0"
             >
               <Card className="glass sticky top-4">
                 <CardContent className="p-4">
@@ -609,6 +609,18 @@ export default function BookDetail() {
             </motion.div>
           )}
         </div>
+
+        {/* Members sheet - mobile only */}
+        <Sheet open={showMembers} onOpenChange={setShowMembers}>
+          <SheetContent side="bottom" className="lg:hidden max-h-[80vh] overflow-y-auto rounded-t-2xl">
+            <SheetHeader>
+              <SheetTitle>Members</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4">
+              <BookMembers bookId={bookId!} />
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </DashboardLayout>
   );
