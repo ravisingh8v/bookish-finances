@@ -337,8 +337,9 @@ export default function BookDetail() {
                   </Button>
                 </div>
               </DialogContent>
-            </Dialog>
-          )}
+              </Dialog>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">
