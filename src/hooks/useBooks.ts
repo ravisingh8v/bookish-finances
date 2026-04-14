@@ -1,10 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
+import { useOfflineSync } from "./useOfflineSync";
 
 export function useBooks() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const { isOnline, queueAction } = useOfflineSync();
 
   const booksQuery = useQuery({
     queryKey: ["books"],
@@ -30,6 +32,11 @@ export function useBooks() {
       color?: string;
       icon?: string;
     }) => {
+      if (!isOnline) {
+        await queueAction({ type: "create_book", payload: book, userId: user?.id });
+        return { id: crypto.randomUUID(), ...book, offline: true };
+      }
+
       const { data, error } = await supabase
         .from("expense_books")
         .insert({ ...book, created_by: user!.id })
@@ -48,6 +55,11 @@ export function useBooks() {
 
   const deleteBook = useMutation({
     mutationFn: async (bookId: string) => {
+      if (!isOnline) {
+        await queueAction({ type: "delete_book", payload: { bookId }, userId: user?.id });
+        return;
+      }
+
       const { error } = await supabase
         .from("expense_books")
         .delete()
