@@ -346,7 +346,7 @@ export default function BookDetail() {
           {/* Main content */}
           <div className="flex-1 space-y-6 min-w-0">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <Card className="glass">
                 <CardContent className="p-4">
                   <p className="text-sm text-muted-foreground">Income</p>
