@@ -201,43 +201,43 @@ export default function BookDetail() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link to="/books">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-display font-bold truncate">
+            <h1 className="text-lg sm:text-2xl font-display font-bold truncate">
               {book?.name ?? "Loading..."}
             </h1>
             {book?.description && (
-              <p className="text-muted-foreground text-sm truncate">
+              <p className="text-muted-foreground text-xs sm:text-sm truncate">
                 {book.description}
               </p>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setShowMembers(!showMembers)}
-          >
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">{members.length}</span>
-          </Button>
-          {canEdit && (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Add Expense</DialogTitle>
-                </DialogHeader>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => setShowMembers(!showMembers)}
+            >
+              <Users className="h-4 w-4" />
+            </Button>
+            {canEdit && (
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button size="icon" className="h-9 w-9 sm:h-auto sm:w-auto sm:px-4 sm:gap-2">
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Add</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">
+                  <DialogHeader>
+                    <DialogTitle>Add Expense</DialogTitle>
+                  </DialogHeader>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-2">
                     {EXPENSE_TYPES.map((t) => (
