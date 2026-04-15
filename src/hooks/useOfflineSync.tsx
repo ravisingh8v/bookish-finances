@@ -10,6 +10,19 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { createSyncActionId, db, SyncAction } from "@/lib/db";
+import {
+  countStoredQueue,
+  getStoredExpenses,
+  getStoredQueue,
+  removeStoredBook,
+  removeStoredExpenseBucket,
+  removeStoredQueueActions,
+  renameStoredExpenseBucket,
+  setStoredExpenses,
+  updateStoredBook,
+  upsertStoredBook,
+  upsertStoredQueueAction,
+} from "@/lib/offlineJournal";
 import { useAuth } from "./useAuth";
 import { useOnlineStatus } from "./useOnlineStatus";
 
@@ -140,7 +153,17 @@ async function replaceBookReference(tempBookId: string, realBookId: string) {
     });
   }
 
-  const queuedActions = await db.syncQueue.toArray();
+  updateStoredBook<Record<string, unknown> & { id: string }>(tempBookId, (book) => ({
+    ...book,
+    id: realBookId,
+    _offline: false,
+  }));
+  renameStoredExpenseBucket<Record<string, unknown> & { book_id?: string }>(
+    tempBookId,
+    realBookId,
+  );
+
+  const queuedActions = getStoredQueue();
   await Promise.all(
     queuedActions.map(async (action) => {
       let changed = false;
@@ -167,6 +190,10 @@ async function replaceBookReference(tempBookId: string, realBookId: string) {
       }
 
       if (changed) {
+        upsertStoredQueueAction({
+          ...action,
+          payload,
+        });
         await db.syncQueue.put({
           ...action,
           payload,
@@ -233,6 +260,12 @@ async function processAction(action: SyncAction, userId: string): Promise<boolea
           },
           cachedAt: Date.now(),
         });
+        upsertStoredBook({
+          ...data,
+          members: [{ user_id: userId, role: "owner" }],
+          my_access: [{ user_id: userId, role: "owner" }],
+          _offline: false,
+        });
         break;
       }
       case "update_book": {
@@ -257,6 +290,8 @@ async function processAction(action: SyncAction, userId: string): Promise<boolea
         if (payload.bookId.startsWith("temp_")) {
           await db.books.delete(payload.bookId);
           await db.expenses.delete(payload.bookId);
+          removeStoredBook(payload.bookId);
+          removeStoredExpenseBucket(payload.bookId);
           return true;
         }
 
@@ -268,6 +303,8 @@ async function processAction(action: SyncAction, userId: string): Promise<boolea
 
         await db.books.delete(payload.bookId);
         await db.expenses.delete(payload.bookId);
+        removeStoredBook(payload.bookId);
+        removeStoredExpenseBucket(payload.bookId);
         break;
       }
       case "create_expense": {
@@ -293,23 +330,32 @@ async function processAction(action: SyncAction, userId: string): Promise<boolea
           .single();
         if (error) throw error;
 
+        const updatedExpense = {
+          ...data,
+          creator_profile: null,
+          payer_profile: null,
+          _offline: false,
+        };
         const cached = await db.expenses.get(payload.book_id);
         if (cached) {
+          const updatedExpenses = cached.expenses.map((expense) =>
+            (expense as Record<string, unknown>).id === action.tempId
+              ? updatedExpense
+              : expense,
+          );
           await db.expenses.put({
             ...cached,
-            expenses: cached.expenses.map((expense) =>
-              (expense as Record<string, unknown>).id === action.tempId
-                ? {
-                    ...data,
-                    creator_profile: null,
-                    payer_profile: null,
-                    _offline: false,
-                  }
-                : expense,
-            ),
+            expenses: updatedExpenses,
             cachedAt: Date.now(),
           });
         }
+        setStoredExpenses(
+          payload.book_id,
+          getStoredExpenses<Record<string, unknown>>(payload.book_id).map(
+            (expense) =>
+              expense.id === action.tempId ? updatedExpense : expense,
+          ),
+        );
         break;
       }
       case "update_expense": {
@@ -426,7 +472,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
   const refreshCount = useCallback(async () => {
     try {
-      setPendingCount(await db.syncQueue.count());
+      setPendingCount(countStoredQueue());
     } catch {
       setPendingCount(0);
     }
@@ -434,13 +480,15 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
   const queueAction = useCallback(
     async (action: Omit<SyncAction, "id" | "createdAt" | "retryCount">) => {
-      await db.syncQueue.put({
+      const queuedAction: SyncAction = {
         ...action,
         id: createSyncActionId(action.type),
         createdAt: Date.now(),
         retryCount: 0,
         userId: action.userId ?? user?.id,
-      });
+      };
+      upsertStoredQueueAction(queuedAction);
+      void db.syncQueue.put(queuedAction).catch(() => {});
       await refreshCount();
     },
     [refreshCount, user?.id],
@@ -448,7 +496,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
   const cancelQueuedCreate = useCallback(
     async (tempId: string) => {
-      const actions = await db.syncQueue.toArray();
+      const actions = getStoredQueue();
       const actionIds = actions
         .filter(
           (action) =>
@@ -458,7 +506,8 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
         .map((action) => action.id);
 
       if (actionIds.length > 0) {
-        await db.syncQueue.bulkDelete(actionIds);
+        removeStoredQueueActions(actionIds);
+        void db.syncQueue.bulkDelete(actionIds).catch(() => {});
         await refreshCount();
       }
     },
@@ -472,7 +521,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     setSyncStatus("syncing");
 
     try {
-      const actions = await db.syncQueue.orderBy("createdAt").toArray();
+      const actions = getStoredQueue().sort((a, b) => a.createdAt - b.createdAt);
       if (actions.length === 0) {
         setSyncStatus("idle");
         return;
@@ -482,7 +531,8 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
       for (const action of actions) {
         if (action.retryCount >= MAX_RETRY) {
-          await db.syncQueue.delete(action.id);
+          removeStoredQueueActions([action.id]);
+          void db.syncQueue.delete(action.id).catch(() => {});
           continue;
         }
 
@@ -501,18 +551,27 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
         const ok = await processAction(action, user.id);
         if (ok) {
-          await db.syncQueue.delete(action.id);
+          removeStoredQueueActions([action.id]);
+          void db.syncQueue.delete(action.id).catch(() => {});
         } else {
           failed += 1;
-          await db.syncQueue.update(action.id, {
+          const nextAction = {
+            ...action,
             retryCount: action.retryCount + 1,
             lastAttempt: Date.now(),
-          });
+          };
+          upsertStoredQueueAction(nextAction);
+          void db.syncQueue
+            .update(action.id, {
+              retryCount: nextAction.retryCount,
+              lastAttempt: nextAction.lastAttempt,
+            })
+            .catch(() => {});
         }
       }
 
       await refreshCount();
-      const remaining = await db.syncQueue.count();
+      const remaining = countStoredQueue();
 
       if (remaining === 0) {
         setSyncStatus("success");

@@ -4,6 +4,14 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/db";
 import { withNetworkTimeout } from "@/lib/network";
+import {
+  getStoredExpenses,
+  getStoredQueue,
+  removeStoredQueueActions,
+  setStoredExpenses,
+  upsertStoredQueueAction,
+  updateStoredExpenses,
+} from "@/lib/offlineJournal";
 import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
 
@@ -98,20 +106,30 @@ function optimisticExpense(
 }
 
 async function putExpenses(bookId: string, expenses: Expense[]) {
-  await db.expenses.put({
-    id: bookId,
-    expenses: expenses.slice(0, MAX_EXPENSES_CACHE),
-    cachedAt: Date.now(),
-  });
+  setStoredExpenses(bookId, expenses.slice(0, MAX_EXPENSES_CACHE));
+  void db.expenses
+    .put({
+      id: bookId,
+      expenses: expenses.slice(0, MAX_EXPENSES_CACHE),
+      cachedAt: Date.now(),
+    })
+    .catch(() => {});
 }
 
 async function updateCachedExpenses(
   bookId: string,
   updater: (expenses: Expense[]) => Expense[],
 ) {
-  const cached = await db.expenses.get(bookId);
-  const current = (cached?.expenses ?? []) as Expense[];
-  await putExpenses(bookId, updater(current));
+  const current = getStoredExpenses<Expense>(bookId);
+  const next = updater(current);
+  setStoredExpenses(bookId, next.slice(0, MAX_EXPENSES_CACHE));
+  void db.expenses
+    .put({
+      id: bookId,
+      expenses: next.slice(0, MAX_EXPENSES_CACHE),
+      cachedAt: Date.now(),
+    })
+    .catch(() => {});
 }
 
 export function useExpenses(bookId: string) {
@@ -133,11 +151,16 @@ export function useExpenses(bookId: string) {
       .get(bookId)
       .then((cached) => {
         if (!active) return;
-        setLocalExpenses((cached?.expenses ?? []) as Expense[]);
+        const cachedExpenses = (cached?.expenses ?? []) as Expense[];
+        setLocalExpenses(
+          cachedExpenses.length > 0
+            ? cachedExpenses
+            : getStoredExpenses<Expense>(bookId),
+        );
       })
       .catch(() => {
         if (!active) return;
-        setLocalExpenses([]);
+        setLocalExpenses(getStoredExpenses<Expense>(bookId));
       });
     return () => {
       active = false;
@@ -148,7 +171,10 @@ export function useExpenses(bookId: string) {
     queryKey: ["expenses", bookId],
     queryFn: async () => {
       const cached = await db.expenses.get(bookId);
-      const cachedExpenses = (cached?.expenses ?? []) as Expense[];
+      const cachedExpenses =
+        ((cached?.expenses ?? []) as Expense[]).length > 0
+          ? ((cached?.expenses ?? []) as Expense[])
+          : getStoredExpenses<Expense>(bookId);
 
       if (!user || !bookId) return [];
       if (!isOnline) return cachedExpenses;
@@ -266,7 +292,7 @@ export function useExpenses(bookId: string) {
         ),
       );
 
-      const queued = await db.syncQueue.toArray();
+      const queued = getStoredQueue();
       const pendingCreate = queued.find(
         (action) =>
           action.type === "create_expense" &&
@@ -275,14 +301,16 @@ export function useExpenses(bookId: string) {
       );
 
       if (pendingCreate) {
-        await db.syncQueue.put({
+        const nextAction = {
           ...pendingCreate,
           payload: {
             ...pendingCreate.payload,
             ...params,
             tempId: params.expenseId,
           },
-        });
+        };
+        upsertStoredQueueAction(nextAction);
+        void db.syncQueue.put(nextAction).catch(() => {});
       } else {
         await queueAction({
           type: "update_expense",
@@ -313,7 +341,7 @@ export function useExpenses(bookId: string) {
 
       if (expenseId.startsWith("temp_")) {
         await cancelQueuedCreate(expenseId);
-        const queued = await db.syncQueue.toArray();
+        const queued = getStoredQueue();
         const relatedIds = queued
           .filter(
             (action) =>
@@ -321,7 +349,8 @@ export function useExpenses(bookId: string) {
           )
           .map((action) => action.id);
         if (relatedIds.length > 0) {
-          await db.syncQueue.bulkDelete(relatedIds);
+          removeStoredQueueActions(relatedIds);
+          void db.syncQueue.bulkDelete(relatedIds).catch(() => {});
           await refreshPendingCount();
         }
         return;
@@ -378,14 +407,15 @@ export function useExpenses(bookId: string) {
       await db.deletedExpenses.delete(expenseId);
 
       if (!isOnline) {
-        const queued = await db.syncQueue.toArray();
+        const queued = getStoredQueue();
         const pendingDelete = queued.find(
           (action) =>
             action.type === "delete_expense" &&
             action.payload.expenseId === expenseId,
         );
         if (pendingDelete) {
-          await db.syncQueue.delete(pendingDelete.id);
+          removeStoredQueueActions([pendingDelete.id]);
+          void db.syncQueue.delete(pendingDelete.id).catch(() => {});
           await refreshPendingCount();
           return;
         }
