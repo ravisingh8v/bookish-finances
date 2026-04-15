@@ -30,7 +30,7 @@ export interface Expense {
 }
 
 const PAGE_SIZE = 20;
-const MAX_CACHED_EXPENSES = 40;
+const MAX_CACHED_EXPENSES = 100; // Increased to support better offline experience with multiple pages
 
 export function useExpenses(bookId: string) {
   const { user, profile } = useAuth();

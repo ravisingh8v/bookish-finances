@@ -5,7 +5,7 @@ import { useOfflineSync } from "./useOfflineSync";
 import { getCacheEntry, setCacheEntry } from "@/lib/offlineStore";
 
 const BOOKS_CACHE_KEY = "books";
-const PRELOADED_EXPENSES_PER_BOOK = 20;
+const PRELOADED_EXPENSES_PER_BOOK = 30; // Preload 30 records for better offline availability
 
 export function useBooks() {
   const { user } = useAuth();

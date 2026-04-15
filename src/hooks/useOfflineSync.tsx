@@ -58,7 +58,9 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       };
       await enqueueAction(offlineAction);
       await refreshCount();
-      toast.info("Saved offline. Will sync when back online.");
+      toast.success("Saved locally. Will sync when internet is available.", {
+        description: "Your data is safely stored and will be synced automatically.",
+      });
     },
     [user, refreshCount]
   );
