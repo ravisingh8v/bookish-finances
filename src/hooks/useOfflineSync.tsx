@@ -20,7 +20,11 @@ interface OfflineSyncContextType {
   syncStatus: SyncStatus;
   pendingCount: number;
   lastSyncedAt: number | null;
+  isSaving: boolean;
+  beginWrite: () => void;
+  endWrite: () => void;
   queueAction: (action: Omit<SyncAction, "id" | "createdAt" | "retryCount">) => Promise<void>;
+  cancelQueuedCreate: (tempId: string) => Promise<void>;
   syncNow: () => Promise<void>;
 }
 
@@ -83,6 +87,8 @@ async function processAction(action: SyncAction, userId: string): Promise<boolea
       }
       case "update_expense": {
         const p = action.payload as { expenseId: string; bookId: string; title?: string; amount?: number; date?: string; category_id?: string; expense_type?: string; payment_method?: string; notes?: string; tags?: string[] };
+        // Skip update if expenseId is still a temp — it was never created on server
+        if (p.expenseId.startsWith("temp_")) break;
         const update: Record<string, unknown> = {};
         if (p.title !== undefined) update.title = p.title;
         if (p.amount !== undefined) update.amount = p.amount;
@@ -98,6 +104,8 @@ async function processAction(action: SyncAction, userId: string): Promise<boolea
       }
       case "delete_expense": {
         const { expenseId } = action.payload as { expenseId: string };
+        // Guard: never try to delete a temp ID on the server
+        if (expenseId.startsWith("temp_")) break;
         const { error } = await supabase.from("expenses").delete().eq("id", expenseId);
         if (error) throw error;
         await db.deletedExpenses.delete(expenseId);
@@ -138,7 +146,20 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   const [syncStatus, setSyncStatus] = useState<SyncStatus>("idle");
   const [pendingCount, setPendingCount] = useState(0);
   const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const syncingRef = useRef(false);
+  const saveCountRef = useRef(0);
+
+  // Ref-counted saving flag — safe for concurrent mutations
+  const beginWrite = useCallback(() => {
+    saveCountRef.current += 1;
+    setIsSaving(true);
+  }, []);
+
+  const endWrite = useCallback(() => {
+    saveCountRef.current = Math.max(0, saveCountRef.current - 1);
+    if (saveCountRef.current === 0) setIsSaving(false);
+  }, []);
 
   const refreshCount = useCallback(async () => {
     try {
@@ -161,6 +182,22 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     },
     [user, refreshCount]
   );
+
+  /**
+   * Cancel all queued CREATE actions whose tempId matches the given id.
+   * Used when an offline-created item is deleted before it ever syncs —
+   * no server operation is needed in that case.
+   */
+  const cancelQueuedCreate = useCallback(async (tempId: string) => {
+    const all = await db.syncQueue.toArray();
+    const toDelete = all.filter(
+      (a) =>
+        a.tempId === tempId ||
+        (a.payload as Record<string, unknown>)?.tempId === tempId
+    );
+    await Promise.all(toDelete.map((a) => db.syncQueue.delete(a.id)));
+    if (toDelete.length > 0) await refreshCount();
+  }, [refreshCount]);
 
   const syncNow = useCallback(async () => {
     if (syncingRef.current || !isOnline || !user) return;
@@ -221,7 +258,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   useEffect(() => { refreshCount(); }, [refreshCount]);
 
   return (
-    <OfflineSyncContext.Provider value={{ isOnline, syncStatus, pendingCount, lastSyncedAt, queueAction, syncNow }}>
+    <OfflineSyncContext.Provider value={{ isOnline, syncStatus, pendingCount, lastSyncedAt, isSaving, beginWrite, endWrite, queueAction, cancelQueuedCreate, syncNow }}>
       {children}
     </OfflineSyncContext.Provider>
   );

@@ -9,12 +9,11 @@ const MAX_BOOKS_CACHE = 10;
 export function useBooks() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const { isOnline, queueAction } = useOfflineSync();
+  const { isOnline, queueAction, cancelQueuedCreate, beginWrite, endWrite } = useOfflineSync();
 
   const booksQuery = useQuery({
     queryKey: ["books"],
     queryFn: async () => {
-      // Always serve from cache first (stale-while-revalidate)
       const cached = await db.books.orderBy("cachedAt").reverse().limit(MAX_BOOKS_CACHE).toArray();
       const cachedBooks = cached.map((c) => c.data);
 
@@ -28,13 +27,11 @@ export function useBooks() {
           .eq("my_access.user_id", user!.id);
         if (error) throw error;
 
-        // Update Dexie cache — keep recent 10 books
         await db.books.clear();
         for (const book of (data ?? []).slice(0, MAX_BOOKS_CACHE)) {
           await db.books.put({ id: book.id, data: book, cachedAt: Date.now() });
         }
 
-        // Preload recent expenses for each book in background
         preloadExpenses(data?.map((b) => b.id) ?? []);
 
         return data ?? [];
@@ -48,84 +45,107 @@ export function useBooks() {
 
   const createBook = useMutation({
     mutationFn: async (book: { name: string; description?: string; currency?: string; color?: string; icon?: string }) => {
-      const tempId = `temp_${crypto.randomUUID()}`;
-      const tempBook = {
-        id: tempId,
-        ...book,
-        created_by: user?.id,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        color: book.color ?? "#10B981",
-        currency: book.currency ?? "INR",
-        icon: book.icon ?? "wallet",
-        description: book.description ?? null,
-        members: [{ user_id: user?.id, role: "owner" }],
-        my_access: [{ user_id: user?.id, role: "owner" }],
-        _offline: !isOnline,
-      };
+      beginWrite();
+      try {
+        const tempId = `temp_${crypto.randomUUID()}`;
+        const tempBook = {
+          id: tempId,
+          ...book,
+          created_by: user?.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          color: book.color ?? "#10B981",
+          currency: book.currency ?? "INR",
+          icon: book.icon ?? "wallet",
+          description: book.description ?? null,
+          members: [{ user_id: user?.id, role: "owner" }],
+          my_access: [{ user_id: user?.id, role: "owner" }],
+          _offline: !isOnline,
+        };
 
-      // Optimistic: add to Dexie + React Query cache immediately
-      await db.books.put({ id: tempId, data: tempBook, cachedAt: Date.now() });
-      queryClient.setQueryData(["books"], (old: unknown[] | undefined) => [tempBook, ...(old ?? [])]);
+        await db.books.put({ id: tempId, data: tempBook, cachedAt: Date.now() });
+        queryClient.setQueryData(["books"], (old: unknown[] | undefined) => [tempBook, ...(old ?? [])]);
 
-      if (!isOnline) {
-        await queueAction({ type: "create_book", payload: { ...book, tempId }, tempId, userId: user?.id });
-        return tempBook;
+        if (!isOnline) {
+          await queueAction({ type: "create_book", payload: { ...book, tempId }, tempId, userId: user?.id });
+          return tempBook;
+        }
+
+        const { data, error } = await supabase.from("expense_books")
+          .insert({ ...book, created_by: user!.id }).select().single();
+        if (error) throw error;
+
+        await supabase.from("book_members").insert({ book_id: data.id, user_id: user!.id, role: "owner" });
+
+        await db.books.delete(tempId);
+        await db.books.put({ id: data.id, data: { ...data, members: [{ user_id: user?.id, role: "owner" }], my_access: [{ user_id: user?.id, role: "owner" }] }, cachedAt: Date.now() });
+
+        return data;
+      } finally {
+        endWrite();
       }
-
-      const { data, error } = await supabase.from("expense_books")
-        .insert({ ...book, created_by: user!.id }).select().single();
-      if (error) throw error;
-
-      await supabase.from("book_members").insert({ book_id: data.id, user_id: user!.id, role: "owner" });
-
-      // Replace temp entry with real one
-      await db.books.delete(tempId);
-      await db.books.put({ id: data.id, data: { ...data, members: [{ user_id: user?.id, role: "owner" }], my_access: [{ user_id: user?.id, role: "owner" }] }, cachedAt: Date.now() });
-
-      return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
   });
 
   const updateBook = useMutation({
     mutationFn: async (params: { bookId: string; name?: string; description?: string; currency?: string; color?: string; icon?: string }) => {
-      // Optimistic update in Dexie
-      const cached = await db.books.get(params.bookId);
-      if (cached) {
-        await db.books.put({ ...cached, data: { ...cached.data, ...params }, cachedAt: Date.now() });
-      }
-      queryClient.setQueryData(["books"], (old: unknown[] | undefined) =>
-        (old ?? []).map((b: Record<string, unknown>) => b.id === params.bookId ? { ...b, ...params } : b)
-      );
+      beginWrite();
+      try {
+        const cached = await db.books.get(params.bookId);
+        if (cached) {
+          await db.books.put({ ...cached, data: { ...cached.data, ...params }, cachedAt: Date.now() });
+        }
+        queryClient.setQueryData(["books"], (old: unknown[] | undefined) =>
+          (old ?? []).map((b: Record<string, unknown>) => b.id === params.bookId ? { ...b, ...params } : b)
+        );
 
-      if (!isOnline) {
-        await queueAction({ type: "update_book", payload: params, userId: user?.id });
-        return;
-      }
+        if (!isOnline) {
+          await queueAction({ type: "update_book", payload: params, userId: user?.id });
+          return;
+        }
 
-      const { error } = await supabase.from("expense_books").update({ name: params.name, description: params.description, currency: params.currency, color: params.color, icon: params.icon }).eq("id", params.bookId);
-      if (error) throw error;
+        // Can't update a temp-ID book on the server
+        if (params.bookId.startsWith("temp_")) return;
+
+        const { error } = await supabase.from("expense_books").update({ name: params.name, description: params.description, currency: params.currency, color: params.color, icon: params.icon }).eq("id", params.bookId);
+        if (error) throw error;
+      } finally {
+        endWrite();
+      }
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
   });
 
   const deleteBook = useMutation({
     mutationFn: async (bookId: string) => {
-      // Optimistic remove from cache
-      await db.books.delete(bookId);
-      await db.expenses.delete(bookId);
-      queryClient.setQueryData(["books"], (old: unknown[] | undefined) =>
-        (old ?? []).filter((b: Record<string, unknown>) => b.id !== bookId)
-      );
+      beginWrite();
+      try {
+        const isTempId = bookId.startsWith("temp_");
 
-      if (!isOnline) {
-        await queueAction({ type: "delete_book", payload: { bookId }, userId: user?.id });
-        return;
+        // Optimistic remove
+        await db.books.delete(bookId);
+        await db.expenses.delete(bookId);
+        queryClient.setQueryData(["books"], (old: unknown[] | undefined) =>
+          (old ?? []).filter((b: Record<string, unknown>) => b.id !== bookId)
+        );
+
+        if (isTempId) {
+          // Book was never synced — cancel its queued create, no server delete needed
+          await cancelQueuedCreate(bookId);
+          return;
+        }
+
+        if (!isOnline) {
+          await queueAction({ type: "delete_book", payload: { bookId }, userId: user?.id });
+          return;
+        }
+
+        const { error } = await supabase.from("expense_books").delete().eq("id", bookId);
+        if (error) throw error;
+      } finally {
+        endWrite();
       }
-
-      const { error } = await supabase.from("expense_books").delete().eq("id", bookId);
-      if (error) throw error;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
   });

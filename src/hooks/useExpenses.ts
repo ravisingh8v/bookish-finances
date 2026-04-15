@@ -32,12 +32,11 @@ const PAGE_SIZE = 20;
 export function useExpenses(bookId: string) {
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
-  const { isOnline, queueAction } = useOfflineSync();
+  const { isOnline, queueAction, cancelQueuedCreate, beginWrite, endWrite } = useOfflineSync();
 
   const expensesQuery = useQuery({
     queryKey: ["expenses", bookId],
     queryFn: async () => {
-      // Serve from Dexie first
       const cached = await db.expenses.get(bookId);
       const cachedExpenses = (cached?.expenses ?? []) as Expense[];
 
@@ -89,60 +88,64 @@ export function useExpenses(bookId: string) {
       notes?: string;
       tags?: string[];
     }) => {
-      const tempId = `temp_${crypto.randomUUID()}`;
-      const tempExpense: Expense = {
-        id: tempId,
-        book_id: payload.book_id,
-        title: payload.title,
-        amount: payload.amount,
-        date: payload.date ?? new Date().toISOString().split("T")[0],
-        category_id: payload.category_id ?? null,
-        expense_type: payload.expense_type ?? "debit",
-        payment_method: payload.payment_method ?? "cash",
-        notes: payload.notes ?? null,
-        tags: payload.tags ?? [],
-        paid_by: user!.id,
-        created_by: user!.id,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        categories: null,
-        creator_profile: { display_name: profile?.display_name ?? null, email: profile?.email ?? null },
-        payer_profile: { display_name: profile?.display_name ?? null, email: profile?.email ?? null },
-        _offline: !isOnline,
-      };
+      beginWrite();
+      try {
+        const tempId = `temp_${crypto.randomUUID()}`;
+        const tempExpense: Expense = {
+          id: tempId,
+          book_id: payload.book_id,
+          title: payload.title,
+          amount: payload.amount,
+          date: payload.date ?? new Date().toISOString().split("T")[0],
+          category_id: payload.category_id ?? null,
+          expense_type: payload.expense_type ?? "debit",
+          payment_method: payload.payment_method ?? "cash",
+          notes: payload.notes ?? null,
+          tags: payload.tags ?? [],
+          paid_by: user!.id,
+          created_by: user!.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          categories: null,
+          creator_profile: { display_name: profile?.display_name ?? null, email: profile?.email ?? null },
+          payer_profile: { display_name: profile?.display_name ?? null, email: profile?.email ?? null },
+          _offline: !isOnline,
+        };
 
-      // Optimistic update
-      queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) => [tempExpense, ...(old ?? [])]);
-      const current = await db.expenses.get(bookId);
-      await db.expenses.put({ id: bookId, expenses: [tempExpense, ...(current?.expenses ?? [])].slice(0, MAX_EXPENSES_CACHE), cachedAt: Date.now() });
+        // Optimistic update
+        queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) => [tempExpense, ...(old ?? [])]);
+        const current = await db.expenses.get(bookId);
+        await db.expenses.put({ id: bookId, expenses: [tempExpense, ...(current?.expenses ?? [])].slice(0, MAX_EXPENSES_CACHE), cachedAt: Date.now() });
 
-      if (!isOnline) {
-        await queueAction({ type: "create_expense", payload: { ...payload, tempId }, tempId, userId: user?.id });
-        return tempExpense;
+        if (!isOnline) {
+          await queueAction({ type: "create_expense", payload: { ...payload, tempId }, tempId, userId: user?.id });
+          return tempExpense;
+        }
+
+        const { data, error } = await supabase.from("expenses").insert({
+          ...payload,
+          category_id: payload.category_id || null,
+          expense_type: payload.expense_type ?? "debit",
+          payment_method: payload.payment_method ?? "cash",
+          notes: payload.notes ?? null,
+          tags: payload.tags ?? [],
+          paid_by: user!.id,
+          created_by: user!.id,
+        }).select("*, categories(name, icon, color)").single();
+        if (error) throw error;
+
+        const realExpense = { ...data, creator_profile: { display_name: profile?.display_name ?? null, email: profile?.email ?? null }, payer_profile: null } as Expense;
+        queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) =>
+          (old ?? []).map((e) => (e.id === tempId ? realExpense : e))
+        );
+        const updated = await db.expenses.get(bookId);
+        if (updated) {
+          await db.expenses.put({ id: bookId, expenses: updated.expenses.map((e) => (e as Expense).id === tempId ? realExpense : e), cachedAt: Date.now() });
+        }
+        return realExpense;
+      } finally {
+        endWrite();
       }
-
-      const { data, error } = await supabase.from("expenses").insert({
-        ...payload,
-        category_id: payload.category_id || null,
-        expense_type: payload.expense_type ?? "debit",
-        payment_method: payload.payment_method ?? "cash",
-        notes: payload.notes ?? null,
-        tags: payload.tags ?? [],
-        paid_by: user!.id,
-        created_by: user!.id,
-      }).select("*, categories(name, icon, color)").single();
-      if (error) throw error;
-
-      // Replace temp with real
-      const realExpense = { ...data, creator_profile: { display_name: profile?.display_name ?? null, email: profile?.email ?? null }, payer_profile: null } as Expense;
-      queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) =>
-        (old ?? []).map((e) => (e.id === tempId ? realExpense : e))
-      );
-      const updated = await db.expenses.get(bookId);
-      if (updated) {
-        await db.expenses.put({ id: bookId, expenses: updated.expenses.map((e) => (e as Expense).id === tempId ? realExpense : e), cachedAt: Date.now() });
-      }
-      return realExpense;
     },
     onError: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses", bookId] });
@@ -161,66 +164,90 @@ export function useExpenses(bookId: string) {
       notes?: string;
       tags?: string[];
     }) => {
-      // Optimistic update
-      queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) =>
-        (old ?? []).map((e) => (e.id === params.expenseId ? { ...e, ...params } : e))
-      );
-      const cached = await db.expenses.get(bookId);
-      if (cached) {
-        await db.expenses.put({ id: bookId, expenses: cached.expenses.map((e) => (e as Expense).id === params.expenseId ? { ...e, ...params } : e), cachedAt: Date.now() });
-      }
+      beginWrite();
+      try {
+        // Optimistic update
+        queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) =>
+          (old ?? []).map((e) => (e.id === params.expenseId ? { ...e, ...params } : e))
+        );
+        const cached = await db.expenses.get(bookId);
+        if (cached) {
+          await db.expenses.put({ id: bookId, expenses: cached.expenses.map((e) => (e as Expense).id === params.expenseId ? { ...e, ...params } : e), cachedAt: Date.now() });
+        }
 
-      if (!isOnline) {
-        await queueAction({ type: "update_expense", payload: { ...params, bookId }, userId: user?.id });
-        return;
-      }
+        if (!isOnline) {
+          await queueAction({ type: "update_expense", payload: { ...params, bookId }, userId: user?.id });
+          return;
+        }
 
-      const update: Record<string, unknown> = {};
-      if (params.title !== undefined) update.title = params.title;
-      if (params.amount !== undefined) update.amount = params.amount;
-      if (params.date !== undefined) update.date = params.date;
-      if (params.category_id !== undefined) update.category_id = params.category_id || null;
-      if (params.expense_type !== undefined) update.expense_type = params.expense_type;
-      if (params.payment_method !== undefined) update.payment_method = params.payment_method;
-      if (params.notes !== undefined) update.notes = params.notes;
-      if (params.tags !== undefined) update.tags = params.tags;
-      const { error } = await supabase.from("expenses").update(update).eq("id", params.expenseId);
-      if (error) throw error;
+        // If it's a temp ID (offline-created, not yet synced) we can't update on server
+        if (params.expenseId.startsWith("temp_")) return;
+
+        const update: Record<string, unknown> = {};
+        if (params.title !== undefined) update.title = params.title;
+        if (params.amount !== undefined) update.amount = params.amount;
+        if (params.date !== undefined) update.date = params.date;
+        if (params.category_id !== undefined) update.category_id = params.category_id || null;
+        if (params.expense_type !== undefined) update.expense_type = params.expense_type;
+        if (params.payment_method !== undefined) update.payment_method = params.payment_method;
+        if (params.notes !== undefined) update.notes = params.notes;
+        if (params.tags !== undefined) update.tags = params.tags;
+        const { error } = await supabase.from("expenses").update(update).eq("id", params.expenseId);
+        if (error) throw error;
+      } finally {
+        endWrite();
+      }
     },
     onError: () => queryClient.invalidateQueries({ queryKey: ["expenses", bookId] }),
   });
 
   const deleteExpense = useMutation({
     mutationFn: async (expenseId: string) => {
-      // Save to deleted store for undo
-      const expense = expenses.find((e) => e.id === expenseId);
-      if (expense) {
-        await db.deletedExpenses.put({ id: expenseId, bookId, data: expense as unknown as Record<string, unknown>, deletedAt: Date.now() });
-      }
+      beginWrite();
+      try {
+        const isTempId = expenseId.startsWith("temp_");
+        const expense = expenses.find((e) => e.id === expenseId);
 
-      // Optimistic remove
-      queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) =>
-        (old ?? []).filter((e) => e.id !== expenseId)
-      );
-      const cached = await db.expenses.get(bookId);
-      if (cached) {
-        await db.expenses.put({ id: bookId, expenses: cached.expenses.filter((e) => (e as Expense).id !== expenseId), cachedAt: Date.now() });
-      }
+        // Only save to undo store for real (server-persisted) expenses
+        if (expense && !isTempId) {
+          await db.deletedExpenses.put({ id: expenseId, bookId, data: expense as unknown as Record<string, unknown>, deletedAt: Date.now() });
+        }
 
-      if (!isOnline) {
-        await queueAction({ type: "delete_expense", payload: { expenseId }, userId: user?.id });
-        return;
-      }
+        // Optimistic remove
+        queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) =>
+          (old ?? []).filter((e) => e.id !== expenseId)
+        );
+        const cached = await db.expenses.get(bookId);
+        if (cached) {
+          await db.expenses.put({ id: bookId, expenses: cached.expenses.filter((e) => (e as Expense).id !== expenseId), cachedAt: Date.now() });
+        }
 
-      const { error } = await supabase.from("expenses").delete().eq("id", expenseId);
-      if (error) throw error;
-      await db.deletedExpenses.delete(expenseId);
+        if (isTempId) {
+          // Item was never synced to server — cancel its queued create instead of
+          // queuing a server delete (which would fail on a non-existent row).
+          await cancelQueuedCreate(expenseId);
+          return;
+        }
+
+        if (!isOnline) {
+          await queueAction({ type: "delete_expense", payload: { expenseId }, userId: user?.id });
+          return;
+        }
+
+        const { error } = await supabase.from("expenses").delete().eq("id", expenseId);
+        if (error) throw error;
+        await db.deletedExpenses.delete(expenseId);
+      } finally {
+        endWrite();
+      }
     },
-    onSuccess: () => {
+    onSuccess: (_data, expenseId) => {
+      const isTempId = expenseId.startsWith("temp_");
+      if (isTempId) return; // No undo for offline-only expenses (never existed on server)
       toast("Expense deleted", {
         action: {
           label: "Undo",
-          onClick: () => restoreExpense.mutate(expenses.find((e) => true)?.id ?? ""),
+          onClick: () => restoreExpense.mutate(expenseId),
         },
         duration: 4000,
       });
@@ -230,47 +257,55 @@ export function useExpenses(bookId: string) {
 
   const restoreExpense = useMutation({
     mutationFn: async (expenseId: string) => {
-      const deleted = await db.deletedExpenses.get(expenseId);
-      if (!deleted) return;
+      beginWrite();
+      try {
+        const deleted = await db.deletedExpenses.get(expenseId);
+        if (!deleted) return;
 
-      const expense = deleted.data as Expense;
+        const expense = deleted.data as Expense;
 
-      // Re-add to local cache
-      queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) => {
-        const current = old ?? [];
-        if (current.find((e) => e.id === expenseId)) return current;
-        return [{ ...expense, _offline: !isOnline }, ...current];
-      });
-      const cached = await db.expenses.get(bookId);
-      if (cached && !cached.expenses.find((e) => (e as Expense).id === expenseId)) {
-        await db.expenses.put({ id: bookId, expenses: [expense, ...cached.expenses].slice(0, MAX_EXPENSES_CACHE), cachedAt: Date.now() });
-      }
-      await db.deletedExpenses.delete(expenseId);
-
-      if (!isOnline) {
-        // Cancel pending delete if any
-        const pending = await db.syncQueue.where("type").equals("delete_expense").toArray();
-        const match = pending.find((a) => (a.payload as { expenseId: string }).expenseId === expenseId);
-        if (match) {
-          await db.syncQueue.delete(match.id);
-        } else {
-          await queueAction({ type: "create_expense", payload: { book_id: bookId, title: expense.title, amount: expense.amount, date: expense.date, category_id: expense.category_id ?? undefined, expense_type: expense.expense_type, payment_method: expense.payment_method ?? undefined, notes: expense.notes ?? undefined, tags: expense.tags ?? undefined, tempId: expenseId }, tempId: expenseId, userId: user?.id });
+        // Re-add to local cache
+        queryClient.setQueryData(["expenses", bookId], (old: Expense[] | undefined) => {
+          const current = old ?? [];
+          if (current.find((e) => e.id === expenseId)) return current;
+          return [{ ...expense, _offline: !isOnline }, ...current];
+        });
+        const cached = await db.expenses.get(bookId);
+        if (cached && !cached.expenses.find((e) => (e as Expense).id === expenseId)) {
+          await db.expenses.put({ id: bookId, expenses: [expense, ...cached.expenses].slice(0, MAX_EXPENSES_CACHE), cachedAt: Date.now() });
         }
-        return;
-      }
+        await db.deletedExpenses.delete(expenseId);
 
-      // Re-insert to Supabase
-      await supabase.from("expenses").insert({
-        book_id: expense.book_id, title: expense.title, amount: expense.amount,
-        date: expense.date, category_id: expense.category_id, expense_type: expense.expense_type,
-        payment_method: expense.payment_method, notes: expense.notes, tags: expense.tags ?? [],
-        paid_by: expense.paid_by, created_by: expense.created_by,
-      });
+        if (!isOnline) {
+          // Cancel any pending delete for this expense, then re-queue a create
+          const pending = await db.syncQueue.where("type").equals("delete_expense").toArray();
+          const match = pending.find((a) => (a.payload as { expenseId: string }).expenseId === expenseId);
+          if (match) {
+            await db.syncQueue.delete(match.id);
+          } else {
+            await queueAction({
+              type: "create_expense",
+              payload: { book_id: bookId, title: expense.title, amount: expense.amount, date: expense.date, category_id: expense.category_id ?? undefined, expense_type: expense.expense_type, payment_method: expense.payment_method ?? undefined, notes: expense.notes ?? undefined, tags: expense.tags ?? undefined, tempId: expenseId },
+              tempId: expenseId,
+              userId: user?.id,
+            });
+          }
+          return;
+        }
+
+        await supabase.from("expenses").insert({
+          book_id: expense.book_id, title: expense.title, amount: expense.amount,
+          date: expense.date, category_id: expense.category_id, expense_type: expense.expense_type,
+          payment_method: expense.payment_method, notes: expense.notes, tags: expense.tags ?? [],
+          paid_by: expense.paid_by, created_by: expense.created_by,
+        });
+      } finally {
+        endWrite();
+      }
     },
     onSuccess: () => toast.success("Expense restored!"),
   });
 
-  // Paginated fetch of older expenses (load more)
   const fetchNextPage = async () => {
     if (!isOnline) return;
     const current = expenses.length;

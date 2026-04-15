@@ -91,7 +91,7 @@ const getCurrencySymbol = (c: string) =>
 export default function BookDetail() {
   const { bookId } = useParams<{ bookId: string }>();
   const { user } = useAuth();
-  const { isOnline } = useOfflineSync();
+  const { isOnline, isSaving } = useOfflineSync();
   const { books } = useBooks();
   const cachedBook = books.find((candidate) => candidate.id === bookId);
   const { expenses, isLoading, createExpense, deleteExpense, fetchNextPage, hasNextPage, isFetchingNextPage } = useExpenses(
