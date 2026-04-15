@@ -2,7 +2,10 @@ import { DashboardLayout } from "@/components/DashboardLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { useAuth } from "@/hooks/useAuth";
 import { useBooks } from "@/hooks/useBooks";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/db";
+import { withNetworkTimeout } from "@/lib/network";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { BookOpen, TrendingDown, TrendingUp, Wallet } from "lucide-react";
@@ -11,17 +14,50 @@ import { Link } from "react-router-dom";
 export default function Dashboard() {
   const { profile, user } = useAuth();
   const { books, isLoading } = useBooks();
+  const { isOnline } = useOfflineSync();
 
   const statsQuery = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: async () => {
-      const { data: expenses } = await supabase
-        .from("expenses")
-        .select(
-          "amount , expense_type,  expense_books!inner(id,name,book_members!inner(user_id,role))",
-        )
-        .eq("expense_books.book_members.user_id", user.id)
-        .eq("paid_by", user.id);
+      if (!isOnline) {
+        const cached = await db.dashboard.get("stats");
+        if (cached?.data)
+          return cached.data as {
+            totalExpense: number;
+            totalIncome: number;
+            balance: number;
+            count: number;
+          };
+
+        const all = await db.expenses.toArray();
+        const expenses = all.flatMap((item) => (item.expenses ?? []) as any[]);
+        const totalExpense =
+          expenses
+            .filter((e) => e.expense_type === "debit")
+            .reduce((s, e) => s + Number(e.amount), 0) ?? 0;
+        const totalIncome =
+          expenses
+            .filter((e) => e.expense_type === "credit")
+            .reduce((s, e) => s + Number(e.amount), 0) ?? 0;
+        const data = {
+          totalExpense,
+          totalIncome,
+          balance: totalIncome - totalExpense,
+          count: expenses.length,
+        };
+        await db.dashboard.put({ id: "stats", data, cachedAt: Date.now() });
+        return data;
+      }
+
+      const { data: expenses } = await withNetworkTimeout(
+        supabase
+          .from("expenses")
+          .select(
+            "amount , expense_type,  expense_books!inner(id,name,book_members!inner(user_id,role))",
+          )
+          .eq("expense_books.book_members.user_id", user.id)
+          .eq("paid_by", user.id),
+      );
       const totalExpense =
         expenses
           ?.filter((e) => e.expense_type === "debit")
@@ -89,7 +125,7 @@ export default function Dashboard() {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
           {statCards.map((stat, i) => (
             <motion.div
               key={stat.title}

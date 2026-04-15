@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
 import { AppSidebar } from "./AppSidebar";
+import { OfflineStatusBar } from "./OfflineStatusBar";
 
 export function DashboardLayout({ children }: { children: ReactNode }) {
   const { session, loading, profile } = useAuth();
@@ -18,7 +19,9 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex flex-col w-full">
+        <OfflineStatusBar />
+        <div className="flex flex-1">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
           <header className="h-14 flex items-center border-b border-border px-4 gap-4 bg-card/50 backdrop-blur-sm sticky top-0 z-30">
@@ -36,6 +39,7 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
           <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
             {children}
           </main>
+        </div>
         </div>
       </div>
     </SidebarProvider>

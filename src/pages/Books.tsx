@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useBooks } from "@/hooks/useBooks";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { motion } from "framer-motion";
 import { BookOpen, Loader2, Plus, Trash2, Users } from "lucide-react";
 import { useState } from "react";
@@ -40,6 +41,7 @@ const COLORS = [
 export default function Books() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isOnline } = useOfflineSync();
   const { books, isLoading, createBook, deleteBook, isBookOwner } = useBooks();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -52,13 +54,16 @@ export default function Books() {
       toast.error("Book name is required");
       return;
     }
+
+    const payload = {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      currency,
+      color,
+    };
+
     try {
-      await createBook.mutateAsync({
-        name: name.trim(),
-        description: description.trim() || undefined,
-        currency,
-        color,
-      });
+      await createBook.mutateAsync(payload);
       toast.success("Book created!");
       setOpen(false);
       setName("");
@@ -87,31 +92,46 @@ export default function Books() {
                 New Book
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Expense Book</DialogTitle>
+            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md max-w-[95vw] p-6 sm:p-8">
+              <DialogHeader className="pb-6">
+                <DialogTitle className="text-xl">
+                  Create Expense Book
+                </DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Name</Label>
+                <div className="space-y-3">
+                  <Label htmlFor="book-name" className="text-sm font-medium">
+                    Name
+                  </Label>
                   <Input
+                    id="book-name"
                     placeholder="e.g., Trip with Friends"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
+                    className="h-11"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Description (optional)</Label>
+                <div className="space-y-3">
+                  <Label htmlFor="book-desc" className="text-sm font-medium">
+                    Description (optional)
+                  </Label>
                   <Input
+                    id="book-desc"
                     placeholder="What's this book for?"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
+                    className="h-11"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Currency</Label>
+                <div className="space-y-3">
+                  <Label
+                    htmlFor="book-currency"
+                    className="text-sm font-medium"
+                  >
+                    Currency
+                  </Label>
                   <Select value={currency} onValueChange={setCurrency}>
-                    <SelectTrigger>
+                    <SelectTrigger id="book-currency" className="h-11">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -123,21 +143,27 @@ export default function Books() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label>Color</Label>
-                  <div className="flex gap-2">
+                <div className="space-y-3">
+                  <Label className="text-sm font-medium">Color</Label>
+                  <div className="flex flex-wrap gap-3">
                     {COLORS.map((c) => (
                       <button
                         key={c}
                         onClick={() => setColor(c)}
-                        className={`w-8 h-8 rounded-full transition-transform ${color === c ? "ring-2 ring-primary scale-110" : "hover:scale-105"}`}
+                        className={`w-10 h-10 rounded-full transition-transform border-2 ${
+                          color === c
+                            ? "ring-2 ring-primary scale-110 border-primary"
+                            : "hover:scale-105 border-border"
+                        }`}
                         style={{ backgroundColor: c }}
                       />
                     ))}
                   </div>
                 </div>
+              </div>
+              <div className="flex gap-3 pt-6">
                 <Button
-                  className="w-full"
+                  className="flex-1 h-11"
                   onClick={handleCreate}
                   disabled={createBook.isPending}
                 >
@@ -217,7 +243,7 @@ export default function Books() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                              className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (

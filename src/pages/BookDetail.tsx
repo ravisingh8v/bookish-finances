@@ -18,11 +18,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { useBookMembers } from "@/hooks/useBookMembers";
+import { useBooks } from "@/hooks/useBooks";
 import { useCategories, useExpenses } from "@/hooks/useExpenses";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabase } from "@/integrations/supabase/client";
+import { withNetworkTimeout } from "@/lib/network";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,7 +54,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -83,13 +92,49 @@ const getCurrencySymbol = (c: string) =>
 export default function BookDetail() {
   const { bookId } = useParams<{ bookId: string }>();
   const { user } = useAuth();
-  const { expenses, isLoading, createExpense, deleteExpense } = useExpenses(
-    bookId!,
+  const { isOnline, isSaving } = useOfflineSync();
+  const { books } = useBooks();
+  const cachedBook = books.find((candidate) => candidate.id === bookId);
+  const {
+    expenses,
+    isLoading,
+    createExpense,
+    updateExpense,
+    deleteExpense,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useExpenses(bookId!);
+
+  // Infinite scroll observer - triggers fetch when sentinel enters viewport
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect();
+      if (!node) return;
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        },
+        { rootMargin: "100px" }, // Preload when sentinel is 100px from viewport
+      );
+      observerRef.current.observe(node);
+    },
+    [hasNextPage, isFetchingNextPage, fetchNextPage],
   );
   const { data: categories } = useCategories();
   const { members, isOwner, currentUserRole } = useBookMembers(bookId!);
   const [open, setOpen] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => setIsDesktop(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterMember, setFilterMember] = useState<string>("all");
@@ -102,33 +147,41 @@ export default function BookDetail() {
   const [expenseType, setExpenseType] = useState("debit");
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
 
   const bookQuery = useQuery({
     queryKey: ["book", bookId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("expense_books")
-        .select("*")
-        .eq("id", bookId!)
-        .single();
+      const { data, error } = await withNetworkTimeout(
+        supabase.from("expense_books").select("*").eq("id", bookId!).single(),
+      );
       if (error) throw error;
       return data;
     },
-    enabled: !!bookId,
+    enabled: !!bookId && isOnline,
+    initialData: cachedBook,
   });
 
-  const book = bookQuery.data;
-  const canEdit = currentUserRole === "owner" || currentUserRole === "editor";
+  const book = bookQuery.data ?? cachedBook;
+  const cachedUserRole = cachedBook?.members?.find(
+    (member) => member.user_id === user?.id,
+  )?.role;
+  const effectiveRole = currentUserRole ?? cachedUserRole;
+  const canEdit = effectiveRole === "owner" || effectiveRole === "editor";
 
   // Access denied state
-  if (bookQuery.error || (bookQuery.isSuccess && !book)) {
+  if (!bookQuery.isLoading && !book) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <ShieldAlert className="h-12 w-12 text-muted-foreground" />
-          <h2 className="text-xl font-display font-bold">Access Denied</h2>
+          <h2 className="text-xl font-display font-bold">
+            {isOnline ? "Access Denied" : "Unavailable Offline"}
+          </h2>
           <p className="text-muted-foreground">
-            You don't have access to this book or it doesn't exist.
+            {isOnline
+              ? "You don't have access to this book or it doesn't exist."
+              : "This book isn't cached yet. Open it once while online to use it offline."}
           </p>
           <Link to="/books">
             <Button variant="outline">Back to Books</Button>
@@ -146,9 +199,24 @@ export default function BookDetail() {
     setExpenseType("debit");
     setPaymentMethod("cash");
     setNotes("");
+    setEditingExpenseId(null);
   };
 
-  const handleCreate = async () => {
+  const handleEditExpense = (expense: (typeof expenses)[number]) => {
+    setTitle(expense.title);
+    setAmount(String(expense.amount));
+    setDate(
+      expense.date?.split("T")[0] ?? new Date().toISOString().split("T")[0],
+    );
+    setCategoryId(expense.category_id ?? "");
+    setExpenseType(expense.expense_type ?? "debit");
+    setPaymentMethod(expense.payment_method ?? "cash");
+    setNotes(expense.notes ?? "");
+    setEditingExpenseId(expense.id);
+    setOpen(true);
+  };
+
+  const handleSaveExpense = async () => {
     if (!title.trim()) {
       toast.error("Title is required");
       return;
@@ -157,17 +225,32 @@ export default function BookDetail() {
       toast.error("Valid amount is required");
       return;
     }
+
+    const payload = {
+      title: title.trim(),
+      amount: Number(amount),
+      date,
+      category_id: categoryId || undefined,
+      expense_type: expenseType,
+      payment_method: paymentMethod,
+      notes: notes.trim() || undefined,
+    };
+
+    const isEditing = Boolean(editingExpenseId);
+    const currentEditingExpenseId = editingExpenseId;
+
     try {
-      await createExpense.mutateAsync({
-        title: title.trim(),
-        amount: Number(amount),
-        date,
-        category_id: categoryId || undefined,
-        expense_type: expenseType,
-        payment_method: paymentMethod,
-        notes: notes.trim() || undefined,
-      });
-      toast.success("Expense added!");
+      if (isEditing) {
+        await updateExpense.mutateAsync({
+          expenseId: currentEditingExpenseId!,
+          ...payload,
+        });
+        toast.success("Expense updated!");
+      } else {
+        await createExpense.mutateAsync({ book_id: bookId!, ...payload });
+        toast.success("Expense added!");
+      }
+
       setOpen(false);
       resetForm();
     } catch (e: any) {
@@ -195,173 +278,246 @@ export default function BookDetail() {
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <Link to="/books">
-            <Button variant="ghost" size="icon">
+            <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-display font-bold truncate">
+            <h1 className="text-lg sm:text-2xl font-display font-bold truncate">
               {book?.name ?? "Loading..."}
             </h1>
             {book?.description && (
-              <p className="text-muted-foreground text-sm truncate">
+              <p className="text-muted-foreground text-xs sm:text-sm truncate">
                 {book.description}
               </p>
             )}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setShowMembers(!showMembers)}
-          >
-            <Users className="h-4 w-4" />
-            <span className="hidden sm:inline">{members.length}</span>
-          </Button>
-          {canEdit && (
-            <Dialog open={open} onOpenChange={setOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Add Expense</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    {EXPENSE_TYPES.map((t) => (
-                      <button
-                        key={t.value}
-                        onClick={() => setExpenseType(t.value)}
-                        className={`p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2
-                          ${expenseType === t.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/30"}`}
-                      >
-                        <t.icon className="h-4 w-4" />
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Title</Label>
-                    <Input
-                      placeholder="What did you spend on?"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Amount</Label>
-                      <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Date</Label>
-                      <Input
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Category</Label>
-                      <Select value={categoryId} onValueChange={setCategoryId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories?.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Payment</Label>
-                      <Select
-                        value={paymentMethod}
-                        onValueChange={setPaymentMethod}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PAYMENT_METHODS.map((m) => (
-                            <SelectItem key={m} value={m}>
-                              {m
-                                .replace("_", " ")
-                                .replace(/\b\w/g, (c) => c.toUpperCase())}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Notes (optional)</Label>
-                    <Textarea
-                      placeholder="Any additional details..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={2}
-                    />
-                  </div>
-                  <Button
-                    className="w-full"
-                    onClick={handleCreate}
-                    disabled={createExpense.isPending}
-                  >
-                    {createExpense.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : null}
-                    Add {expenseType === "credit" ? "Income" : "Expense"}
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              variant="outline"
+              size="icon"
+              className="h-9 w-9"
+              onClick={() => setShowMembers(!showMembers)}
+            >
+              <Users className="h-4 w-4" />
+            </Button>
+            {canEdit && (
+              <Dialog
+                open={open}
+                onOpenChange={(value) => {
+                  if (!value) resetForm();
+                  setOpen(value);
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button className="gap-2 h-9 px-3 sm:px-4">
+                    <Plus className="h-4 w-4" />
+                    <span className="hidden sm:inline">Add Expense</span>
                   </Button>
-                </div>
-              </DialogContent>
-            </Dialog>
-          )}
+                </DialogTrigger>
+                <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-w-[95vw] max-h-[calc(100dvh-4rem)] overflow-hidden p-0">
+                  <div className="flex h-full flex-col">
+                    <DialogHeader className="px-6 pt-6 pb-3">
+                      <DialogTitle className="text-xl">
+                        {editingExpenseId ? "Edit Expense" : "Add Expense"}
+                      </DialogTitle>
+                    </DialogHeader>
+                    <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
+                      <div className="grid grid-cols-2 gap-2">
+                        {EXPENSE_TYPES.map((t) => (
+                          <button
+                            key={t.value}
+                            onClick={() => setExpenseType(t.value)}
+                            className={`rounded-xl border px-3 py-3 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                              expenseType === t.value
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-border hover:border-primary/30"
+                            }`}
+                          >
+                            <t.icon className="h-4 w-4" />
+                            <span>{t.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="expense-title"
+                          className="text-sm font-medium"
+                        >
+                          Title
+                        </Label>
+                        <Input
+                          id="expense-title"
+                          placeholder="What did you spend on?"
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          className="h-11"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-3">
+                          <Label
+                            htmlFor="expense-amount"
+                            className="text-sm font-medium"
+                          >
+                            Amount
+                          </Label>
+                          <Input
+                            id="expense-amount"
+                            type="number"
+                            placeholder="0.00"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            className="h-11"
+                          />
+                        </div>
+                        <div className="space-y-3">
+                          <Label
+                            htmlFor="expense-date"
+                            className="text-sm font-medium"
+                          >
+                            Date
+                          </Label>
+                          <Input
+                            id="expense-date"
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className="h-11"
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-3">
+                          <Label
+                            htmlFor="expense-category"
+                            className="text-sm font-medium"
+                          >
+                            Category
+                          </Label>
+                          <Select
+                            value={categoryId}
+                            onValueChange={setCategoryId}
+                          >
+                            <SelectTrigger
+                              id="expense-category"
+                              className="h-11"
+                            >
+                              <SelectValue placeholder="Select" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {categories?.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div className="space-y-3">
+                          <Label
+                            htmlFor="expense-payment"
+                            className="text-sm font-medium"
+                          >
+                            Payment
+                          </Label>
+                          <Select
+                            value={paymentMethod}
+                            onValueChange={setPaymentMethod}
+                          >
+                            <SelectTrigger
+                              id="expense-payment"
+                              className="h-11"
+                            >
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {PAYMENT_METHODS.map((m) => (
+                                <SelectItem key={m} value={m}>
+                                  {m
+                                    .replace("_", " ")
+                                    .replace(/\b\w/g, (c) => c.toUpperCase())}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="expense-notes"
+                          className="text-sm font-medium"
+                        >
+                          Notes (optional)
+                        </Label>
+                        <Textarea
+                          id="expense-notes"
+                          placeholder="Any additional details..."
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          rows={3}
+                          className="resize-none"
+                        />
+                      </div>
+                    </div>
+                    <div className="border-t px-6 py-4">
+                      <Button
+                        className="w-full h-11"
+                        onClick={handleSaveExpense}
+                        disabled={
+                          createExpense.isPending || updateExpense.isPending
+                        }
+                      >
+                        {createExpense.isPending || updateExpense.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : null}
+                        {editingExpenseId
+                          ? "Save Changes"
+                          : `Add ${expenseType === "credit" ? "Income" : "Expense"}`}
+                      </Button>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            )}
+          </div>
         </div>
 
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Main content */}
           <div className="flex-1 space-y-6 min-w-0">
             {/* Summary Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4">
               <Card className="glass">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Income</p>
-                  <p className="text-xl font-display font-bold text-success">
+                <CardContent className="p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Income
+                  </p>
+                  <p className="text-base sm:text-xl font-display font-bold text-success truncate">
                     {cur}
                     {totalIncome.toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
               <Card className="glass">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Expenses</p>
-                  <p className="text-xl font-display font-bold text-destructive">
+                <CardContent className="p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Expenses
+                  </p>
+                  <p className="text-base sm:text-xl font-display font-bold text-destructive truncate">
                     {cur}
                     {totalExpense.toLocaleString()}
                   </p>
                 </CardContent>
               </Card>
               <Card className="glass">
-                <CardContent className="p-4">
-                  <p className="text-sm text-muted-foreground">Balance</p>
-                  <p className="text-xl font-display font-bold">
+                <CardContent className="p-3 sm:p-4">
+                  <p className="text-xs sm:text-sm text-muted-foreground">
+                    Balance
+                  </p>
+                  <p className="text-base sm:text-xl font-display font-bold truncate">
                     {cur}
                     {(totalIncome - totalExpense).toLocaleString()}
                   </p>
@@ -377,7 +533,7 @@ export default function BookDetail() {
                   placeholder="Search expenses..."
                   className="pl-9"
                   value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  onChange={(e: any) => setSearch(e.target.value)}
                 />
               </div>
               <Select value={filterType} onValueChange={setFilterType}>
@@ -410,6 +566,16 @@ export default function BookDetail() {
             </div>
 
             {/* Expense List */}
+            {/* Offline cached data indicator */}
+            {!isOnline && filtered.length > 0 && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-900">
+                <p className="font-medium">Viewing cached data</p>
+                <p className="text-amber-800 text-xs mt-1">
+                  You're offline. New actions will sync when back online.
+                </p>
+              </div>
+            )}
+
             {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
@@ -444,14 +610,12 @@ export default function BookDetail() {
                         <span
                           className={`absolute right-0 top-[0px] rounded-l-full px-2 font-[500] text-sm`}
                           style={{
-                            backgroundColor: expense.categories.color
-                              ? expense.categories.color + 20
-                              : "#0000020",
-                            color: expense.categories.color
-                              ? expense.categories.color
-                              : "#00000",
-                            // color: `color-contrast(${expense.categories.color} vs white, black)`,
-                            // filter: "invert()",
+                            backgroundColor: expense.categories?.color
+                              ? `${expense.categories.color}20`
+                              : "hsl(var(--muted))",
+                            color:
+                              expense.categories?.color ??
+                              "hsl(var(--muted-foreground))",
                           }}
                         >
                           {expense.categories?.name ?? "Uncategorized"}
@@ -526,7 +690,7 @@ export default function BookDetail() {
                             {cur}
                             {Number(expense.amount).toLocaleString()}
                           </p>
-                          {canDelete && (
+                          {(canDelete || canEdit) && (
                             <>
                               <DropdownMenu modal>
                                 <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none">
@@ -537,31 +701,37 @@ export default function BookDetail() {
                                     className="DropdownMenuContent p-1 bg-white text-gray-700 text-sm font-[500] z-[999]"
                                     sideOffset={5}
                                   >
-                                    <DropdownMenuItem
-                                      className="DropdownMenuItem p-2 rounded hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
-                                      onClick={() => {
-                                        if (confirm("Delete this expense?"))
-                                          deleteExpense.mutate(expense.id);
-                                      }}
-                                    >
-                                      <div className="flex gap-2 items-center">
-                                        <div>
-                                          <Trash2 className="h-4 w-4" />
+                                    {canEdit && (
+                                      <DropdownMenuItem
+                                        className="DropdownMenuItem p-2 rounded hover:bg-primary/10 focus-visible:outline-none cursor-pointer"
+                                        onClick={() =>
+                                          handleEditExpense(expense)
+                                        }
+                                      >
+                                        <div className="flex gap-2 items-center">
+                                          <div>
+                                            <Edit className="h-4 w-4" />
+                                          </div>
+                                          <div>Edit</div>
                                         </div>
-                                        <div>Delete</div>
-                                      </div>
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      disabled
-                                      className="DropdownMenuItem  p-2 rounded text-gray-400 focus-visible:outline-none cursor-not-allowed"
-                                    >
-                                      <div className="flex gap-2 items-center">
-                                        <div>
-                                          <Edit className="h-4 w-4" />
+                                      </DropdownMenuItem>
+                                    )}
+                                    {canDelete && (
+                                      <DropdownMenuItem
+                                        className="DropdownMenuItem p-2 rounded hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
+                                        onClick={() => {
+                                          if (confirm("Delete this expense?"))
+                                            deleteExpense.mutate(expense.id);
+                                        }}
+                                      >
+                                        <div className="flex gap-2 items-center">
+                                          <div>
+                                            <Trash2 className="h-4 w-4" />
+                                          </div>
+                                          <div>Delete</div>
                                         </div>
-                                        <div>Edit</div>
-                                      </div>
-                                    </DropdownMenuItem>
+                                      </DropdownMenuItem>
+                                    )}
                                   </DropdownMenuContent>
                                 </DropdownMenuPortal>
                               </DropdownMenu>
@@ -584,16 +754,24 @@ export default function BookDetail() {
                     </motion.div>
                   );
                 })}
+                {/* Infinite scroll sentinel */}
+                {hasNextPage && (
+                  <div ref={sentinelRef} className="flex justify-center py-4">
+                    {isFetchingNextPage && (
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
 
-          {/* Members sidebar */}
+          {/* Members sidebar - desktop only */}
           {showMembers && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="w-full lg:w-72 shrink-0"
+              className="hidden lg:block w-72 shrink-0"
             >
               <Card className="glass sticky top-4">
                 <CardContent className="p-4">
@@ -603,6 +781,21 @@ export default function BookDetail() {
             </motion.div>
           )}
         </div>
+
+        {/* Members sheet - mobile only */}
+        <Sheet open={showMembers && !isDesktop} onOpenChange={setShowMembers}>
+          <SheetContent
+            side="bottom"
+            className="lg:hidden max-h-[80vh] overflow-y-auto rounded-t-2xl"
+          >
+            <SheetHeader>
+              <SheetTitle>Members</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4">
+              <BookMembers bookId={bookId!} />
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
     </DashboardLayout>
   );
