@@ -27,7 +27,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { useBookMembers } from "@/hooks/useBookMembers";
-import { useCategories, useExpenses } from "@/hooks/useExpenses";
+import { useCategories, useExpenses, Expense } from "@/hooks/useExpenses";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu,
@@ -51,7 +51,7 @@ import {
   TrendingUp,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -89,8 +89,24 @@ const getCurrencySymbol = (c: string) =>
 export default function BookDetail() {
   const { bookId } = useParams<{ bookId: string }>();
   const { user } = useAuth();
-  const { expenses, isLoading, createExpense, deleteExpense } = useExpenses(
+  const { expenses, isLoading, createExpense, deleteExpense, fetchNextPage, hasNextPage, isFetchingNextPage } = useExpenses(
     bookId!,
+  );
+
+  // Infinite scroll observer
+  const observerRef = useRef<IntersectionObserver | null>(null);
+  const sentinelRef = useCallback(
+    (node: HTMLDivElement | null) => {
+      if (observerRef.current) observerRef.current.disconnect();
+      if (!node) return;
+      observerRef.current = new IntersectionObserver((entries) => {
+        if (entries[0].isIntersecting && hasNextPage) {
+          fetchNextPage();
+        }
+      });
+      observerRef.current.observe(node);
+    },
+    [hasNextPage, fetchNextPage],
   );
   const { data: categories } = useCategories();
   const { members, isOwner, currentUserRole } = useBookMembers(bookId!);
@@ -234,7 +250,7 @@ export default function BookDetail() {
                     <span className="hidden sm:inline">Add</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="max-h-[90vh] overflow-y-auto mx-4 sm:mx-auto">
+                <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Add Expense</DialogTitle>
                   </DialogHeader>
@@ -588,6 +604,14 @@ export default function BookDetail() {
                     </motion.div>
                   );
                 })}
+                {/* Infinite scroll sentinel */}
+                {hasNextPage && (
+                  <div ref={sentinelRef} className="flex justify-center py-4">
+                    {isFetchingNextPage && (
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

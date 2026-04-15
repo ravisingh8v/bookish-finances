@@ -1,7 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
+import { getCacheEntry, setCacheEntry } from "@/lib/offlineStore";
+import { useEffect, useCallback, useMemo } from "react";
 
 export interface Expense {
   id: string;
@@ -24,27 +26,32 @@ export interface Expense {
     email: string | null;
   } | null;
   payer_profile?: { display_name: string | null; email: string | null } | null;
+  _offline?: boolean;
 }
+
+const PAGE_SIZE = 20;
 
 export function useExpenses(bookId: string) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { isOnline, queueAction } = useOfflineSync();
 
-  const expensesQuery = useQuery({
+  const infiniteQuery = useInfiniteQuery({
     queryKey: ["expenses", bookId],
-    queryFn: async () => {
+    queryFn: async ({ pageParam = 0 }) => {
+      const from = pageParam * PAGE_SIZE;
+      const to = from + PAGE_SIZE - 1;
+
       const { data, error } = await supabase
         .from("expenses")
         .select(`*, categories(name, icon, color)`)
         .eq("book_id", bookId)
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .range(from, to);
       if (error) throw error;
 
-      // Fetch profiles for all unique user ids (created_by + paid_by)
-      const userIds = [
-        ...new Set(data.flatMap((e) => [e.created_by, e.paid_by])),
-      ];
+      // Fetch profiles for all unique user ids
+      const userIds = [...new Set(data.flatMap((e) => [e.created_by, e.paid_by]))];
       const { data: profiles } = await supabase
         .from("profiles")
         .select("user_id, display_name, email")
@@ -52,14 +59,50 @@ export function useExpenses(bookId: string) {
 
       const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) ?? []);
 
-      return data.map((e) => ({
+      const mapped = data.map((e) => ({
         ...e,
         creator_profile: profileMap.get(e.created_by) ?? null,
         payer_profile: profileMap.get(e.paid_by) ?? null,
       })) as Expense[];
+
+      // Cache first page for offline
+      if (pageParam === 0) {
+        setCacheEntry(`expenses:${bookId}`, mapped).catch(() => {});
+      }
+
+      return mapped;
     },
-    enabled: !!bookId && !!user,
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      return lastPage.length === PAGE_SIZE ? allPages.length : undefined;
+    },
+    enabled: !!bookId && !!user && isOnline,
   });
+
+  // Load cached expenses when offline
+  useEffect(() => {
+    if (!isOnline && user && bookId) {
+      getCacheEntry<Expense[]>(`expenses:${bookId}`).then((cached) => {
+        if (cached) {
+          queryClient.setQueryData(["expenses", bookId], {
+            pages: [cached],
+            pageParams: [0],
+          });
+        }
+      }).catch(() => {});
+    }
+  }, [isOnline, user, bookId, queryClient]);
+
+  const expenses = useMemo(
+    () => infiniteQuery.data?.pages.flat() ?? [],
+    [infiniteQuery.data]
+  );
+
+  const fetchNextPage = useCallback(() => {
+    if (infiniteQuery.hasNextPage && !infiniteQuery.isFetchingNextPage) {
+      infiniteQuery.fetchNextPage();
+    }
+  }, [infiniteQuery]);
 
   const createExpense = useMutation({
     mutationFn: async (expense: {
@@ -78,7 +121,35 @@ export function useExpenses(bookId: string) {
           payload: { ...expense, book_id: bookId },
           userId: user?.id,
         });
-        return { id: crypto.randomUUID(), ...expense, offline: true };
+        // Optimistically add to list
+        const tempExpense: Expense = {
+          id: crypto.randomUUID(),
+          book_id: bookId,
+          title: expense.title,
+          amount: expense.amount,
+          date: expense.date ?? new Date().toISOString().split("T")[0],
+          category_id: expense.category_id ?? null,
+          expense_type: expense.expense_type ?? "debit",
+          payment_method: expense.payment_method ?? "cash",
+          notes: expense.notes ?? null,
+          tags: expense.tags ?? null,
+          paid_by: user!.id,
+          created_by: user!.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          categories: null,
+          creator_profile: null,
+          payer_profile: null,
+          _offline: true,
+        };
+        queryClient.setQueryData(["expenses", bookId], (old: any) => {
+          const pages = old?.pages ?? [];
+          return {
+            pages: [[tempExpense, ...(pages[0] ?? [])], ...pages.slice(1)],
+            pageParams: old?.pageParams ?? [0],
+          };
+        });
+        return tempExpense;
       }
 
       const { data, error } = await supabase
@@ -94,8 +165,11 @@ export function useExpenses(bookId: string) {
       if (error) throw error;
       return data;
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["expenses", bookId] }),
+    onSuccess: () => {
+      if (isOnline) {
+        queryClient.invalidateQueries({ queryKey: ["expenses", bookId] });
+      }
+    },
   });
 
   const deleteExpense = useMutation({
@@ -106,6 +180,16 @@ export function useExpenses(bookId: string) {
           payload: { expenseId },
           userId: user?.id,
         });
+        // Optimistically remove
+        queryClient.setQueryData(["expenses", bookId], (old: any) => {
+          if (!old?.pages) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page: Expense[]) =>
+              page.filter((e) => e.id !== expenseId)
+            ),
+          };
+        });
         return;
       }
 
@@ -115,15 +199,21 @@ export function useExpenses(bookId: string) {
         .eq("id", expenseId);
       if (error) throw error;
     },
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["expenses", bookId] }),
+    onSuccess: () => {
+      if (isOnline) {
+        queryClient.invalidateQueries({ queryKey: ["expenses", bookId] });
+      }
+    },
   });
 
   return {
-    expenses: expensesQuery.data ?? [],
-    isLoading: expensesQuery.isLoading,
+    expenses,
+    isLoading: infiniteQuery.isLoading && isOnline,
     createExpense,
     deleteExpense,
+    fetchNextPage,
+    hasNextPage: infiniteQuery.hasNextPage ?? false,
+    isFetchingNextPage: infiniteQuery.isFetchingNextPage,
   };
 }
 

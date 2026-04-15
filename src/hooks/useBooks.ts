@@ -2,6 +2,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
+import { getCacheEntry, setCacheEntry } from "@/lib/offlineStore";
+import { useEffect } from "react";
 
 export function useBooks() {
   const { user } = useAuth();
@@ -19,10 +21,28 @@ export function useBooks() {
         .order("created_at", { ascending: false })
         .eq("my_access.user_id", user!.id);
       if (error) throw error;
+      // Cache for offline use
+      setCacheEntry("books", data).catch(() => {});
       return data;
     },
-    enabled: !!user,
+    enabled: !!user && isOnline,
+    // Seed with cached data when offline
+    placeholderData: () => {
+      if (!isOnline) return undefined; // will be filled by initialData
+      return undefined;
+    },
   });
+
+  // Load cached books when offline
+  useEffect(() => {
+    if (!isOnline && user && !booksQuery.data?.length) {
+      getCacheEntry("books").then((cached) => {
+        if (cached) {
+          queryClient.setQueryData(["books"], cached);
+        }
+      }).catch(() => {});
+    }
+  }, [isOnline, user, booksQuery.data, queryClient]);
 
   const createBook = useMutation({
     mutationFn: async (book: {
@@ -34,7 +54,23 @@ export function useBooks() {
     }) => {
       if (!isOnline) {
         await queueAction({ type: "create_book", payload: book, userId: user?.id });
-        return { id: crypto.randomUUID(), ...book, offline: true };
+        // Optimistically add to cache
+        const tempBook = {
+          id: crypto.randomUUID(),
+          ...book,
+          created_by: user?.id,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          color: book.color ?? "#10B981",
+          currency: book.currency ?? "INR",
+          icon: book.icon ?? "wallet",
+          description: book.description ?? null,
+          members: [{ user_id: user?.id, role: "owner" }],
+          my_access: [{ user_id: user?.id, role: "owner" }],
+          _offline: true,
+        };
+        queryClient.setQueryData(["books"], (old: any[] | undefined) => [tempBook, ...(old ?? [])]);
+        return tempBook;
       }
 
       const { data, error } = await supabase
@@ -44,19 +80,26 @@ export function useBooks() {
         .single();
       if (error) throw error;
 
-      // Add creator as owner
       await supabase
         .from("book_members")
         .insert({ book_id: data.id, user_id: user!.id, role: "owner" });
       return data;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
+    onSuccess: (_, __, ___) => {
+      if (isOnline) {
+        queryClient.invalidateQueries({ queryKey: ["books"] });
+      }
+    },
   });
 
   const deleteBook = useMutation({
     mutationFn: async (bookId: string) => {
       if (!isOnline) {
         await queueAction({ type: "delete_book", payload: { bookId }, userId: user?.id });
+        // Optimistically remove from cache
+        queryClient.setQueryData(["books"], (old: any[] | undefined) =>
+          (old ?? []).filter((b: any) => b.id !== bookId)
+        );
         return;
       }
 
@@ -66,10 +109,13 @@ export function useBooks() {
         .eq("id", bookId);
       if (error) throw error;
     },
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
+    onSuccess: () => {
+      if (isOnline) {
+        queryClient.invalidateQueries({ queryKey: ["books"] });
+      }
+    },
   });
 
-  // Helper: check if current user is owner of a book
   const isBookOwner = (book: {
     members: { user_id: string; role: string }[];
   }) => {
@@ -80,7 +126,7 @@ export function useBooks() {
 
   return {
     books: booksQuery.data ?? [],
-    isLoading: booksQuery.isLoading,
+    isLoading: booksQuery.isLoading && isOnline,
     createBook,
     deleteBook,
     isBookOwner,

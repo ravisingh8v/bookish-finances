@@ -1,18 +1,24 @@
 /**
- * Offline queue using IndexedDB for storing pending actions.
- * Actions are queued when offline and synced when back online.
+ * Offline storage using IndexedDB for action queue + data cache.
  */
 
 const DB_NAME = "expenseflow_offline";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const QUEUE_STORE = "action_queue";
+const CACHE_STORE = "data_cache";
 
 export interface OfflineAction {
-  id: string; // temp UUID
+  id: string;
   type: "create_book" | "create_expense" | "delete_expense" | "delete_book";
   payload: Record<string, unknown>;
   createdAt: number;
-  userId?: string; // null if not logged in yet
+  userId?: string;
+}
+
+export interface CacheEntry {
+  key: string; // e.g. "books" or "expenses:bookId"
+  data: unknown;
+  updatedAt: number;
 }
 
 function openDB(): Promise<IDBDatabase> {
@@ -23,11 +29,16 @@ function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(QUEUE_STORE)) {
         db.createObjectStore(QUEUE_STORE, { keyPath: "id" });
       }
+      if (!db.objectStoreNames.contains(CACHE_STORE)) {
+        db.createObjectStore(CACHE_STORE, { keyPath: "key" });
+      }
     };
     req.onsuccess = () => resolve(req.result);
     req.onerror = () => reject(req.error);
   });
 }
+
+// ── Action Queue ──
 
 export async function enqueueAction(action: OfflineAction): Promise<void> {
   const db = await openDB();
@@ -77,4 +88,29 @@ export async function clearAllActions(): Promise<void> {
 export async function getQueueCount(): Promise<number> {
   const actions = await getAllActions();
   return actions.length;
+}
+
+// ── Data Cache ──
+
+export async function setCacheEntry(key: string, data: unknown): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CACHE_STORE, "readwrite");
+    tx.objectStore(CACHE_STORE).put({ key, data, updatedAt: Date.now() } as CacheEntry);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+export async function getCacheEntry<T = unknown>(key: string): Promise<T | null> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(CACHE_STORE, "readonly");
+    const req = tx.objectStore(CACHE_STORE).get(key);
+    req.onsuccess = () => {
+      const entry = req.result as CacheEntry | undefined;
+      resolve(entry ? (entry.data as T) : null);
+    };
+    req.onerror = () => reject(req.error);
+  });
 }
