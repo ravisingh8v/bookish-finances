@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient, useInfiniteQuery } from "@tansta
 import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
 import { getCacheEntry, setCacheEntry } from "@/lib/offlineStore";
-import { useEffect, useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 
 export interface Expense {
   id: string;
@@ -30,68 +30,123 @@ export interface Expense {
 }
 
 const PAGE_SIZE = 20;
+const MAX_CACHED_EXPENSES = 40;
 
 export function useExpenses(bookId: string) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const queryClient = useQueryClient();
   const { isOnline, queueAction } = useOfflineSync();
+  const expenseCacheKey = `expenses:${bookId}`;
+
+  const cacheFetchedExpenses = useCallback(
+    async (fetchedExpenses: Expense[], reset = false) => {
+      const existingExpenses = reset
+        ? []
+        : ((await getCacheEntry<Expense[]>(expenseCacheKey)) ?? []);
+      const existingIds = new Set(existingExpenses.map((expense) => expense.id));
+      const mergedExpenses = reset
+        ? fetchedExpenses
+        : [
+            ...existingExpenses,
+            ...fetchedExpenses.filter((expense) => !existingIds.has(expense.id)),
+          ];
+
+      await setCacheEntry(expenseCacheKey, mergedExpenses.slice(0, MAX_CACHED_EXPENSES));
+    },
+    [expenseCacheKey],
+  );
+
+  const updateExpenseState = useCallback(
+    (updater: (pages: Expense[][]) => Expense[][]) => {
+      let flattenedExpenses: Expense[] = [];
+
+      queryClient.setQueryData(
+        ["expenses", bookId],
+        (old:
+          | {
+              pages?: Expense[][];
+              pageParams?: number[];
+            }
+          | undefined) => {
+          const currentPages = old?.pages?.length ? old.pages : [[]];
+          const nextPages = updater(currentPages);
+          const safePages = nextPages.length ? nextPages : [[]];
+
+          flattenedExpenses = safePages.flat().slice(0, MAX_CACHED_EXPENSES);
+
+          return {
+            pages: safePages,
+            pageParams: old?.pageParams ?? [0],
+          };
+        },
+      );
+
+      void setCacheEntry(expenseCacheKey, flattenedExpenses);
+    },
+    [bookId, expenseCacheKey, queryClient],
+  );
 
   const infiniteQuery = useInfiniteQuery({
     queryKey: ["expenses", bookId],
     queryFn: async ({ pageParam = 0 }) => {
+      const cachedExpenses = await getCacheEntry<Expense[]>(expenseCacheKey);
+
+      if (!isOnline) {
+        return pageParam === 0 ? cachedExpenses ?? [] : [];
+      }
+
       const from = pageParam * PAGE_SIZE;
       const to = from + PAGE_SIZE - 1;
 
-      const { data, error } = await supabase
-        .from("expenses")
-        .select(`*, categories(name, icon, color)`)
-        .eq("book_id", bookId)
-        .order("created_at", { ascending: false })
-        .range(from, to);
-      if (error) throw error;
+      try {
+        const { data, error } = await supabase
+          .from("expenses")
+          .select(`*, categories(name, icon, color)`)
+          .eq("book_id", bookId)
+          .order("created_at", { ascending: false })
+          .range(from, to);
 
-      // Fetch profiles for all unique user ids
-      const userIds = [...new Set(data.flatMap((e) => [e.created_by, e.paid_by]))];
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, display_name, email")
-        .in("user_id", userIds);
+        if (error) throw error;
 
-      const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) ?? []);
+        const userIds = [
+          ...new Set(data.flatMap((expense) => [expense.created_by, expense.paid_by])),
+        ];
 
-      const mapped = data.map((e) => ({
-        ...e,
-        creator_profile: profileMap.get(e.created_by) ?? null,
-        payer_profile: profileMap.get(e.paid_by) ?? null,
-      })) as Expense[];
+        let profileMap = new Map<string, { display_name: string | null; email: string | null }>();
 
-      // Cache first page for offline
-      if (pageParam === 0) {
-        setCacheEntry(`expenses:${bookId}`, mapped).catch(() => {});
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from("profiles")
+            .select("user_id, display_name, email")
+            .in("user_id", userIds);
+
+          profileMap = new Map(profiles?.map((profile) => [profile.user_id, profile]) ?? []);
+        }
+
+        const mapped = data.map((expense) => ({
+          ...expense,
+          creator_profile: profileMap.get(expense.created_by) ?? null,
+          payer_profile: profileMap.get(expense.paid_by) ?? null,
+        })) as Expense[];
+
+        await cacheFetchedExpenses(mapped, pageParam === 0);
+
+        return mapped;
+      } catch (error) {
+        if (pageParam === 0 && cachedExpenses) {
+          return cachedExpenses;
+        }
+
+        throw error;
       }
-
-      return mapped;
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage, allPages) => {
+      if (!isOnline) return undefined;
       return lastPage.length === PAGE_SIZE ? allPages.length : undefined;
     },
-    enabled: !!bookId && !!user && isOnline,
+    enabled: !!bookId && !!user,
   });
-
-  // Load cached expenses when offline
-  useEffect(() => {
-    if (!isOnline && user && bookId) {
-      getCacheEntry<Expense[]>(`expenses:${bookId}`).then((cached) => {
-        if (cached) {
-          queryClient.setQueryData(["expenses", bookId], {
-            pages: [cached],
-            pageParams: [0],
-          });
-        }
-      }).catch(() => {});
-    }
-  }, [isOnline, user, bookId, queryClient]);
 
   const expenses = useMemo(
     () => infiniteQuery.data?.pages.flat() ?? [],
@@ -116,12 +171,6 @@ export function useExpenses(bookId: string) {
       tags?: string[];
     }) => {
       if (!isOnline) {
-        await queueAction({
-          type: "create_expense",
-          payload: { ...expense, book_id: bookId },
-          userId: user?.id,
-        });
-        // Optimistically add to list
         const tempExpense: Expense = {
           id: crypto.randomUUID(),
           book_id: bookId,
@@ -138,17 +187,25 @@ export function useExpenses(bookId: string) {
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
           categories: null,
-          creator_profile: null,
-          payer_profile: null,
+          creator_profile: {
+            display_name: profile?.display_name ?? null,
+            email: profile?.email ?? null,
+          },
+          payer_profile: {
+            display_name: profile?.display_name ?? null,
+            email: profile?.email ?? null,
+          },
           _offline: true,
         };
-        queryClient.setQueryData(["expenses", bookId], (old: any) => {
-          const pages = old?.pages ?? [];
-          return {
-            pages: [[tempExpense, ...(pages[0] ?? [])], ...pages.slice(1)],
-            pageParams: old?.pageParams ?? [0],
-          };
+
+        updateExpenseState((pages) => [[tempExpense, ...(pages[0] ?? [])], ...pages.slice(1)]);
+
+        await queueAction({
+          type: "create_expense",
+          payload: { ...expense, book_id: bookId },
+          userId: user?.id,
         });
+
         return tempExpense;
       }
 
@@ -175,20 +232,14 @@ export function useExpenses(bookId: string) {
   const deleteExpense = useMutation({
     mutationFn: async (expenseId: string) => {
       if (!isOnline) {
+        updateExpenseState((pages) =>
+          pages.map((page) => page.filter((expense) => expense.id !== expenseId)),
+        );
+
         await queueAction({
           type: "delete_expense",
           payload: { expenseId },
           userId: user?.id,
-        });
-        // Optimistically remove
-        queryClient.setQueryData(["expenses", bookId], (old: any) => {
-          if (!old?.pages) return old;
-          return {
-            ...old,
-            pages: old.pages.map((page: Expense[]) =>
-              page.filter((e) => e.id !== expenseId)
-            ),
-          };
         });
         return;
       }
@@ -208,7 +259,7 @@ export function useExpenses(bookId: string) {
 
   return {
     expenses,
-    isLoading: infiniteQuery.isLoading && isOnline,
+    isLoading: infiniteQuery.isLoading && isOnline && expenses.length === 0,
     createExpense,
     deleteExpense,
     fetchNextPage,

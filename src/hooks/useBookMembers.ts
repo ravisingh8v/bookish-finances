@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "./useAuth";
+import { useOfflineSync } from "./useOfflineSync";
+import { getCacheEntry } from "@/lib/offlineStore";
 import { toast } from "sonner";
 
 export interface BookMember {
@@ -18,29 +20,64 @@ export interface BookMember {
 
 export function useBookMembers(bookId: string) {
   const { user } = useAuth();
+  const { isOnline } = useOfflineSync();
   const queryClient = useQueryClient();
+
+  const getCachedMembers = async (): Promise<BookMember[]> => {
+    const cachedBooks = (await getCacheEntry<any[]>("books")) ?? [];
+    const cachedBook = cachedBooks.find((book) => book.id === bookId);
+
+    return (cachedBook?.members ?? []).map((member, index) => ({
+      id: `${bookId}-${member.user_id}-${index}`,
+      book_id: bookId,
+      user_id: member.user_id,
+      role: member.role,
+      joined_at: cachedBook?.created_at ?? new Date().toISOString(),
+      profile: null,
+    }));
+  };
 
   const membersQuery = useQuery({
     queryKey: ["book-members", bookId],
     queryFn: async () => {
-      const { data: members, error } = await supabase
-        .from("book_members")
-        .select("*")
-        .eq("book_id", bookId);
-      if (error) throw error;
+      const cachedMembers = await getCachedMembers();
 
-      // Fetch profiles for all member user_ids
-      const userIds = members.map((m) => m.user_id);
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, display_name, email, avatar_url")
-        .in("user_id", userIds);
+      if (!isOnline) {
+        return cachedMembers;
+      }
 
-      const profileMap = new Map(profiles?.map((p) => [p.user_id, p]) ?? []);
-      return members.map((m) => ({
-        ...m,
-        profile: profileMap.get(m.user_id) ?? null,
-      })) as BookMember[];
+      try {
+        const { data: members, error } = await supabase
+          .from("book_members")
+          .select("*")
+          .eq("book_id", bookId);
+
+        if (error) throw error;
+
+        const userIds = members.map((member) => member.user_id);
+
+        if (userIds.length === 0) {
+          return members as BookMember[];
+        }
+
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, display_name, email, avatar_url")
+          .in("user_id", userIds);
+
+        const profileMap = new Map(profiles?.map((profile) => [profile.user_id, profile]) ?? []);
+
+        return members.map((member) => ({
+          ...member,
+          profile: profileMap.get(member.user_id) ?? null,
+        })) as BookMember[];
+      } catch (error) {
+        if (cachedMembers.length > 0) {
+          return cachedMembers;
+        }
+
+        throw error;
+      }
     },
     enabled: !!bookId && !!user,
   });
