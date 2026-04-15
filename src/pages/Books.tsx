@@ -92,7 +92,7 @@ export default function Books() {
                 New Book
               </Button>
             </DialogTrigger>
-            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md max-w-[95vw] p-6 sm:p-8">
+            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md max-w-[95vw] p-2 sm:p-8">
               <DialogHeader className="pb-6">
                 <DialogTitle className="text-xl">
                   Create Expense Book

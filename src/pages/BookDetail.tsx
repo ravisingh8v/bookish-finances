@@ -70,10 +70,15 @@ const EXPENSE_TYPES = [
   {
     value: "debit",
     label: "Expense",
-    icon: TrendingDown,
+    icon: TrendingUp,
     color: "text-destructive",
   },
-  { value: "credit", label: "Income", icon: TrendingUp, color: "text-success" },
+  {
+    value: "credit",
+    label: "Income",
+    icon: TrendingDown,
+    color: "text-success",
+  },
 ];
 
 function getInitials(name?: string | null) {
@@ -319,12 +324,12 @@ export default function BookDetail() {
                 </DialogTrigger>
                 <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-w-[95vw] max-h-[calc(100dvh-4rem)] overflow-hidden p-0">
                   <div className="flex h-full flex-col">
-                    <DialogHeader className="px-6 pt-6 pb-3">
+                    <DialogHeader className="px-3 pt-2 pb-6">
                       <DialogTitle className="text-xl">
                         {editingExpenseId ? "Edit Expense" : "Add Expense"}
                       </DialogTitle>
                     </DialogHeader>
-                    <div className="flex-1 overflow-y-auto px-6 pb-4 space-y-4">
+                    <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-4">
                       <div className="grid grid-cols-2 gap-2">
                         {EXPENSE_TYPES.map((t) => (
                           <button
@@ -332,8 +337,12 @@ export default function BookDetail() {
                             onClick={() => setExpenseType(t.value)}
                             className={`rounded-xl border px-3 py-3 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
                               expenseType === t.value
-                                ? "border-primary bg-primary/10 text-primary"
-                                : "border-border hover:border-primary/30"
+                                ? t.value == "debit"
+                                  ? "border-destructive bg-destructive/10 text-destructive"
+                                  : "border-primary bg-primary/10 text-primary"
+                                : t.value == "debit"
+                                  ? "border-destructive text-destructive"
+                                  : "border-primary text-primary hover:border-primary hover:bg-primary/10 hover:text-primary"
                             }`}
                           >
                             <t.icon className="h-4 w-4" />
@@ -462,7 +471,7 @@ export default function BookDetail() {
                         />
                       </div>
                     </div>
-                    <div className="border-t px-6 py-4">
+                    <div className="border-t px-3 py-4">
                       <Button
                         className="w-full h-11"
                         onClick={handleSaveExpense}
@@ -703,7 +712,7 @@ export default function BookDetail() {
                                   >
                                     {canEdit && (
                                       <DropdownMenuItem
-                                        className="DropdownMenuItem p-2 rounded hover:bg-primary/10 focus-visible:outline-none cursor-pointer"
+                                        className="DropdownMenuItem p-2 rounded hover:bg-accent hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
                                         onClick={() =>
                                           handleEditExpense(expense)
                                         }

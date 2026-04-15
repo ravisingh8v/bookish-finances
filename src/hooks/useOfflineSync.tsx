@@ -521,15 +521,21 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     setSyncStatus("syncing");
 
     try {
-      const actions = getStoredQueue().sort((a, b) => a.createdAt - b.createdAt);
-      if (actions.length === 0) {
+      const initialActions = getStoredQueue().sort(
+        (a, b) => a.createdAt - b.createdAt,
+      );
+      if (initialActions.length === 0) {
         setSyncStatus("idle");
         return;
       }
 
       let failed = 0;
 
-      for (const action of actions) {
+      while (true) {
+        const actions = getStoredQueue().sort((a, b) => a.createdAt - b.createdAt);
+        const action = actions[0];
+        if (!action) break;
+
         if (action.retryCount >= MAX_RETRY) {
           removeStoredQueueActions([action.id]);
           void db.syncQueue.delete(action.id).catch(() => {});
@@ -546,7 +552,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
           Date.now() - action.lastAttempt < delay
         ) {
           failed += 1;
-          continue;
+          break;
         }
 
         const ok = await processAction(action, user.id);
