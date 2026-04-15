@@ -26,8 +26,10 @@ import {
 } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
+import { useBooks } from "@/hooks/useBooks";
 import { useBookMembers } from "@/hooks/useBookMembers";
-import { useCategories, useExpenses, Expense } from "@/hooks/useExpenses";
+import { useCategories, useExpenses } from "@/hooks/useExpenses";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabase } from "@/integrations/supabase/client";
 import {
   DropdownMenu,
@@ -89,6 +91,9 @@ const getCurrencySymbol = (c: string) =>
 export default function BookDetail() {
   const { bookId } = useParams<{ bookId: string }>();
   const { user } = useAuth();
+  const { isOnline } = useOfflineSync();
+  const { books } = useBooks();
+  const cachedBook = books.find((candidate) => candidate.id === bookId);
   const { expenses, isLoading, createExpense, deleteExpense, fetchNextPage, hasNextPage, isFetchingNextPage } = useExpenses(
     bookId!,
   );
@@ -136,21 +141,30 @@ export default function BookDetail() {
       if (error) throw error;
       return data;
     },
-    enabled: !!bookId,
+    enabled: !!bookId && isOnline,
+    initialData: cachedBook,
   });
 
-  const book = bookQuery.data;
-  const canEdit = currentUserRole === "owner" || currentUserRole === "editor";
+  const book = bookQuery.data ?? cachedBook;
+  const cachedUserRole = cachedBook?.members?.find(
+    (member) => member.user_id === user?.id,
+  )?.role;
+  const effectiveRole = currentUserRole ?? cachedUserRole;
+  const canEdit = effectiveRole === "owner" || effectiveRole === "editor";
 
   // Access denied state
-  if (bookQuery.error || (bookQuery.isSuccess && !book)) {
+  if (!bookQuery.isLoading && !book) {
     return (
       <DashboardLayout>
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <ShieldAlert className="h-12 w-12 text-muted-foreground" />
-          <h2 className="text-xl font-display font-bold">Access Denied</h2>
+          <h2 className="text-xl font-display font-bold">
+            {isOnline ? "Access Denied" : "Unavailable Offline"}
+          </h2>
           <p className="text-muted-foreground">
-            You don't have access to this book or it doesn't exist.
+            {isOnline
+              ? "You don't have access to this book or it doesn't exist."
+              : "This book isn't cached yet. Open it once while online to use it offline."}
           </p>
           <Link to="/books">
             <Button variant="outline">Back to Books</Button>
@@ -179,16 +193,28 @@ export default function BookDetail() {
       toast.error("Valid amount is required");
       return;
     }
-    try {
-      await createExpense.mutateAsync({
-        title: title.trim(),
-        amount: Number(amount),
-        date,
-        category_id: categoryId || undefined,
-        expense_type: expenseType,
-        payment_method: paymentMethod,
-        notes: notes.trim() || undefined,
+
+    const payload = {
+      title: title.trim(),
+      amount: Number(amount),
+      date,
+      category_id: categoryId || undefined,
+      expense_type: expenseType,
+      payment_method: paymentMethod,
+      notes: notes.trim() || undefined,
+    };
+
+    if (!isOnline) {
+      setOpen(false);
+      resetForm();
+      createExpense.mutate(payload, {
+        onError: (error: Error) => toast.error(error.message),
       });
+      return;
+    }
+
+    try {
+      await createExpense.mutateAsync(payload);
       toast.success("Expense added!");
       setOpen(false);
       resetForm();
@@ -250,12 +276,12 @@ export default function BookDetail() {
                     <span className="hidden sm:inline">Add</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="sm:max-w-lg">
                   <DialogHeader>
                     <DialogTitle>Add Expense</DialogTitle>
                   </DialogHeader>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-4 overflow-x-hidden">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {EXPENSE_TYPES.map((t) => (
                       <button
                         key={t.value}
@@ -276,7 +302,7 @@ export default function BookDetail() {
                       onChange={(e) => setTitle(e.target.value)}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Amount</Label>
                       <Input
@@ -295,7 +321,7 @@ export default function BookDetail() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                       <Label>Category</Label>
                       <Select value={categoryId} onValueChange={setCategoryId}>
@@ -341,16 +367,18 @@ export default function BookDetail() {
                       rows={2}
                     />
                   </div>
-                  <Button
-                    className="w-full"
-                    onClick={handleCreate}
-                    disabled={createExpense.isPending}
-                  >
-                    {createExpense.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : null}
-                    Add {expenseType === "credit" ? "Income" : "Expense"}
-                  </Button>
+                    <div className="sticky bottom-0 bg-background pt-3">
+                      <Button
+                        className="w-full"
+                        onClick={handleCreate}
+                        disabled={createExpense.isPending}
+                      >
+                        {createExpense.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : null}
+                        Add {expenseType === "credit" ? "Income" : "Expense"}
+                      </Button>
+                    </div>
                 </div>
               </DialogContent>
               </Dialog>
@@ -464,14 +492,10 @@ export default function BookDetail() {
                         <span
                           className={`absolute right-0 top-[0px] rounded-l-full px-2 font-[500] text-sm`}
                           style={{
-                            backgroundColor: expense.categories.color
-                              ? expense.categories.color + 20
-                              : "#0000080",
-                            color: expense.categories.color
-                              ? expense.categories.color
-                              : "#00000",
-                            // color: `color-contrast(${expense.categories.color} vs white, black)`,
-                            // filter: "invert()",
+                            backgroundColor: expense.categories?.color
+                              ? `${expense.categories.color}20`
+                              : "hsl(var(--muted))",
+                            color: expense.categories?.color ?? "hsl(var(--muted-foreground))",
                           }}
                         >
                           {expense.categories?.name ?? "Uncategorized"}

@@ -80,11 +80,11 @@ export function BookMembers({ bookId }: { bookId: string }) {
                 Invite
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Invite Member</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-4 overflow-x-hidden">
                 <div className="space-y-2">
                   <Label>Email Address</Label>
                   <Input
@@ -106,14 +106,16 @@ export function BookMembers({ bookId }: { bookId: string }) {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button
-                  className="w-full"
-                  onClick={handleAdd}
-                  disabled={addMember.isPending}
-                >
-                  {addMember.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Send Invite
-                </Button>
+                <div className="sticky bottom-0 bg-background pt-3">
+                  <Button
+                    className="w-full"
+                    onClick={handleAdd}
+                    disabled={addMember.isPending}
+                  >
+                    {addMember.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    Send Invite
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>

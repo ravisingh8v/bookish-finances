@@ -3,46 +3,105 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
 import { getCacheEntry, setCacheEntry } from "@/lib/offlineStore";
-import { useEffect } from "react";
+
+const BOOKS_CACHE_KEY = "books";
+const PRELOADED_EXPENSES_PER_BOOK = 20;
 
 export function useBooks() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { isOnline, queueAction } = useOfflineSync();
 
+  const updateBooksCache = (updater: (books: any[]) => any[]) => {
+    let nextBooks: any[] = [];
+
+    queryClient.setQueryData(["books"], (old: any[] | undefined) => {
+      nextBooks = updater(old ?? []);
+      return nextBooks;
+    });
+
+    void setCacheEntry(BOOKS_CACHE_KEY, nextBooks);
+  };
+
+  const preloadRecentExpenses = async (bookIds: string[]) => {
+    await Promise.all(
+      bookIds.map(async (bookId) => {
+        try {
+          const { data: expenses, error } = await supabase
+            .from("expenses")
+            .select("*, categories(name, icon, color)")
+            .eq("book_id", bookId)
+            .order("created_at", { ascending: false })
+            .range(0, PRELOADED_EXPENSES_PER_BOOK - 1);
+
+          if (error) throw error;
+
+          const userIds = [
+            ...new Set(
+              (expenses ?? [])
+                .flatMap((expense) => [expense.created_by, expense.paid_by])
+                .filter(Boolean),
+            ),
+          ];
+
+          let profileMap = new Map<string, { display_name: string | null; email: string | null }>();
+
+          if (userIds.length > 0) {
+            const { data: profiles } = await supabase
+              .from("profiles")
+              .select("user_id, display_name, email")
+              .in("user_id", userIds);
+
+            profileMap = new Map(
+              profiles?.map((profile) => [profile.user_id, profile]) ?? [],
+            );
+          }
+
+          const cachedExpenses = (expenses ?? []).map((expense) => ({
+            ...expense,
+            creator_profile: profileMap.get(expense.created_by) ?? null,
+            payer_profile: profileMap.get(expense.paid_by) ?? null,
+          }));
+
+          await setCacheEntry(`expenses:${bookId}`, cachedExpenses);
+        } catch {
+          // Ignore preload failures and keep book loading fast.
+        }
+      }),
+    );
+  };
+
   const booksQuery = useQuery({
     queryKey: ["books"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("expense_books")
-        .select(
-          "*, members:book_members(user_id, role), my_access:book_members!inner(user_id, role)",
-        )
-        .order("created_at", { ascending: false })
-        .eq("my_access.user_id", user!.id);
-      if (error) throw error;
-      // Cache for offline use
-      setCacheEntry("books", data).catch(() => {});
-      return data;
-    },
-    enabled: !!user && isOnline,
-    // Seed with cached data when offline
-    placeholderData: () => {
-      if (!isOnline) return undefined; // will be filled by initialData
-      return undefined;
-    },
-  });
+      const cachedBooks = await getCacheEntry<any[]>(BOOKS_CACHE_KEY);
 
-  // Load cached books when offline
-  useEffect(() => {
-    if (!isOnline && user && !booksQuery.data?.length) {
-      getCacheEntry("books").then((cached) => {
-        if (cached) {
-          queryClient.setQueryData(["books"], cached);
-        }
-      }).catch(() => {});
-    }
-  }, [isOnline, user, booksQuery.data, queryClient]);
+      if (!isOnline) {
+        return cachedBooks ?? [];
+      }
+
+      try {
+        const { data, error } = await supabase
+          .from("expense_books")
+          .select(
+            "*, members:book_members(user_id, role), my_access:book_members!inner(user_id, role)",
+          )
+          .order("created_at", { ascending: false })
+          .eq("my_access.user_id", user!.id);
+
+        if (error) throw error;
+
+        void setCacheEntry(BOOKS_CACHE_KEY, data);
+        void preloadRecentExpenses(data.map((book) => book.id));
+
+        return data;
+      } catch (error) {
+        if (cachedBooks) return cachedBooks;
+        throw error;
+      }
+    },
+    enabled: !!user,
+  });
 
   const createBook = useMutation({
     mutationFn: async (book: {
@@ -69,7 +128,8 @@ export function useBooks() {
           my_access: [{ user_id: user?.id, role: "owner" }],
           _offline: true,
         };
-        queryClient.setQueryData(["books"], (old: any[] | undefined) => [tempBook, ...(old ?? [])]);
+
+        updateBooksCache((old) => [tempBook, ...old]);
         return tempBook;
       }
 
@@ -96,10 +156,8 @@ export function useBooks() {
     mutationFn: async (bookId: string) => {
       if (!isOnline) {
         await queueAction({ type: "delete_book", payload: { bookId }, userId: user?.id });
-        // Optimistically remove from cache
-        queryClient.setQueryData(["books"], (old: any[] | undefined) =>
-          (old ?? []).filter((b: any) => b.id !== bookId)
-        );
+
+        updateBooksCache((old) => old.filter((book) => book.id !== bookId));
         return;
       }
 

@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useBooks } from "@/hooks/useBooks";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { motion } from "framer-motion";
 import { BookOpen, Loader2, Plus, Trash2, Users } from "lucide-react";
 import { useState } from "react";
@@ -40,6 +41,7 @@ const COLORS = [
 export default function Books() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { isOnline } = useOfflineSync();
   const { books, isLoading, createBook, deleteBook, isBookOwner } = useBooks();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -52,13 +54,28 @@ export default function Books() {
       toast.error("Book name is required");
       return;
     }
-    try {
-      await createBook.mutateAsync({
-        name: name.trim(),
-        description: description.trim() || undefined,
-        currency,
-        color,
+
+    const payload = {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      currency,
+      color,
+    };
+
+    if (!isOnline) {
+      setOpen(false);
+      setName("");
+      setDescription("");
+      setCurrency("INR");
+      setColor(COLORS[0]);
+      createBook.mutate(payload, {
+        onError: (error: Error) => toast.error(error.message),
       });
+      return;
+    }
+
+    try {
+      await createBook.mutateAsync(payload);
       toast.success("Book created!");
       setOpen(false);
       setName("");
@@ -87,11 +104,11 @@ export default function Books() {
                 New Book
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Create Expense Book</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
+              <div className="space-y-4 overflow-x-hidden">
                 <div className="space-y-2">
                   <Label>Name</Label>
                   <Input
@@ -125,7 +142,7 @@ export default function Books() {
                 </div>
                 <div className="space-y-2">
                   <Label>Color</Label>
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {COLORS.map((c) => (
                       <button
                         key={c}
@@ -136,16 +153,18 @@ export default function Books() {
                     ))}
                   </div>
                 </div>
-                <Button
-                  className="w-full"
-                  onClick={handleCreate}
-                  disabled={createBook.isPending}
-                >
-                  {createBook.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : null}
-                  Create Book
-                </Button>
+                <div className="sticky bottom-0 bg-background pt-3">
+                  <Button
+                    className="w-full"
+                    onClick={handleCreate}
+                    disabled={createBook.isPending}
+                  >
+                    {createBook.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : null}
+                    Create Book
+                  </Button>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
