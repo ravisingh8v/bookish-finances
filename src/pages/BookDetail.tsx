@@ -120,6 +120,13 @@ export default function BookDetail() {
   const { members, isOwner, currentUserRole } = useBookMembers(bookId!);
   const [open, setOpen] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(() => window.innerWidth >= 1024);
+  useEffect(() => {
+    const mql = window.matchMedia("(min-width: 1024px)");
+    const onChange = () => setIsDesktop(mql.matches);
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, []);
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterMember, setFilterMember] = useState<string>("all");
@@ -675,7 +682,7 @@ export default function BookDetail() {
         </div>
 
         {/* Members sheet - mobile only */}
-        <Sheet open={showMembers} onOpenChange={setShowMembers}>
+        <Sheet open={showMembers && !isDesktop} onOpenChange={setShowMembers}>
           <SheetContent side="bottom" className="lg:hidden max-h-[80vh] overflow-y-auto rounded-t-2xl">
             <SheetHeader>
               <SheetTitle>Members</SheetTitle>
