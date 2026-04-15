@@ -1,192 +1,173 @@
 import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/db";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
-import { getCacheEntry, setCacheEntry } from "@/lib/offlineStore";
 
-const BOOKS_CACHE_KEY = "books";
-const PRELOADED_EXPENSES_PER_BOOK = 30; // Preload 30 records for better offline availability
+const MAX_BOOKS_CACHE = 10;
 
 export function useBooks() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { isOnline, queueAction } = useOfflineSync();
 
-  const updateBooksCache = (updater: (books: any[]) => any[]) => {
-    let nextBooks: any[] = [];
-
-    queryClient.setQueryData(["books"], (old: any[] | undefined) => {
-      nextBooks = updater(old ?? []);
-      return nextBooks;
-    });
-
-    void setCacheEntry(BOOKS_CACHE_KEY, nextBooks);
-  };
-
-  const preloadRecentExpenses = async (bookIds: string[]) => {
-    await Promise.all(
-      bookIds.map(async (bookId) => {
-        try {
-          const { data: expenses, error } = await supabase
-            .from("expenses")
-            .select("*, categories(name, icon, color)")
-            .eq("book_id", bookId)
-            .order("created_at", { ascending: false })
-            .range(0, PRELOADED_EXPENSES_PER_BOOK - 1);
-
-          if (error) throw error;
-
-          const userIds = [
-            ...new Set(
-              (expenses ?? [])
-                .flatMap((expense) => [expense.created_by, expense.paid_by])
-                .filter(Boolean),
-            ),
-          ];
-
-          let profileMap = new Map<string, { display_name: string | null; email: string | null }>();
-
-          if (userIds.length > 0) {
-            const { data: profiles } = await supabase
-              .from("profiles")
-              .select("user_id, display_name, email")
-              .in("user_id", userIds);
-
-            profileMap = new Map(
-              profiles?.map((profile) => [profile.user_id, profile]) ?? [],
-            );
-          }
-
-          const cachedExpenses = (expenses ?? []).map((expense) => ({
-            ...expense,
-            creator_profile: profileMap.get(expense.created_by) ?? null,
-            payer_profile: profileMap.get(expense.paid_by) ?? null,
-          }));
-
-          await setCacheEntry(`expenses:${bookId}`, cachedExpenses);
-        } catch {
-          // Ignore preload failures and keep book loading fast.
-        }
-      }),
-    );
-  };
-
   const booksQuery = useQuery({
     queryKey: ["books"],
     queryFn: async () => {
-      const cachedBooks = await getCacheEntry<any[]>(BOOKS_CACHE_KEY);
+      // Always serve from cache first (stale-while-revalidate)
+      const cached = await db.books.orderBy("cachedAt").reverse().limit(MAX_BOOKS_CACHE).toArray();
+      const cachedBooks = cached.map((c) => c.data);
 
-      if (!isOnline) {
-        return cachedBooks ?? [];
-      }
+      if (!isOnline) return cachedBooks;
 
       try {
         const { data, error } = await supabase
           .from("expense_books")
-          .select(
-            "*, members:book_members(user_id, role), my_access:book_members!inner(user_id, role)",
-          )
+          .select("*, members:book_members(user_id, role), my_access:book_members!inner(user_id, role)")
           .order("created_at", { ascending: false })
           .eq("my_access.user_id", user!.id);
-
         if (error) throw error;
 
-        void setCacheEntry(BOOKS_CACHE_KEY, data);
-        void preloadRecentExpenses(data.map((book) => book.id));
+        // Update Dexie cache — keep recent 10 books
+        await db.books.clear();
+        for (const book of (data ?? []).slice(0, MAX_BOOKS_CACHE)) {
+          await db.books.put({ id: book.id, data: book, cachedAt: Date.now() });
+        }
 
-        return data;
-      } catch (error) {
-        if (cachedBooks) return cachedBooks;
-        throw error;
+        // Preload recent expenses for each book in background
+        preloadExpenses(data?.map((b) => b.id) ?? []);
+
+        return data ?? [];
+      } catch {
+        return cachedBooks;
       }
     },
     enabled: !!user,
+    staleTime: 30_000,
   });
 
   const createBook = useMutation({
-    mutationFn: async (book: {
-      name: string;
-      description?: string;
-      currency?: string;
-      color?: string;
-      icon?: string;
-    }) => {
-      if (!isOnline) {
-        await queueAction({ type: "create_book", payload: book, userId: user?.id });
-        // Optimistically add to cache
-        const tempBook = {
-          id: crypto.randomUUID(),
-          ...book,
-          created_by: user?.id,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-          color: book.color ?? "#10B981",
-          currency: book.currency ?? "INR",
-          icon: book.icon ?? "wallet",
-          description: book.description ?? null,
-          members: [{ user_id: user?.id, role: "owner" }],
-          my_access: [{ user_id: user?.id, role: "owner" }],
-          _offline: true,
-        };
+    mutationFn: async (book: { name: string; description?: string; currency?: string; color?: string; icon?: string }) => {
+      const tempId = `temp_${crypto.randomUUID()}`;
+      const tempBook = {
+        id: tempId,
+        ...book,
+        created_by: user?.id,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        color: book.color ?? "#10B981",
+        currency: book.currency ?? "INR",
+        icon: book.icon ?? "wallet",
+        description: book.description ?? null,
+        members: [{ user_id: user?.id, role: "owner" }],
+        my_access: [{ user_id: user?.id, role: "owner" }],
+        _offline: !isOnline,
+      };
 
-        updateBooksCache((old) => [tempBook, ...old]);
+      // Optimistic: add to Dexie + React Query cache immediately
+      await db.books.put({ id: tempId, data: tempBook, cachedAt: Date.now() });
+      queryClient.setQueryData(["books"], (old: unknown[] | undefined) => [tempBook, ...(old ?? [])]);
+
+      if (!isOnline) {
+        await queueAction({ type: "create_book", payload: { ...book, tempId }, tempId, userId: user?.id });
         return tempBook;
       }
 
-      const { data, error } = await supabase
-        .from("expense_books")
-        .insert({ ...book, created_by: user!.id })
-        .select()
-        .single();
+      const { data, error } = await supabase.from("expense_books")
+        .insert({ ...book, created_by: user!.id }).select().single();
       if (error) throw error;
 
-      await supabase
-        .from("book_members")
-        .insert({ book_id: data.id, user_id: user!.id, role: "owner" });
+      await supabase.from("book_members").insert({ book_id: data.id, user_id: user!.id, role: "owner" });
+
+      // Replace temp entry with real one
+      await db.books.delete(tempId);
+      await db.books.put({ id: data.id, data: { ...data, members: [{ user_id: user?.id, role: "owner" }], my_access: [{ user_id: user?.id, role: "owner" }] }, cachedAt: Date.now() });
+
       return data;
     },
-    onSuccess: (_, __, ___) => {
-      if (isOnline) {
-        queryClient.invalidateQueries({ queryKey: ["books"] });
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
+  });
+
+  const updateBook = useMutation({
+    mutationFn: async (params: { bookId: string; name?: string; description?: string; currency?: string; color?: string; icon?: string }) => {
+      // Optimistic update in Dexie
+      const cached = await db.books.get(params.bookId);
+      if (cached) {
+        await db.books.put({ ...cached, data: { ...cached.data, ...params }, cachedAt: Date.now() });
       }
+      queryClient.setQueryData(["books"], (old: unknown[] | undefined) =>
+        (old ?? []).map((b: Record<string, unknown>) => b.id === params.bookId ? { ...b, ...params } : b)
+      );
+
+      if (!isOnline) {
+        await queueAction({ type: "update_book", payload: params, userId: user?.id });
+        return;
+      }
+
+      const { error } = await supabase.from("expense_books").update({ name: params.name, description: params.description, currency: params.currency, color: params.color, icon: params.icon }).eq("id", params.bookId);
+      if (error) throw error;
     },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
   });
 
   const deleteBook = useMutation({
     mutationFn: async (bookId: string) => {
+      // Optimistic remove from cache
+      await db.books.delete(bookId);
+      await db.expenses.delete(bookId);
+      queryClient.setQueryData(["books"], (old: unknown[] | undefined) =>
+        (old ?? []).filter((b: Record<string, unknown>) => b.id !== bookId)
+      );
+
       if (!isOnline) {
         await queueAction({ type: "delete_book", payload: { bookId }, userId: user?.id });
-
-        updateBooksCache((old) => old.filter((book) => book.id !== bookId));
         return;
       }
 
-      const { error } = await supabase
-        .from("expense_books")
-        .delete()
-        .eq("id", bookId);
+      const { error } = await supabase.from("expense_books").delete().eq("id", bookId);
       if (error) throw error;
     },
-    onSuccess: () => {
-      if (isOnline) {
-        queryClient.invalidateQueries({ queryKey: ["books"] });
-      }
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["books"] }),
   });
 
-  const isBookOwner = (book: {
-    members: { user_id: string; role: string }[];
-  }) => {
-    return book.members?.some(
-      (m) => m.user_id === user?.id && m.role === "owner",
-    );
-  };
+  const isBookOwner = (book: { members: { user_id: string; role: string }[] }) =>
+    book.members?.some((m) => m.user_id === user?.id && m.role === "owner");
 
   return {
     books: booksQuery.data ?? [],
     isLoading: booksQuery.isLoading && isOnline,
     createBook,
+    updateBook,
     deleteBook,
     isBookOwner,
   };
+}
+
+async function preloadExpenses(bookIds: string[]) {
+  await Promise.all(bookIds.slice(0, MAX_BOOKS_CACHE).map(async (bookId) => {
+    try {
+      const { data: expenses, error } = await supabase
+        .from("expenses")
+        .select("*, categories(name, icon, color)")
+        .eq("book_id", bookId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) return;
+
+      const userIds = [...new Set((expenses ?? []).flatMap((e) => [e.created_by, e.paid_by]).filter(Boolean))];
+      let profileMap = new Map<string, { display_name: string | null; email: string | null }>();
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase.from("profiles").select("user_id, display_name, email").in("user_id", userIds);
+        profileMap = new Map(profiles?.map((p) => [p.user_id, p]) ?? []);
+      }
+
+      const withProfiles = (expenses ?? []).map((e) => ({
+        ...e,
+        creator_profile: profileMap.get(e.created_by) ?? null,
+        payer_profile: profileMap.get(e.paid_by) ?? null,
+      }));
+
+      await db.expenses.put({ id: bookId, expenses: withProfiles, cachedAt: Date.now() });
+    } catch { /* ignore preload failures */ }
+  }));
 }

@@ -1,0 +1,120 @@
+The previous offline implementation did not work, so remove the existing offline support logic completely and rebuild it from scratch using a proper offline-first architecture.
+
+This is an expense tracker app, so offline mode must support real daily usage, not just viewing a single screen.
+
+Rebuild expectations
+0) Fix invite user model ui for desktop as it is not visible on desktop the overklay overalp with it in desktop and another thing is the add expense button UI should be consistant with add book apart from this whatever u feel good make it.
+
+1) Persistent offline data across app restarts
+
+If I open the app tomorrow while still offline, it should still show meaningful data.
+
+Minimum cached data:
+
+latest 10 recent books
+inside each book cache at least 20 recent expenses
+cached dashboard summary
+cached totals and analytics
+recent filters / last viewed book
+pending unsynced operations queue
+
+This data must persist across:
+
+refresh
+browser close
+next day reopen
+device restart
+
+Use IndexedDB as primary storage, not session/local state.
+
+2) Full offline CRUD support
+
+Offline mode must support:
+
+create
+edit
+delete
+restore / undo recent delete
+mark paid / unpaid
+category changes
+notes updates
+book updates
+
+Everything should work without internet errors.
+
+All offline actions should be stored in a sync queue.
+
+3) Reliable sync engine
+
+When internet comes back:
+
+sync queued actions in order
+retry failed sync automatically
+prevent duplicate expense creation
+resolve conflicts safely using:
+latest updated timestamp
+server merge fallback
+never break totals after sync
+analytics must remain accurate
+4) Dashboard offline support
+
+Dashboard should still work offline with cached:
+
+total expenses
+category totals
+book-wise totals
+recent spending trend
+monthly summaries
+last synced timestamp
+
+Even if some old data is archived, recent summaries must stay accurate.
+
+5) Smart large-data strategy for browser limits
+
+Because expense data can grow large, use:
+
+lazy loading + pagination
+cache only recent data deeply
+archive old data as summarized monthly chunks
+store full details only for recent books
+keep dashboard aggregates precomputed
+use background cleanup for stale cache
+
+Recommended approach:
+
+recent active books → full cache
+old books → summary cache only
+old expenses → monthly compressed summary
+sync queue → highest priority persistence
+
+This avoids browser storage issues.
+
+
+Offline techniques
+IndexedDB + Dexie
+stale-while-revalidate caching
+background sync queue
+optimistic UI updates
+write-ahead operation logs
+conflict resolution with timestamps
+retry with exponential backoff
+lazy pagination with cursor-based caching
+aggregate summary caching
+delta sync instead of full sync
+service worker for static assets
+cache versioning + migration
+
+What user should still access offline
+
+✅ dashboard totals
+✅ last 10 books
+✅ last 20 expenses/book
+✅ edit/delete/create
+✅ search recent data
+✅ filters
+✅ analytics snapshot
+✅ pending sync status
+✅ export last cached month CSV
+✅ restore deleted expense
+
+That would make it feel like a native mobile app quality experience.

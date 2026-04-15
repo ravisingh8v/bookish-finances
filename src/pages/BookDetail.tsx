@@ -276,9 +276,9 @@ export default function BookDetail() {
             {canEdit && (
               <Dialog open={open} onOpenChange={setOpen}>
                 <DialogTrigger asChild>
-                  <Button size="icon" className="h-9 w-9 sm:h-auto sm:w-auto sm:px-4 sm:gap-2">
+                  <Button className="gap-2 h-9 px-3 sm:px-4">
                     <Plus className="h-4 w-4" />
-                    <span className="hidden sm:inline">Add</span>
+                    <span className="hidden sm:inline">Add Expense</span>
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-w-[95vw]">
