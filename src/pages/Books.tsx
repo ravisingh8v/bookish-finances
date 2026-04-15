@@ -62,19 +62,21 @@ export default function Books() {
       color,
     };
 
-    if (!isOnline) {
-      setOpen(false);
-      setName("");
-      setDescription("");
-      setCurrency("INR");
-      setColor(COLORS[0]);
-      createBook.mutate(payload, {
-        onError: (error: Error) => toast.error(error.message),
-      });
-      return;
-    }
-
     try {
+      if (!isOnline) {
+        // Offline flow: immediately close modal and clear form for responsive UX
+        setOpen(false);
+        setName("");
+        setDescription("");
+        setCurrency("INR");
+        setColor(COLORS[0]);
+
+        // Then queue the action in background
+        await createBook.mutateAsync(payload);
+        return;
+      }
+
+      // Online flow: standard async flow
       await createBook.mutateAsync(payload);
       toast.success("Book created!");
       setOpen(false);
@@ -104,31 +106,33 @@ export default function Books() {
                 New Book
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md max-w-[95vw]">
               <DialogHeader>
                 <DialogTitle>Create Expense Book</DialogTitle>
               </DialogHeader>
-              <div className="space-y-4 overflow-x-hidden">
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Name</Label>
+                  <Label htmlFor="book-name">Name</Label>
                   <Input
+                    id="book-name"
                     placeholder="e.g., Trip with Friends"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Description (optional)</Label>
+                  <Label htmlFor="book-desc">Description (optional)</Label>
                   <Input
+                    id="book-desc"
                     placeholder="What's this book for?"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Currency</Label>
+                  <Label htmlFor="book-currency">Currency</Label>
                   <Select value={currency} onValueChange={setCurrency}>
-                    <SelectTrigger>
+                    <SelectTrigger id="book-currency">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -153,18 +157,18 @@ export default function Books() {
                     ))}
                   </div>
                 </div>
-                <div className="sticky bottom-0 bg-background pt-3">
-                  <Button
-                    className="w-full"
-                    onClick={handleCreate}
-                    disabled={createBook.isPending}
-                  >
-                    {createBook.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : null}
-                    Create Book
-                  </Button>
-                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="flex-1"
+                  onClick={handleCreate}
+                  disabled={createBook.isPending}
+                >
+                  {createBook.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : null}
+                  Create Book
+                </Button>
               </div>
             </DialogContent>
           </Dialog>

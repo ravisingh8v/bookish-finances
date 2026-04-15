@@ -98,20 +98,23 @@ export default function BookDetail() {
     bookId!,
   );
 
-  // Infinite scroll observer
+  // Infinite scroll observer - triggers fetch when sentinel enters viewport
   const observerRef = useRef<IntersectionObserver | null>(null);
   const sentinelRef = useCallback(
     (node: HTMLDivElement | null) => {
       if (observerRef.current) observerRef.current.disconnect();
       if (!node) return;
-      observerRef.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasNextPage) {
-          fetchNextPage();
-        }
-      });
+      observerRef.current = new IntersectionObserver(
+        (entries) => {
+          if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+            fetchNextPage();
+          }
+        },
+        { rootMargin: "100px" } // Preload when sentinel is 100px from viewport
+      );
       observerRef.current.observe(node);
     },
-    [hasNextPage, fetchNextPage],
+    [hasNextPage, isFetchingNextPage, fetchNextPage],
   );
   const { data: categories } = useCategories();
   const { members, isOwner, currentUserRole } = useBookMembers(bookId!);
@@ -204,16 +207,18 @@ export default function BookDetail() {
       notes: notes.trim() || undefined,
     };
 
-    if (!isOnline) {
-      setOpen(false);
-      resetForm();
-      createExpense.mutate(payload, {
-        onError: (error: Error) => toast.error(error.message),
-      });
-      return;
-    }
-
     try {
+      if (!isOnline) {
+        // Offline flow: immediately close modal and clear form for responsive UX
+        setOpen(false);
+        resetForm();
+
+        // Then queue the action in background
+        await createExpense.mutateAsync(payload);
+        return;
+      }
+
+      // Online flow: standard async flow
       await createExpense.mutateAsync(payload);
       toast.success("Expense added!");
       setOpen(false);
@@ -276,111 +281,116 @@ export default function BookDetail() {
                     <span className="hidden sm:inline">Add</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="sm:max-w-lg">
+                <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-w-[95vw]">
                   <DialogHeader>
                     <DialogTitle>Add Expense</DialogTitle>
                   </DialogHeader>
-                  <div className="space-y-4 overflow-x-hidden">
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {EXPENSE_TYPES.map((t) => (
-                      <button
-                        key={t.value}
-                        onClick={() => setExpenseType(t.value)}
-                        className={`p-3 rounded-xl border text-sm font-medium transition-all flex items-center justify-center gap-2
-                          ${expenseType === t.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/30"}`}
-                      >
-                        <t.icon className="h-4 w-4" />
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Title</Label>
-                    <Input
-                      placeholder="What did you spend on?"
-                      value={title}
-                      onChange={(e) => setTitle(e.target.value)}
-                    />
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-2">
+                      {EXPENSE_TYPES.map((t) => (
+                        <button
+                          key={t.value}
+                          onClick={() => setExpenseType(t.value)}
+                          className={`p-3 rounded-xl border text-xs sm:text-sm font-medium transition-all flex items-center justify-center gap-1 sm:gap-2
+                            ${expenseType === t.value ? "border-primary bg-primary/10 text-primary" : "border-border hover:border-primary/30"}`}
+                        >
+                          <t.icon className="h-4 w-4" />
+                          <span className="hidden sm:inline">{t.label}</span>
+                          <span className="sm:hidden">{t.label.split(" ")[0]}</span>
+                        </button>
+                      ))}
+                    </div>
                     <div className="space-y-2">
-                      <Label>Amount</Label>
+                      <Label htmlFor="expense-title">Title</Label>
                       <Input
-                        type="number"
-                        placeholder="0.00"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                        id="expense-title"
+                        placeholder="What did you spend on?"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
                       />
                     </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="expense-amount">Amount</Label>
+                        <Input
+                          id="expense-amount"
+                          type="number"
+                          placeholder="0.00"
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="expense-date">Date</Label>
+                        <Input
+                          id="expense-date"
+                          type="date"
+                          value={date}
+                          onChange={(e) => setDate(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="expense-category">Category</Label>
+                        <Select value={categoryId} onValueChange={setCategoryId}>
+                          <SelectTrigger id="expense-category">
+                            <SelectValue placeholder="Select" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {categories?.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="expense-payment">Payment</Label>
+                        <Select
+                          value={paymentMethod}
+                          onValueChange={setPaymentMethod}
+                        >
+                          <SelectTrigger id="expense-payment">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {PAYMENT_METHODS.map((m) => (
+                              <SelectItem key={m} value={m}>
+                                {m
+                                  .replace("_", " ")
+                                  .replace(/\b\w/g, (c) => c.toUpperCase())}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                     <div className="space-y-2">
-                      <Label>Date</Label>
-                      <Input
-                        type="date"
-                        value={date}
-                        onChange={(e) => setDate(e.target.value)}
+                      <Label htmlFor="expense-notes">Notes (optional)</Label>
+                      <Textarea
+                        id="expense-notes"
+                        placeholder="Any additional details..."
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        rows={2}
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label>Category</Label>
-                      <Select value={categoryId} onValueChange={setCategoryId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {categories?.map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Payment</Label>
-                      <Select
-                        value={paymentMethod}
-                        onValueChange={setPaymentMethod}
-                      >
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {PAYMENT_METHODS.map((m) => (
-                            <SelectItem key={m} value={m}>
-                              {m
-                                .replace("_", " ")
-                                .replace(/\b\w/g, (c) => c.toUpperCase())}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="flex gap-2">
+                    <Button
+                      className="flex-1"
+                      onClick={handleCreate}
+                      disabled={createExpense.isPending}
+                    >
+                      {createExpense.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
+                      Add {expenseType === "credit" ? "Income" : "Expense"}
+                    </Button>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Notes (optional)</Label>
-                    <Textarea
-                      placeholder="Any additional details..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      rows={2}
-                    />
-                  </div>
-                    <div className="sticky bottom-0 bg-background pt-3">
-                      <Button
-                        className="w-full"
-                        onClick={handleCreate}
-                        disabled={createExpense.isPending}
-                      >
-                        {createExpense.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        ) : null}
-                        Add {expenseType === "credit" ? "Income" : "Expense"}
-                      </Button>
-                    </div>
-                </div>
-              </DialogContent>
+                </DialogContent>
               </Dialog>
             )}
           </div>
@@ -458,6 +468,14 @@ export default function BookDetail() {
             </div>
 
             {/* Expense List */}
+            {/* Offline cached data indicator */}
+            {!isOnline && filtered.length > 0 && (
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-900">
+                <p className="font-medium">Viewing cached data</p>
+                <p className="text-amber-800 text-xs mt-1">You're offline. New actions will sync when back online.</p>
+              </div>
+            )}
+
             {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
