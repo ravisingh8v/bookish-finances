@@ -6,12 +6,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -73,19 +71,21 @@ export function BookMembers({ bookId }: { bookId: string }) {
           Members ({members.length})
         </h3>
         {isOwner && (
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
               <Button size="sm" variant="outline" className="gap-1.5">
                 <UserPlus className="h-3.5 w-3.5" />
                 Invite
               </Button>
-            </DialogTrigger>
-            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md max-w-[95vw]">
-              <DialogHeader>
-                <DialogTitle>Invite Member</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-2">
+            </PopoverTrigger>
+            <PopoverContent
+              className="w-80 p-4"
+              align="end"
+              sideOffset={8}
+            >
+              <p className="text-sm font-semibold mb-4">Invite Member</p>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
                   <Label htmlFor="invite-email">Email Address</Label>
                   <Input
                     id="invite-email"
@@ -93,24 +93,23 @@ export function BookMembers({ bookId }: { bookId: string }) {
                     placeholder="user@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleAdd()}
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   <Label htmlFor="invite-role">Role</Label>
                   <Select value={role} onValueChange={setRole}>
                     <SelectTrigger id="invite-role">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="editor">Editor — can add & edit expenses</SelectItem>
+                      <SelectItem value="editor">Editor — can add &amp; edit expenses</SelectItem>
                       <SelectItem value="viewer">Viewer — read only</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="flex gap-2">
                 <Button
-                  className="flex-1"
+                  className="w-full mt-1"
                   onClick={handleAdd}
                   disabled={addMember.isPending}
                 >
@@ -118,8 +117,8 @@ export function BookMembers({ bookId }: { bookId: string }) {
                   Send Invite
                 </Button>
               </div>
-            </DialogContent>
-          </Dialog>
+            </PopoverContent>
+          </Popover>
         )}
       </div>
 
