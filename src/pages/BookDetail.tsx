@@ -446,7 +446,7 @@ export default function BookDetail() {
                           style={{
                             backgroundColor: expense.categories.color
                               ? expense.categories.color + 20
-                              : "#0000080",
+                              : "#0000020",
                             color: expense.categories.color
                               ? expense.categories.color
                               : "#00000",
