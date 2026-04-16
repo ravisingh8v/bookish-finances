@@ -98,7 +98,7 @@ const getCurrencySymbol = (c: string) =>
 export default function BookDetail() {
   const { bookId } = useParams<{ bookId: string }>();
   const { user } = useAuth();
-  const { isOnline, isSaving } = useOfflineSync();
+  const { isOnline } = useOfflineSync();
   const { books } = useBooks();
   const cachedBook = books.find((candidate) => candidate.id === bookId);
   const {
@@ -112,7 +112,6 @@ export default function BookDetail() {
     isFetchingNextPage,
   } = useExpenses(bookId!);
 
-  // Infinite scroll observer - triggers fetch when sentinel enters viewport
   const observerRef = useRef<IntersectionObserver | null>(null);
   const sentinelRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -124,7 +123,7 @@ export default function BookDetail() {
             fetchNextPage();
           }
         },
-        { rootMargin: "100px" }, // Preload when sentinel is 100px from viewport
+        { rootMargin: "100px" },
       );
       observerRef.current.observe(node);
     },
@@ -175,7 +174,6 @@ export default function BookDetail() {
   const effectiveRole = currentUserRole ?? cachedUserRole;
   const canEdit = effectiveRole === "owner" || effectiveRole === "editor";
 
-  // Access denied state
   if (!bookQuery.isLoading && !book) {
     return (
       <DashboardLayout>
@@ -245,20 +243,29 @@ export default function BookDetail() {
     const isEditing = Boolean(editingExpenseId);
     const currentEditingExpenseId = editingExpenseId;
 
+    // Close modal immediately for snappy UX
+    setOpen(false);
+    resetForm();
+
     try {
       if (isEditing) {
         await updateExpense.mutateAsync({
           expenseId: currentEditingExpenseId!,
           ...payload,
         });
-        toast.success("Expense updated!");
+        toast.success(
+          isOnline
+            ? "Expense updated!"
+            : "Expense updated offline. Will sync when online.",
+        );
       } else {
         await createExpense.mutateAsync({ book_id: bookId!, ...payload });
-        toast.success("Expense added!");
+        toast.success(
+          isOnline
+            ? "Expense added!"
+            : "Saved offline. Will sync when internet is available.",
+        );
       }
-
-      setOpen(false);
-      resetForm();
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -338,10 +345,10 @@ export default function BookDetail() {
                             onClick={() => setExpenseType(t.value)}
                             className={`rounded-xl border px-3 py-3 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
                               expenseType === t.value
-                                ? t.value == "debit"
+                                ? t.value === "debit"
                                   ? "border-destructive bg-destructive/10 text-destructive"
                                   : "border-primary bg-primary/10 text-primary"
-                                : t.value == "debit"
+                                : t.value === "debit"
                                   ? "border-border text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
                                   : "border-border text-primary hover:border-primary hover:bg-primary/10"
                             }`}
@@ -575,8 +582,7 @@ export default function BookDetail() {
               )}
             </div>
 
-            {/* Expense List */}
-            {/* Offline cached data indicator - appears dynamically only when offline */}
+            {/* Offline indicator */}
             <AnimatePresence mode="wait">
               {!isOnline && (
                 <motion.div
@@ -595,6 +601,7 @@ export default function BookDetail() {
               )}
             </AnimatePresence>
 
+            {/* Expense List */}
             {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
@@ -627,7 +634,7 @@ export default function BookDetail() {
                     >
                       <Card className="glass hover:shadow-md transition-shadow group overflow-hidden">
                         <span
-                          className={`absolute right-0 top-[0px] rounded-l-full px-2 font-[500] text-sm`}
+                          className="absolute right-0 top-0 rounded-l-full px-2 font-medium text-sm"
                           style={{
                             backgroundColor: expense.categories?.color
                               ? `${expense.categories.color}20`
@@ -659,11 +666,6 @@ export default function BookDetail() {
                               {expense.title}
                             </p>
                             <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
-                              {/* <span>
-                                {expense.categories?.name ?? "Uncategorized"}
-                              </span>
-                              <span>•</span> */}
-
                               {expense.payment_method && (
                                 <>
                                   <span className="capitalize">
@@ -675,6 +677,14 @@ export default function BookDetail() {
                               <span>
                                 {new Date(expense.date).toLocaleDateString()}
                               </span>
+                              {expense._offline && (
+                                <>
+                                  <span>•</span>
+                                  <span className="text-amber-600">
+                                    Pending sync
+                                  </span>
+                                </>
+                              )}
                             </div>
                             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 mt-0.5">
                               <span className="inline-flex items-center gap-1">
@@ -684,7 +694,7 @@ export default function BookDetail() {
                                   )}
                                 </span>
                                 Added by{" "}
-                                {expense.created_by === user!.id
+                                {expense.created_by === user?.id
                                   ? "You"
                                   : expense.creator_profile?.display_name ||
                                     "Unknown"}
@@ -710,63 +720,45 @@ export default function BookDetail() {
                             {Number(expense.amount).toLocaleString()}
                           </p>
                           {(canDelete || canEdit) && (
-                            <>
-                              <DropdownMenu modal>
-                                <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none">
-                                  <EllipsisVertical className="h-4 w-4" />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuPortal>
-                                  <DropdownMenuContent
-                                    className="DropdownMenuContent p-1 bg-white text-gray-700 text-sm font-[500] z-[999]"
-                                    sideOffset={5}
-                                  >
-                                    {canEdit && (
-                                      <DropdownMenuItem
-                                        className="DropdownMenuItem p-2 rounded hover:bg-accent hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
-                                        onClick={() =>
-                                          handleEditExpense(expense)
-                                        }
-                                      >
-                                        <div className="flex gap-2 items-center">
-                                          <div>
-                                            <Edit className="h-4 w-4" />
-                                          </div>
-                                          <div>Edit</div>
-                                        </div>
-                                      </DropdownMenuItem>
-                                    )}
-                                    {canDelete && (
-                                      <DropdownMenuItem
-                                        className="DropdownMenuItem p-2 rounded hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
-                                        onClick={() => {
-                                          if (confirm("Delete this expense?"))
-                                            deleteExpense.mutate(expense.id);
-                                        }}
-                                      >
-                                        <div className="flex gap-2 items-center">
-                                          <div>
-                                            <Trash2 className="h-4 w-4" />
-                                          </div>
-                                          <div>Delete</div>
-                                        </div>
-                                      </DropdownMenuItem>
-                                    )}
-                                  </DropdownMenuContent>
-                                </DropdownMenuPortal>
-                              </DropdownMenu>
-
-                              {/* <Button
-                                variant="ghost"
-                                size="icon"
-                                className="opacity-0 group-hover:opacity-100 shrink-0 text-muted-foreground hover:bg-red-50 hover:text-destructive"
-                                onClick={() => {
-                                  if (confirm("Delete this expense?"))
-                                    deleteExpense.mutate(expense.id);
-                                }}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button> */}
-                            </>
+                            <DropdownMenu modal>
+                              <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none">
+                                <EllipsisVertical className="h-4 w-4" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuPortal>
+                                <DropdownMenuContent
+                                  className="DropdownMenuContent p-1 bg-white text-gray-700 text-sm font-medium z-[999] rounded-lg shadow-lg border"
+                                  sideOffset={5}
+                                >
+                                  {canEdit && (
+                                    <DropdownMenuItem
+                                      className="DropdownMenuItem p-2 rounded hover:bg-accent hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
+                                      onClick={() =>
+                                        handleEditExpense(expense)
+                                      }
+                                    >
+                                      <div className="flex gap-2 items-center">
+                                        <Edit className="h-4 w-4" />
+                                        <span>Edit</span>
+                                      </div>
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canDelete && (
+                                    <DropdownMenuItem
+                                      className="DropdownMenuItem p-2 rounded hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
+                                      onClick={() => {
+                                        if (confirm("Delete this expense?"))
+                                          deleteExpense.mutate(expense.id);
+                                      }}
+                                    >
+                                      <div className="flex gap-2 items-center">
+                                        <Trash2 className="h-4 w-4" />
+                                        <span>Delete</span>
+                                      </div>
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenuPortal>
+                            </DropdownMenu>
                           )}
                         </CardContent>
                       </Card>
