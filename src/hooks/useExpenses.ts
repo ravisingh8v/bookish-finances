@@ -1,7 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/db";
 import { isOfflineLikeError, withNetworkTimeout } from "@/lib/network";
-import { getStoredExpenses, setStoredExpenses } from "@/lib/offlineJournal";
+import { getStoredExpenses, setStoredExpenses, getCurrentUserId } from "@/lib/offlineJournal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -98,11 +98,12 @@ function optimisticExpense(
   };
 }
 
-async function putExpenses(bookId: string, expenses: Expense[]) {
-  setStoredExpenses(bookId, expenses.slice(0, MAX_EXPENSES_CACHE));
+async function putExpenses(bookId: string, expenses: Expense[], userId?: string) {
+  setStoredExpenses(bookId, expenses.slice(0, MAX_EXPENSES_CACHE), userId);
   await db.expenses.put({
     id: bookId,
     expenses: expenses.slice(0, MAX_EXPENSES_CACHE),
+    userId: userId || getCurrentUserId(),
     cachedAt: Date.now(),
   });
 }
@@ -110,27 +111,31 @@ async function putExpenses(bookId: string, expenses: Expense[]) {
 async function updateCachedExpenses(
   bookId: string,
   updater: (expenses: Expense[]) => Expense[],
+  userId?: string,
 ) {
-  const current = getStoredExpenses<Expense>(bookId);
+  const current = getStoredExpenses<Expense>(bookId, userId);
   const next = updater(current);
-  setStoredExpenses(bookId, next.slice(0, MAX_EXPENSES_CACHE));
+  setStoredExpenses(bookId, next.slice(0, MAX_EXPENSES_CACHE), userId);
   await db.expenses.put({
     id: bookId,
     expenses: next.slice(0, MAX_EXPENSES_CACHE),
+    userId: userId || getCurrentUserId(),
     cachedAt: Date.now(),
   });
 }
 
-async function getCachedExpenses(bookId: string): Promise<Expense[]> {
+async function getCachedExpenses(bookId: string, userId?: string): Promise<Expense[]> {
   try {
+    const uid = userId || getCurrentUserId();
     const cached = await db.expenses.get(bookId);
-    if (cached && Array.isArray(cached.expenses) && cached.expenses.length > 0) {
+    // Only return if userId matches (for isolation)
+    if (cached && cached.userId === uid && Array.isArray(cached.expenses) && cached.expenses.length > 0) {
       return cached.expenses as Expense[];
     }
   } catch {
     // IndexedDB may fail
   }
-  return getStoredExpenses<Expense>(bookId);
+  return getStoredExpenses<Expense>(bookId, userId);
 }
 
 export function useExpenses(bookId: string) {
@@ -147,23 +152,29 @@ export function useExpenses(bookId: string) {
     upsertQueuedAction,
   } = useOfflineSync();
   const [localExpenses, setLocalExpenses] = useState<Expense[]>([]);
+  const userId = user?.id || getUserId();
 
+  // Immediate offline -> cache fallback
   useEffect(() => {
-    if (!bookId) return;
+    if (!bookId || !userId) return;
     let active = true;
-    getCachedExpenses(bookId).then((expenses) => {
+
+    getCachedExpenses(bookId, userId).then((expenses) => {
       if (active) setLocalExpenses(expenses);
     });
+
     return () => { active = false; };
-  }, [bookId]);
+  }, [bookId, userId]);
 
   const expensesQuery = useQuery({
     queryKey: ["expenses", bookId],
     queryFn: async () => {
-      const cachedExpenses = await getCachedExpenses(bookId);
+      const cachedExpenses = await getCachedExpenses(bookId, userId);
 
-      if (!user || !bookId) return [];
+      if (!user || !bookId || !userId) return [];
 
+      // CRITICAL FIX: Immediately return cached data when offline
+      // This prevents the first-time offline switching failure
       if (!isOnline) {
         return cachedExpenses.sort((a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -204,6 +215,7 @@ export function useExpenses(bookId: string) {
           );
         }
 
+        // Store complete expense data with all relationships
         const remoteExpenses = (data ?? []).map((expense) => ({
           ...expense,
           creator_profile: profileMap.get(expense.created_by) ?? null,
@@ -223,7 +235,7 @@ export function useExpenses(bookId: string) {
           ),
         ];
 
-        await putExpenses(bookId, merged);
+        await putExpenses(bookId, merged, userId);
         return merged;
       } catch (err) {
         if (isOfflineLikeError(err)) {
@@ -234,7 +246,7 @@ export function useExpenses(bookId: string) {
         return cachedExpenses;
       }
     },
-    enabled: !!user && !!bookId,
+    enabled: !!user && !!bookId && !!userId,
     staleTime: 30_000,
     placeholderData: localExpenses,
   });
@@ -244,15 +256,15 @@ export function useExpenses(bookId: string) {
   const createExpense = useMutation({
     mutationFn: async (payload: ExpensePayload) => {
       const tempId = `temp_${crypto.randomUUID()}`;
-      const userId = user?.id || getUserId();
+      const uid = user?.id || getUserId();
 
-      if (!userId) {
+      if (!uid) {
         throw new Error("User ID not available. Please log in again.");
       }
 
       const optimistic = optimisticExpense(
         payload,
-        userId,
+        uid,
         profile,
         tempId,
         true,
@@ -262,12 +274,12 @@ export function useExpenses(bookId: string) {
         ["expenses", bookId],
         (old: Expense[] | undefined) => [optimistic, ...(old ?? [])],
       );
-      await updateCachedExpenses(bookId, (current) => [optimistic, ...current]);
+      await updateCachedExpenses(bookId, (current) => [optimistic, ...current], uid);
       await queueAction({
         type: "create_expense",
-        payload: { ...payload, tempId, paid_by: userId, created_by: userId },
+        payload: { ...payload, tempId, paid_by: uid, created_by: uid },
         tempId,
-        userId: userId,
+        userId: uid,
       });
       if (isOnline) {
         void syncNow();
@@ -281,6 +293,7 @@ export function useExpenses(bookId: string) {
 
   const updateExpense = useMutation({
     mutationFn: async (params: ExpenseUpdate) => {
+      const uid = user?.id || getUserId();
       const patch = {
         title: params.title,
         amount: params.amount,
@@ -306,6 +319,7 @@ export function useExpenses(bookId: string) {
         current.map((expense) =>
           expense.id === params.expenseId ? { ...expense, ...patch } : expense,
         ),
+        uid,
       );
 
       const queued = await getQueuedActions();
@@ -330,7 +344,7 @@ export function useExpenses(bookId: string) {
         await queueAction({
           type: "update_expense",
           payload: { ...params, bookId },
-          userId: user?.id,
+          userId: uid,
         });
       }
 
@@ -345,6 +359,7 @@ export function useExpenses(bookId: string) {
 
   const deleteExpense = useMutation({
     mutationFn: async (expenseId: string) => {
+      const uid = user?.id || getUserId();
       const deletedExpense = expenses.find(
         (expense) => expense.id === expenseId,
       );
@@ -356,6 +371,7 @@ export function useExpenses(bookId: string) {
       );
       await updateCachedExpenses(bookId, (current) =>
         current.filter((expense) => expense.id !== expenseId),
+        uid,
       );
 
       if (expenseId.startsWith("temp_")) {
@@ -379,6 +395,7 @@ export function useExpenses(bookId: string) {
         await db.deletedExpenses.put({
           id: expenseId,
           bookId,
+          userId: uid,
           data: deletedExpense as unknown as Record<string, unknown>,
           deletedAt: Date.now(),
         });
@@ -387,7 +404,7 @@ export function useExpenses(bookId: string) {
       await queueAction({
         type: "delete_expense",
         payload: { expenseId },
-        userId: user?.id,
+        userId: uid,
       });
       if (isOnline) {
         void syncNow();
@@ -410,6 +427,7 @@ export function useExpenses(bookId: string) {
 
   const restoreExpense = useMutation({
     mutationFn: async (expenseId: string) => {
+      const uid = user?.id || getUserId();
       const deleted = await db.deletedExpenses.get(expenseId);
       if (!deleted) return;
 
@@ -425,7 +443,7 @@ export function useExpenses(bookId: string) {
       await updateCachedExpenses(bookId, (current) => {
         if (current.some((entry) => entry.id === expense.id)) return current;
         return [{ ...expense, _offline: !isOnline }, ...current];
-      });
+      }, uid);
       await db.deletedExpenses.delete(expenseId);
 
       const restorePayload = {
@@ -460,7 +478,7 @@ export function useExpenses(bookId: string) {
           type: "create_expense",
           payload: restorePayload,
           tempId: expense.id,
-          userId: user?.id,
+          userId: uid,
         });
         return;
       }
@@ -469,7 +487,7 @@ export function useExpenses(bookId: string) {
         type: "create_expense",
         payload: restorePayload,
         tempId: expense.id,
-        userId: user?.id,
+        userId: uid,
       });
       void syncNow();
     },

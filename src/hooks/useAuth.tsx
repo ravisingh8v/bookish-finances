@@ -8,6 +8,7 @@ import {
   useEffect,
   useState,
 } from "react";
+import { clearUserCache } from "@/lib/offlineJournal";
 
 type Profile = Tables<"profiles">;
 
@@ -28,11 +29,11 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const storeUserIdLocally = (userId: string) => {
-  localStorage.setItem("cached_user_id", userId);
+  localStorage.setItem("_cached_user_id", userId);
 };
 
 const getCachedUserId = (): string | null => {
-  return localStorage.getItem("cached_user_id");
+  return localStorage.getItem("_cached_user_id");
 };
 
 export const getUserId = (): string | null => {
@@ -105,7 +106,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    localStorage.removeItem("cached_user_id");
+    const userId = getCachedUserId();
+    if (userId) {
+      await clearUserCache(userId);
+    }
+    localStorage.removeItem("_cached_user_id");
     await supabase.auth.signOut();
   };
 
