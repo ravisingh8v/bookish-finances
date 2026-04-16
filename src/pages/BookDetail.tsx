@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -40,7 +41,7 @@ import {
   DropdownMenuTrigger,
 } from "@radix-ui/react-dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Edit,
@@ -322,14 +323,14 @@ export default function BookDetail() {
                     <span className="hidden sm:inline">Add Expense</span>
                   </Button>
                 </DialogTrigger>
-                <DialogContent className="w-[calc(100%-2rem)] sm:max-w-lg max-w-[95vw] max-h-[calc(100dvh-4rem)] overflow-hidden p-0">
-                  <div className="flex h-full flex-col">
-                    <DialogHeader className="px-3 pt-2 pb-6">
-                      <DialogTitle className="text-xl">
-                        {editingExpenseId ? "Edit Expense" : "Add Expense"}
-                      </DialogTitle>
-                    </DialogHeader>
-                    <div className="flex-1 overflow-y-auto px-3 pb-4 space-y-4">
+                <DialogContent fullscreen className="flex flex-col">
+                  <DialogHeader className="pb-6 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
+                    <DialogTitle className="text-xl">
+                      {editingExpenseId ? "Edit Expense" : "Add Expense"}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+                    <div className="space-y-4">
                       <div className="grid grid-cols-2 gap-2">
                         {EXPENSE_TYPES.map((t) => (
                           <button
@@ -341,8 +342,8 @@ export default function BookDetail() {
                                   ? "border-destructive bg-destructive/10 text-destructive"
                                   : "border-primary bg-primary/10 text-primary"
                                 : t.value == "debit"
-                                  ? "border-destructive text-destructive"
-                                  : "border-primary text-primary hover:border-primary hover:bg-primary/10 hover:text-primary"
+                                  ? "border-border text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
+                                  : "border-border text-primary hover:border-primary hover:bg-primary/10"
                             }`}
                           >
                             <t.icon className="h-4 w-4" />
@@ -471,23 +472,23 @@ export default function BookDetail() {
                         />
                       </div>
                     </div>
-                    <div className="border-t px-3 py-4">
-                      <Button
-                        className="w-full h-11"
-                        onClick={handleSaveExpense}
-                        disabled={
-                          createExpense.isPending || updateExpense.isPending
-                        }
-                      >
-                        {createExpense.isPending || updateExpense.isPending ? (
-                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        ) : null}
-                        {editingExpenseId
-                          ? "Save Changes"
-                          : `Add ${expenseType === "credit" ? "Income" : "Expense"}`}
-                      </Button>
-                    </div>
                   </div>
+                  <DialogFooter>
+                    <Button
+                      className="w-full h-11 sm:w-auto"
+                      onClick={handleSaveExpense}
+                      disabled={
+                        createExpense.isPending || updateExpense.isPending
+                      }
+                    >
+                      {createExpense.isPending || updateExpense.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
+                      {editingExpenseId
+                        ? "Save Changes"
+                        : `Add ${expenseType === "credit" ? "Income" : "Expense"}`}
+                    </Button>
+                  </DialogFooter>
                 </DialogContent>
               </Dialog>
             )}
@@ -575,15 +576,24 @@ export default function BookDetail() {
             </div>
 
             {/* Expense List */}
-            {/* Offline cached data indicator */}
-            {!isOnline && filtered.length > 0 && (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-900">
-                <p className="font-medium">Viewing cached data</p>
-                <p className="text-amber-800 text-xs mt-1">
-                  You're offline. New actions will sync when back online.
-                </p>
-              </div>
-            )}
+            {/* Offline cached data indicator - appears dynamically only when offline */}
+            <AnimatePresence mode="wait">
+              {!isOnline && (
+                <motion.div
+                  key="offline-indicator"
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                  className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-900"
+                >
+                  <p className="font-medium">Viewing cached data</p>
+                  <p className="text-amber-800 text-xs mt-1">
+                    You're offline. New actions will sync when back online.
+                  </p>
+                </motion.div>
+              )}
+            </AnimatePresence>
 
             {isLoading ? (
               <div className="space-y-3">

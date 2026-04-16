@@ -9,19 +9,20 @@ import {
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { createSyncActionId, db, SyncAction } from "@/lib/db";
+import { type TablesUpdate } from "@/integrations/supabase/types";
+import { createSyncActionId, db, type SyncAction } from "@/lib/db";
 import {
-  countStoredQueue,
+  countPersistedQueue,
+  getPersistedQueue,
   getStoredExpenses,
-  getStoredQueue,
+  removePersistedQueueActions,
   removeStoredBook,
   removeStoredExpenseBucket,
-  removeStoredQueueActions,
   renameStoredExpenseBucket,
   setStoredExpenses,
   updateStoredBook,
+  upsertPersistedQueueAction,
   upsertStoredBook,
-  upsertStoredQueueAction,
 } from "@/lib/offlineJournal";
 import { useAuth } from "./useAuth";
 import { useOnlineStatus } from "./useOnlineStatus";
@@ -40,6 +41,9 @@ interface OfflineSyncContextType {
   queueAction: (
     action: Omit<SyncAction, "id" | "createdAt" | "retryCount">,
   ) => Promise<void>;
+  getQueuedActions: () => Promise<SyncAction[]>;
+  upsertQueuedAction: (action: SyncAction) => Promise<void>;
+  removeQueuedActions: (actionIds: string[]) => Promise<void>;
   cancelQueuedCreate: (tempId: string) => Promise<void>;
   syncNow: () => Promise<void>;
 }
@@ -121,6 +125,91 @@ const OfflineSyncContext = createContext<OfflineSyncContextType | undefined>(
 const MAX_RETRY = 5;
 const RETRY_BACKOFF_BASE = 2000;
 
+function getActionIdentity(action: Pick<SyncAction, "type" | "payload">) {
+  switch (action.type) {
+    case "update_book":
+    case "delete_book":
+      return `book:${String(action.payload.bookId ?? "")}`;
+    case "update_expense":
+    case "delete_expense":
+      return `expense:${String(action.payload.expenseId ?? "")}`;
+    case "update_member_role":
+    case "remove_member":
+      return `member:${String(action.payload.memberId ?? "")}`;
+    default:
+      return null;
+  }
+}
+
+function mergeQueuedAction(existing: SyncAction, incoming: SyncAction) {
+  switch (incoming.type) {
+    case "update_book":
+    case "update_expense":
+    case "update_member_role":
+      if (existing.type !== incoming.type) {
+        return null;
+      }
+
+      return {
+        ...existing,
+        payload: {
+          ...existing.payload,
+          ...incoming.payload,
+        },
+        userId: incoming.userId ?? existing.userId,
+        lastAttempt: undefined,
+        retryCount: 0,
+      };
+    case "delete_book":
+      if (existing.type === "delete_book") {
+        return existing;
+      }
+
+      if (existing.type === "update_book") {
+        return {
+          ...incoming,
+          id: existing.id,
+          createdAt: existing.createdAt,
+          retryCount: 0,
+          lastAttempt: undefined,
+        };
+      }
+      return null;
+    case "delete_expense":
+      if (existing.type === "delete_expense") {
+        return existing;
+      }
+
+      if (existing.type === "update_expense") {
+        return {
+          ...incoming,
+          id: existing.id,
+          createdAt: existing.createdAt,
+          retryCount: 0,
+          lastAttempt: undefined,
+        };
+      }
+      return null;
+    case "remove_member":
+      if (existing.type === "remove_member") {
+        return existing;
+      }
+
+      if (existing.type === "update_member_role") {
+        return {
+          ...incoming,
+          id: existing.id,
+          createdAt: existing.createdAt,
+          retryCount: 0,
+          lastAttempt: undefined,
+        };
+      }
+      return null;
+    default:
+      return null;
+  }
+}
+
 async function replaceBookReference(tempBookId: string, realBookId: string) {
   if (tempBookId === realBookId) return;
 
@@ -146,7 +235,7 @@ async function replaceBookReference(tempBookId: string, realBookId: string) {
       ...tempExpenses,
       id: realBookId,
       expenses: tempExpenses.expenses.map((expense) => ({
-        ...expense,
+        ...(expense as Record<string, unknown>),
         book_id: realBookId,
       })),
       cachedAt: Date.now(),
@@ -163,7 +252,7 @@ async function replaceBookReference(tempBookId: string, realBookId: string) {
     realBookId,
   );
 
-  const queuedActions = getStoredQueue();
+  const queuedActions = await getPersistedQueue();
   await Promise.all(
     queuedActions.map(async (action) => {
       let changed = false;
@@ -190,11 +279,7 @@ async function replaceBookReference(tempBookId: string, realBookId: string) {
       }
 
       if (changed) {
-        upsertStoredQueueAction({
-          ...action,
-          payload,
-        });
-        await db.syncQueue.put({
+        await upsertPersistedQueueAction({
           ...action,
           payload,
         });
@@ -362,7 +447,7 @@ async function processAction(action: SyncAction, userId: string): Promise<boolea
         const payload = action.payload as UpdateExpensePayload;
         if (payload.expenseId.startsWith("temp_")) return true;
 
-        const update: Record<string, unknown> = {};
+        const update: TablesUpdate<"expenses"> = {};
         if (payload.title !== undefined) update.title = payload.title;
         if (payload.amount !== undefined) update.amount = payload.amount;
         if (payload.date !== undefined) update.date = payload.date;
@@ -472,11 +557,31 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
   const refreshCount = useCallback(async () => {
     try {
-      setPendingCount(countStoredQueue());
+      setPendingCount(await countPersistedQueue());
     } catch {
       setPendingCount(0);
     }
   }, []);
+
+  const getQueuedActions = useCallback(async () => {
+    return await getPersistedQueue();
+  }, []);
+
+  const upsertQueuedAction = useCallback(
+    async (action: SyncAction) => {
+      await upsertPersistedQueueAction(action);
+      await refreshCount();
+    },
+    [refreshCount],
+  );
+
+  const removeQueuedActions = useCallback(
+    async (actionIds: string[]) => {
+      await removePersistedQueueActions(actionIds);
+      await refreshCount();
+    },
+    [refreshCount],
+  );
 
   const queueAction = useCallback(
     async (action: Omit<SyncAction, "id" | "createdAt" | "retryCount">) => {
@@ -487,8 +592,24 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
         retryCount: 0,
         userId: action.userId ?? user?.id,
       };
-      upsertStoredQueueAction(queuedAction);
-      void db.syncQueue.put(queuedAction).catch(() => {});
+
+      const actionIdentity = getActionIdentity(queuedAction);
+      if (actionIdentity) {
+        const existingAction = (await getPersistedQueue()).find(
+          (candidate) => getActionIdentity(candidate) === actionIdentity,
+        );
+        const mergedAction = existingAction
+          ? mergeQueuedAction(existingAction, queuedAction)
+          : null;
+
+        if (mergedAction) {
+          await upsertPersistedQueueAction(mergedAction);
+          await refreshCount();
+          return;
+        }
+      }
+
+      await upsertPersistedQueueAction(queuedAction);
       await refreshCount();
     },
     [refreshCount, user?.id],
@@ -496,7 +617,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
   const cancelQueuedCreate = useCallback(
     async (tempId: string) => {
-      const actions = getStoredQueue();
+      const actions = await getPersistedQueue();
       const actionIds = actions
         .filter(
           (action) =>
@@ -506,8 +627,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
         .map((action) => action.id);
 
       if (actionIds.length > 0) {
-        removeStoredQueueActions(actionIds);
-        void db.syncQueue.bulkDelete(actionIds).catch(() => {});
+        await removePersistedQueueActions(actionIds);
         await refreshCount();
       }
     },
@@ -521,9 +641,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     setSyncStatus("syncing");
 
     try {
-      const initialActions = getStoredQueue().sort(
-        (a, b) => a.createdAt - b.createdAt,
-      );
+      const initialActions = await getPersistedQueue();
       if (initialActions.length === 0) {
         setSyncStatus("idle");
         return;
@@ -532,13 +650,12 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       let failed = 0;
 
       while (true) {
-        const actions = getStoredQueue().sort((a, b) => a.createdAt - b.createdAt);
+        const actions = await getPersistedQueue();
         const action = actions[0];
         if (!action) break;
 
         if (action.retryCount >= MAX_RETRY) {
-          removeStoredQueueActions([action.id]);
-          void db.syncQueue.delete(action.id).catch(() => {});
+          await removePersistedQueueActions([action.id]);
           continue;
         }
 
@@ -557,8 +674,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
         const ok = await processAction(action, user.id);
         if (ok) {
-          removeStoredQueueActions([action.id]);
-          void db.syncQueue.delete(action.id).catch(() => {});
+          await removePersistedQueueActions([action.id]);
         } else {
           failed += 1;
           const nextAction = {
@@ -566,18 +682,12 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
             retryCount: action.retryCount + 1,
             lastAttempt: Date.now(),
           };
-          upsertStoredQueueAction(nextAction);
-          void db.syncQueue
-            .update(action.id, {
-              retryCount: nextAction.retryCount,
-              lastAttempt: nextAction.lastAttempt,
-            })
-            .catch(() => {});
+          await upsertPersistedQueueAction(nextAction);
         }
       }
 
       await refreshCount();
-      const remaining = countStoredQueue();
+      const remaining = await countPersistedQueue();
 
       if (remaining === 0) {
         setSyncStatus("success");
@@ -609,19 +719,33 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (isOnline && user) {
-      syncNow();
+      void syncNow();
     }
   }, [isOnline, syncNow, user]);
 
   useEffect(() => {
     if (isOnline && user && pendingCount > 0 && syncStatus !== "syncing") {
-      syncNow();
+      void syncNow();
     }
   }, [isOnline, pendingCount, syncNow, syncStatus, user]);
 
   useEffect(() => {
-    refreshCount();
+    void refreshCount();
   }, [refreshCount]);
+
+  useEffect(() => {
+    const retrySync = () => {
+      if (document.visibilityState === "hidden") return;
+      void syncNow();
+    };
+
+    window.addEventListener("focus", retrySync);
+    document.addEventListener("visibilitychange", retrySync);
+    return () => {
+      window.removeEventListener("focus", retrySync);
+      document.removeEventListener("visibilitychange", retrySync);
+    };
+  }, [syncNow]);
 
   return (
     <OfflineSyncContext.Provider
@@ -635,6 +759,9 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
         endWrite,
         refreshPendingCount: refreshCount,
         queueAction,
+        getQueuedActions,
+        upsertQueuedAction,
+        removeQueuedActions,
         cancelQueuedCreate,
         syncNow,
       }}

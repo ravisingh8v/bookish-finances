@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -92,78 +93,80 @@ export default function Books() {
                 New Book
               </Button>
             </DialogTrigger>
-            <DialogContent className="w-[calc(100%-2rem)] sm:max-w-md max-w-[95vw] p-2 sm:p-8">
-              <DialogHeader className="pb-6">
+            <DialogContent fullscreen className="flex flex-col">
+              <DialogHeader className="pb-6 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
                 <DialogTitle className="text-xl">
                   Create Expense Book
                 </DialogTitle>
               </DialogHeader>
-              <div className="space-y-4">
-                <div className="space-y-3">
-                  <Label htmlFor="book-name" className="text-sm font-medium">
-                    Name
-                  </Label>
-                  <Input
-                    id="book-name"
-                    placeholder="e.g., Trip with Friends"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="h-11"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <Label htmlFor="book-desc" className="text-sm font-medium">
-                    Description (optional)
-                  </Label>
-                  <Input
-                    id="book-desc"
-                    placeholder="What's this book for?"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="h-11"
-                  />
-                </div>
-                <div className="space-y-3">
-                  <Label
-                    htmlFor="book-currency"
-                    className="text-sm font-medium"
-                  >
-                    Currency
-                  </Label>
-                  <Select value={currency} onValueChange={setCurrency}>
-                    <SelectTrigger id="book-currency" className="h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {CURRENCIES.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {c}
-                        </SelectItem>
+              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+                <div className="space-y-4">
+                  <div className="space-y-3">
+                    <Label htmlFor="book-name" className="text-sm font-medium">
+                      Name
+                    </Label>
+                    <Input
+                      id="book-name"
+                      placeholder="e.g., Trip with Friends"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label htmlFor="book-desc" className="text-sm font-medium">
+                      Description (optional)
+                    </Label>
+                    <Input
+                      id="book-desc"
+                      placeholder="What's this book for?"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label
+                      htmlFor="book-currency"
+                      className="text-sm font-medium"
+                    >
+                      Currency
+                    </Label>
+                    <Select value={currency} onValueChange={setCurrency}>
+                      <SelectTrigger id="book-currency" className="h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CURRENCIES.map((c) => (
+                          <SelectItem key={c} value={c}>
+                            {c}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-sm font-medium">Color</Label>
+                    <div className="flex flex-wrap gap-3">
+                      {COLORS.map((c) => (
+                        <button
+                          key={c}
+                          onClick={() => setColor(c)}
+                          className={`w-10 h-10 rounded-full transition-transform border-2 ${
+                            color === c
+                              ? "ring-2 ring-primary scale-110 border-primary"
+                              : "hover:scale-105 border-border"
+                          }`}
+                          style={{ backgroundColor: c }}
+                        />
                       ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-3">
-                  <Label className="text-sm font-medium">Color</Label>
-                  <div className="flex flex-wrap gap-3">
-                    {COLORS.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => setColor(c)}
-                        className={`w-10 h-10 rounded-full transition-transform border-2 ${
-                          color === c
-                            ? "ring-2 ring-primary scale-110 border-primary"
-                            : "hover:scale-105 border-border"
-                        }`}
-                        style={{ backgroundColor: c }}
-                      />
-                    ))}
+                    </div>
                   </div>
                 </div>
               </div>
-              <div className="flex gap-3 pt-6">
+              <DialogFooter>
                 <Button
-                  className="flex-1 h-11"
+                  className="w-full h-11 sm:w-auto"
                   onClick={handleCreate}
                   disabled={createBook.isPending}
                 >
@@ -172,7 +175,7 @@ export default function Books() {
                   ) : null}
                   Create Book
                 </Button>
-              </div>
+              </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>

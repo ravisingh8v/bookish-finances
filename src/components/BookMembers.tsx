@@ -1,15 +1,19 @@
-import { useState } from "react";
-import { useBookMembers, BookMember } from "@/hooks/useBookMembers";
-import { useAuth } from "@/hooks/useAuth";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -17,13 +21,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { UserPlus, MoreVertical, Crown, Pencil, Eye, LogOut, Trash2, Loader2 } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import { BookMember, useBookMembers } from "@/hooks/useBookMembers";
+import { Crown, Eye, Loader2, LogOut, MoreVertical, Pencil, Trash2, UserPlus } from "lucide-react";
+import { useState } from "react";
 import { toast } from "sonner";
 
 const ROLE_CONFIG = {
@@ -71,54 +72,57 @@ export function BookMembers({ bookId }: { bookId: string }) {
           Members ({members.length})
         </h3>
         {isOwner && (
-          <Popover open={open} onOpenChange={setOpen}>
-            <PopoverTrigger asChild>
-              <Button size="sm" variant="outline" className="gap-1.5">
-                <UserPlus className="h-3.5 w-3.5" />
-                Invite
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent
-              className="w-80 p-4"
-              align="end"
-              sideOffset={8}
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-1.5"
+              onClick={() => setOpen(true)}
             >
-              <p className="text-sm font-semibold mb-4">Invite Member</p>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="invite-email">Email Address</Label>
-                  <Input
-                    id="invite-email"
-                    type="email"
-                    placeholder="user@example.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-                  />
+              <UserPlus className="h-3.5 w-3.5" />
+              Invite
+            </Button>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogContent className="w-full max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Invite Member</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="invite-email">Email Address</Label>
+                    <Input
+                      id="invite-email"
+                      type="email"
+                      placeholder="user@example.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="invite-role">Role</Label>
+                    <Select value={role} onValueChange={setRole}>
+                      <SelectTrigger id="invite-role">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="editor">Editor — can add &amp; edit expenses</SelectItem>
+                        <SelectItem value="viewer">Viewer — read only</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    className="w-full mt-1"
+                    onClick={handleAdd}
+                    disabled={addMember.isPending}
+                  >
+                    {addMember.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    Send Invite
+                  </Button>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="invite-role">Role</Label>
-                  <Select value={role} onValueChange={setRole}>
-                    <SelectTrigger id="invite-role">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="editor">Editor — can add &amp; edit expenses</SelectItem>
-                      <SelectItem value="viewer">Viewer — read only</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  className="w-full mt-1"
-                  onClick={handleAdd}
-                  disabled={addMember.isPending}
-                >
-                  {addMember.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
-                  Send Invite
-                </Button>
-              </div>
-            </PopoverContent>
-          </Popover>
+              </DialogContent>
+            </Dialog>
+          </>
         )}
       </div>
 

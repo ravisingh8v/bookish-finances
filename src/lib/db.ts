@@ -28,32 +28,32 @@ export function createSyncActionId(prefix: string) {
 
 export interface CachedBook {
   id: string;
-  data: Record<string, unknown>;
+  data: unknown;
   cachedAt: number;
 }
 
 export interface CachedExpenses {
   id: string;
-  expenses: Record<string, unknown>[];
+  expenses: unknown[];
   cachedAt: number;
 }
 
 export interface CachedCategories {
   id: string;
-  data: Record<string, unknown>[];
+  data: unknown[];
   cachedAt: number;
 }
 
 export interface CachedDashboard {
   id: string;
-  data: Record<string, unknown>;
+  data: unknown;
   cachedAt: number;
 }
 
 export interface DeletedExpense {
   id: string;
   bookId: string;
-  data: Record<string, unknown>;
+  data: unknown;
   deletedAt: number;
 }
 

@@ -1,7 +1,13 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import { Session, User } from "@supabase/supabase-js";
+import {
+  createContext,
+  ReactNode,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
 
 type Profile = Tables<"profiles">;
 
@@ -10,12 +16,31 @@ interface AuthContextType {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string, displayName: string) => Promise<{ error: Error | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    displayName: string,
+  ) => Promise<{ error: Error | null }>;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+// Utility: Store user ID in localStorage for offline fallback
+const storeUserIdLocally = (userId: string) => {
+  localStorage.setItem("cached_user_id", userId);
+};
+
+const getCachedUserId = (): string | null => {
+  return localStorage.getItem("cached_user_id");
+};
+
+// Utility: Get user ID (from session or fallback to cached)
+export const getUserId = (): string | null => {
+  const supabaseSession = supabase.auth.getSession();
+  return supabaseSession?.data?.session?.user?.id || getCachedUserId();
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -24,10 +49,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
+
+      // Store user ID in localStorage for offline access
+      if (session?.user?.id) {
+        storeUserIdLocally(session.user.id);
         setTimeout(() => fetchProfile(session.user.id), 0);
       } else {
         setProfile(null);
@@ -37,7 +67,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
+
+      // Store user ID in localStorage for offline access
+      if (session?.user?.id) {
+        storeUserIdLocally(session.user.id);
         fetchProfile(session.user.id);
       }
       setLoading(false);
@@ -55,7 +88,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setProfile(data);
   };
 
-  const signUp = async (email: string, password: string, displayName: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    displayName: string,
+  ) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -65,16 +102,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
     return { error: error as Error | null };
   };
 
   const signOut = async () => {
+    localStorage.removeItem("cached_user_id");
     await supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ session, user, profile, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider
+      value={{ session, user, profile, loading, signUp, signIn, signOut }}
+    >
       {children}
     </AuthContext.Provider>
   );

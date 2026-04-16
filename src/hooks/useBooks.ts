@@ -1,21 +1,18 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/db";
 import { withNetworkTimeout } from "@/lib/network";
 import {
-  getStoredQueue,
   getStoredBooks,
   removeStoredBook,
   removeStoredExpenseBucket,
-  removeStoredQueueActions,
   setStoredBooks,
   setStoredExpenses,
   updateStoredBook,
-  upsertStoredQueueAction,
   upsertStoredBook,
 } from "@/lib/offlineJournal";
-import { useAuth } from "./useAuth";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { getUserId, useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
 
 const MAX_BOOKS_CACHE = 10;
@@ -49,35 +46,28 @@ type BookUpdate = BookInput & {
 
 async function cacheBooks(books: Book[]) {
   setStoredBooks(books);
-  void db.books
-    .clear()
-    .then(() =>
-      Promise.all(
-        books.slice(0, MAX_BOOKS_CACHE).map((book) =>
-          db.books.put({
-            id: book.id,
-            data: book,
-            cachedAt: Date.now(),
-          }),
-        ),
-      ),
-    )
-    .catch(() => {});
+  await db.books.clear();
+  await Promise.all(
+    books.slice(0, MAX_BOOKS_CACHE).map((book) =>
+      db.books.put({
+        id: book.id,
+        data: book,
+        cachedAt: Date.now(),
+      }),
+    ),
+  );
 }
 
 async function updateCachedBook(bookId: string, updater: (book: Book) => Book) {
   updateStoredBook<Book>(bookId, updater);
-  void db.books
-    .get(bookId)
-    .then((cached) => {
-      if (!cached) return;
-      return db.books.put({
-        ...cached,
-        data: updater(cached.data as Book),
-        cachedAt: Date.now(),
-      });
-    })
-    .catch(() => {});
+  const cached = await db.books.get(bookId);
+  if (!cached) return;
+
+  await db.books.put({
+    ...cached,
+    data: updater(cached.data as Book),
+    cachedAt: Date.now(),
+  });
 }
 
 export function useBooks() {
@@ -87,8 +77,11 @@ export function useBooks() {
     isOnline,
     queueAction,
     cancelQueuedCreate,
+    getQueuedActions,
+    removeQueuedActions,
     refreshPendingCount,
     syncNow,
+    upsertQueuedAction,
   } = useOfflineSync();
   const [localBooks, setLocalBooks] = useState<Book[]>([]);
 
@@ -102,7 +95,9 @@ export function useBooks() {
       .then((cached) => {
         if (!active) return;
         const cachedBooks = cached.map((entry) => entry.data as Book);
-        setLocalBooks(cachedBooks.length > 0 ? cachedBooks : getStoredBooks<Book>());
+        setLocalBooks(
+          cachedBooks.length > 0 ? cachedBooks : getStoredBooks<Book>(),
+        );
       })
       .catch(() => {
         if (!active) return;
@@ -126,7 +121,13 @@ export function useBooks() {
         : getStoredBooks<Book>();
 
       if (!user) return [];
-      if (!isOnline) return cachedBooks;
+
+      // Sort offline data by created_at descending (newest first) to match online behavior
+      if (!isOnline) {
+        return cachedBooks.sort((a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      }
 
       try {
         const { data, error } = await withNetworkTimeout(
@@ -145,7 +146,9 @@ export function useBooks() {
         await preloadExpenses(books.map((book) => book.id));
         return books;
       } catch {
-        return cachedBooks;
+        return cachedBooks.sort((a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
       }
     },
     enabled: !!user,
@@ -157,6 +160,12 @@ export function useBooks() {
     mutationFn: async (book: BookInput) => {
       const tempId = `temp_${crypto.randomUUID()}`;
       const now = new Date().toISOString();
+      const userId = user?.id || getUserId();
+
+      if (!userId) {
+        throw new Error("User ID not available. Please log in again.");
+      }
+
       const optimisticBook: Book = {
         id: tempId,
         name: book.name,
@@ -166,9 +175,9 @@ export function useBooks() {
         icon: book.icon ?? "wallet",
         created_at: now,
         updated_at: now,
-        created_by: user!.id,
-        members: [{ user_id: user!.id, role: "owner" }],
-        my_access: [{ user_id: user!.id, role: "owner" }],
+        created_by: userId,
+        members: [{ user_id: userId, role: "owner" }],
+        my_access: [{ user_id: userId, role: "owner" }],
         _offline: !isOnline,
       };
 
@@ -177,18 +186,16 @@ export function useBooks() {
         ...(old ?? []),
       ]);
       upsertStoredBook(optimisticBook);
-      void db.books
-        .put({
-          id: tempId,
-          data: optimisticBook,
-          cachedAt: Date.now(),
-        })
-        .catch(() => {});
+      await db.books.put({
+        id: tempId,
+        data: optimisticBook,
+        cachedAt: Date.now(),
+      });
       await queueAction({
         type: "create_book",
         payload: { ...book, tempId },
         tempId,
-        userId: user?.id,
+        userId: userId,
       });
       if (isOnline) {
         void syncNow();
@@ -220,7 +227,7 @@ export function useBooks() {
         updated_at: new Date().toISOString(),
       }));
 
-      const actions = getStoredQueue();
+      const actions = await getQueuedActions();
       const pendingCreate = actions.find(
         (action) =>
           action.type === "create_book" &&
@@ -231,10 +238,13 @@ export function useBooks() {
       if (pendingCreate) {
         const nextAction = {
           ...pendingCreate,
-          payload: { ...pendingCreate.payload, ...patch, tempId: params.bookId },
+          payload: {
+            ...pendingCreate.payload,
+            ...patch,
+            tempId: params.bookId,
+          },
         };
-        upsertStoredQueueAction(nextAction);
-        void db.syncQueue.put(nextAction).catch(() => {});
+        await upsertQueuedAction(nextAction);
       } else {
         await queueAction({
           type: "update_book",
@@ -256,11 +266,10 @@ export function useBooks() {
       );
       removeStoredBook(bookId);
       removeStoredExpenseBucket(bookId);
-      void db.books.delete(bookId).catch(() => {});
-      void db.expenses.delete(bookId).catch(() => {});
+      await Promise.all([db.books.delete(bookId), db.expenses.delete(bookId)]);
 
       if (bookId.startsWith("temp_")) {
-        const actions = getStoredQueue();
+        const actions = await getQueuedActions();
         const linkedActionIds = actions
           .filter((action) => {
             const payload = action.payload as Record<string, unknown>;
@@ -273,8 +282,7 @@ export function useBooks() {
           })
           .map((action) => action.id);
         if (linkedActionIds.length > 0) {
-          removeStoredQueueActions(linkedActionIds);
-          void db.syncQueue.bulkDelete(linkedActionIds).catch(() => {});
+          await removeQueuedActions(linkedActionIds);
           await refreshPendingCount();
         }
         return;
@@ -337,7 +345,9 @@ async function preloadExpenses(bookIds: string[]) {
             .from("profiles")
             .select("user_id, display_name, email")
             .in("user_id", userIds);
-          profileMap = new Map(profiles?.map((profile) => [profile.user_id, profile]) ?? []);
+          profileMap = new Map(
+            profiles?.map((profile) => [profile.user_id, profile]) ?? [],
+          );
         }
 
         const enriched = (expenses ?? []).map((expense) => ({

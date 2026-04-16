@@ -142,4 +142,35 @@
   .touch-target {
     @apply min-h-[44px] min-w-[44px];
   }
+
+  /* iOS safe area support */
+  .safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 1rem);
+  }
+
+  .safe-inset-bottom {
+    padding-bottom: max(env(safe-area-inset-bottom), 0.75rem);
+  }
+
+  /* Sticky button for forms - fullscreen dialogs */
+  .form-sticky-bottom {
+    @apply sticky bottom-0 bg-background/95 backdrop-blur-sm border-t pt-3 pb-3 z-40;
+    padding-bottom: calc(max(env(safe-area-inset-bottom), 0.75rem) + 0.75rem);
+  }
+
+  /* Form content wrapper - prevents scroll */
+  .form-content {
+    @apply flex-1 overflow-y-auto overflow-x-hidden;
+  }
+}
+
+/* iOS viewport height fix */
+@supports (height: 100dvh) {
+  html, body {
+    height: 100dvh;
+  }
+}
+
+html body #lovable-badge{
+  display: none !important;
 }

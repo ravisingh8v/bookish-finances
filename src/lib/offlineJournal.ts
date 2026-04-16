@@ -1,4 +1,4 @@
-import type { SyncAction } from "./db";
+import { db, type SyncAction } from "./db";
 
 const BOOKS_KEY = "expenseflow_local_books_v1";
 const EXPENSES_KEY = "expenseflow_local_expenses_v1";
@@ -128,4 +128,36 @@ export function removeStoredQueueActions(actionIds: string[]) {
 
 export function countStoredQueue() {
   return getStoredQueue().length;
+}
+
+export async function getPersistedQueue() {
+  const queuedActions = await db.syncQueue.orderBy("createdAt").toArray();
+  if (queuedActions.length > 0) {
+    setStoredQueue(queuedActions);
+    return queuedActions;
+  }
+
+  const storedActions = getStoredQueue().sort(
+    (a, b) => a.createdAt - b.createdAt,
+  );
+  if (storedActions.length > 0) {
+    await db.syncQueue.bulkPut(storedActions);
+  }
+  return storedActions;
+}
+
+export async function upsertPersistedQueueAction(action: SyncAction) {
+  upsertStoredQueueAction(action);
+  await db.syncQueue.put(action);
+}
+
+export async function removePersistedQueueActions(actionIds: string[]) {
+  if (actionIds.length === 0) return;
+  removeStoredQueueActions(actionIds);
+  await db.syncQueue.bulkDelete(actionIds);
+}
+
+export async function countPersistedQueue() {
+  const actions = await getPersistedQueue();
+  return actions.length;
 }
