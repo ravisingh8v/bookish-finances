@@ -27,7 +27,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Utility: Store user ID in localStorage for offline fallback
 const storeUserIdLocally = (userId: string) => {
   localStorage.setItem("cached_user_id", userId);
 };
@@ -36,10 +35,8 @@ const getCachedUserId = (): string | null => {
   return localStorage.getItem("cached_user_id");
 };
 
-// Utility: Get user ID (from session or fallback to cached)
 export const getUserId = (): string | null => {
-  const supabaseSession = supabase.auth.getSession();
-  return supabaseSession?.data?.session?.user?.id || getCachedUserId();
+  return getCachedUserId();
 };
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -55,7 +52,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
 
-      // Store user ID in localStorage for offline access
       if (session?.user?.id) {
         storeUserIdLocally(session.user.id);
         setTimeout(() => fetchProfile(session.user.id), 0);
@@ -68,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setSession(session);
       setUser(session?.user ?? null);
 
-      // Store user ID in localStorage for offline access
       if (session?.user?.id) {
         storeUserIdLocally(session.user.id);
         fetchProfile(session.user.id);

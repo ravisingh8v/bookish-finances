@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/db";
-import { withNetworkTimeout } from "@/lib/network";
+import { isOfflineLikeError, withNetworkTimeout } from "@/lib/network";
 import {
   getStoredBooks,
   removeStoredBook,
@@ -70,6 +70,24 @@ async function updateCachedBook(bookId: string, updater: (book: Book) => Book) {
   });
 }
 
+function getCachedBooksSync(): Book[] {
+  return getStoredBooks<Book>();
+}
+
+async function getCachedBooksAsync(): Promise<Book[]> {
+  try {
+    const cached = await db.books
+      .orderBy("cachedAt")
+      .reverse()
+      .limit(MAX_BOOKS_CACHE)
+      .toArray();
+    if (cached.length > 0) return cached.map((entry) => entry.data as Book);
+  } catch {
+    // IndexedDB may fail
+  }
+  return getCachedBooksSync();
+}
+
 export function useBooks() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -87,42 +105,19 @@ export function useBooks() {
 
   useEffect(() => {
     let active = true;
-    db.books
-      .orderBy("cachedAt")
-      .reverse()
-      .limit(MAX_BOOKS_CACHE)
-      .toArray()
-      .then((cached) => {
-        if (!active) return;
-        const cachedBooks = cached.map((entry) => entry.data as Book);
-        setLocalBooks(
-          cachedBooks.length > 0 ? cachedBooks : getStoredBooks<Book>(),
-        );
-      })
-      .catch(() => {
-        if (!active) return;
-        setLocalBooks(getStoredBooks<Book>());
-      });
-    return () => {
-      active = false;
-    };
+    getCachedBooksAsync().then((books) => {
+      if (active) setLocalBooks(books);
+    });
+    return () => { active = false; };
   }, []);
 
   const booksQuery = useQuery({
     queryKey: ["books"],
     queryFn: async () => {
-      const cached = await db.books
-        .orderBy("cachedAt")
-        .reverse()
-        .limit(MAX_BOOKS_CACHE)
-        .toArray();
-      const cachedBooks = cached.length
-        ? cached.map((entry) => entry.data as Book)
-        : getStoredBooks<Book>();
+      const cachedBooks = await getCachedBooksAsync();
 
       if (!user) return [];
 
-      // Sort offline data by created_at descending (newest first) to match online behavior
       if (!isOnline) {
         return cachedBooks.sort((a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -143,9 +138,14 @@ export function useBooks() {
 
         const books = (data ?? []) as Book[];
         await cacheBooks(books);
-        await preloadExpenses(books.map((book) => book.id));
+        void preloadExpenses(books.map((book) => book.id));
         return books;
-      } catch {
+      } catch (err) {
+        if (isOfflineLikeError(err)) {
+          return cachedBooks.sort((a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        }
         return cachedBooks.sort((a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
@@ -178,7 +178,7 @@ export function useBooks() {
         created_by: userId,
         members: [{ user_id: userId, role: "owner" }],
         my_access: [{ user_id: userId, role: "owner" }],
-        _offline: !isOnline,
+        _offline: true,
       };
 
       queryClient.setQueryData(["books"], (old: Book[] | undefined) => [
@@ -200,7 +200,7 @@ export function useBooks() {
       if (isOnline) {
         void syncNow();
       }
-      return { ...optimisticBook, _offline: true };
+      return optimisticBook;
     },
   });
 

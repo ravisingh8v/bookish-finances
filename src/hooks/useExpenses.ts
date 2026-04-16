@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/db";
-import { withNetworkTimeout } from "@/lib/network";
+import { isOfflineLikeError, withNetworkTimeout } from "@/lib/network";
 import { getStoredExpenses, setStoredExpenses } from "@/lib/offlineJournal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -121,6 +121,18 @@ async function updateCachedExpenses(
   });
 }
 
+async function getCachedExpenses(bookId: string): Promise<Expense[]> {
+  try {
+    const cached = await db.expenses.get(bookId);
+    if (cached && Array.isArray(cached.expenses) && cached.expenses.length > 0) {
+      return cached.expenses as Expense[];
+    }
+  } catch {
+    // IndexedDB may fail
+  }
+  return getStoredExpenses<Expense>(bookId);
+}
+
 export function useExpenses(bookId: string) {
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
@@ -139,38 +151,19 @@ export function useExpenses(bookId: string) {
   useEffect(() => {
     if (!bookId) return;
     let active = true;
-    db.expenses
-      .get(bookId)
-      .then((cached) => {
-        if (!active) return;
-        const cachedExpenses = (cached?.expenses ?? []) as Expense[];
-        setLocalExpenses(
-          cachedExpenses.length > 0
-            ? cachedExpenses
-            : getStoredExpenses<Expense>(bookId),
-        );
-      })
-      .catch(() => {
-        if (!active) return;
-        setLocalExpenses(getStoredExpenses<Expense>(bookId));
-      });
-    return () => {
-      active = false;
-    };
+    getCachedExpenses(bookId).then((expenses) => {
+      if (active) setLocalExpenses(expenses);
+    });
+    return () => { active = false; };
   }, [bookId]);
 
   const expensesQuery = useQuery({
     queryKey: ["expenses", bookId],
     queryFn: async () => {
-      const cached = await db.expenses.get(bookId);
-      const cachedExpenses =
-        ((cached?.expenses ?? []) as Expense[]).length > 0
-          ? ((cached?.expenses ?? []) as Expense[])
-          : getStoredExpenses<Expense>(bookId);
+      const cachedExpenses = await getCachedExpenses(bookId);
 
       if (!user || !bookId) return [];
 
-      // Sort offline data by created_at descending (newest first) to match online behavior
       if (!isOnline) {
         return cachedExpenses.sort((a, b) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
@@ -218,6 +211,7 @@ export function useExpenses(bookId: string) {
           _offline: false,
         })) as Expense[];
 
+        // Merge offline-created expenses that haven't synced yet
         const offlineOnly = cachedExpenses.filter((expense) =>
           expense.id.startsWith("temp_"),
         );
@@ -231,7 +225,12 @@ export function useExpenses(bookId: string) {
 
         await putExpenses(bookId, merged);
         return merged;
-      } catch {
+      } catch (err) {
+        if (isOfflineLikeError(err)) {
+          return cachedExpenses.sort((a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          );
+        }
         return cachedExpenses;
       }
     },
@@ -256,7 +255,7 @@ export function useExpenses(bookId: string) {
         userId,
         profile,
         tempId,
-        !isOnline,
+        true,
       );
 
       queryClient.setQueryData(
@@ -266,14 +265,14 @@ export function useExpenses(bookId: string) {
       await updateCachedExpenses(bookId, (current) => [optimistic, ...current]);
       await queueAction({
         type: "create_expense",
-        payload: { ...payload, tempId },
+        payload: { ...payload, tempId, paid_by: userId, created_by: userId },
         tempId,
         userId: userId,
       });
       if (isOnline) {
         void syncNow();
       }
-      return { ...optimistic, _offline: true };
+      return optimistic;
     },
     onError: () => {
       queryClient.invalidateQueries({ queryKey: ["expenses", bookId] });
@@ -429,6 +428,21 @@ export function useExpenses(bookId: string) {
       });
       await db.deletedExpenses.delete(expenseId);
 
+      const restorePayload = {
+        book_id: expense.book_id,
+        title: expense.title,
+        amount: expense.amount,
+        date: expense.date,
+        category_id: expense.category_id ?? undefined,
+        expense_type: expense.expense_type,
+        payment_method: expense.payment_method ?? undefined,
+        notes: expense.notes ?? undefined,
+        tags: expense.tags ?? undefined,
+        paid_by: expense.paid_by,
+        created_by: expense.created_by,
+        tempId: expense.id,
+      };
+
       if (!isOnline) {
         const queued = await getQueuedActions();
         const pendingDelete = queued.find(
@@ -444,20 +458,7 @@ export function useExpenses(bookId: string) {
 
         await queueAction({
           type: "create_expense",
-          payload: {
-            book_id: expense.book_id,
-            title: expense.title,
-            amount: expense.amount,
-            date: expense.date,
-            category_id: expense.category_id ?? undefined,
-            expense_type: expense.expense_type,
-            payment_method: expense.payment_method ?? undefined,
-            notes: expense.notes ?? undefined,
-            tags: expense.tags ?? undefined,
-            paid_by: expense.paid_by,
-            created_by: expense.created_by,
-            tempId: expense.id,
-          },
+          payload: restorePayload,
           tempId: expense.id,
           userId: user?.id,
         });
@@ -466,26 +467,11 @@ export function useExpenses(bookId: string) {
 
       await queueAction({
         type: "create_expense",
-        payload: {
-          book_id: expense.book_id,
-          title: expense.title,
-          amount: expense.amount,
-          date: expense.date,
-          category_id: expense.category_id ?? undefined,
-          expense_type: expense.expense_type,
-          payment_method: expense.payment_method ?? undefined,
-          notes: expense.notes ?? undefined,
-          tags: expense.tags ?? undefined,
-          paid_by: expense.paid_by,
-          created_by: expense.created_by,
-          tempId: expense.id,
-        },
+        payload: restorePayload,
         tempId: expense.id,
         userId: user?.id,
       });
-      if (isOnline) {
-        void syncNow();
-      }
+      void syncNow();
     },
     onSuccess: () => {
       toast.success("Expense restored");
@@ -495,20 +481,24 @@ export function useExpenses(bookId: string) {
   const fetchNextPage = async () => {
     if (!isOnline || !bookId) return;
     const currentCount = expenses.length;
-    const { data, error } = await withNetworkTimeout(
-      supabase
-        .from("expenses")
-        .select("*, categories(name, icon, color)")
-        .eq("book_id", bookId)
-        .order("created_at", { ascending: false })
-        .range(currentCount, currentCount + PAGE_SIZE - 1),
-    );
-    if (error || !data?.length) return;
+    try {
+      const { data, error } = await withNetworkTimeout(
+        supabase
+          .from("expenses")
+          .select("*, categories(name, icon, color)")
+          .eq("book_id", bookId)
+          .order("created_at", { ascending: false })
+          .range(currentCount, currentCount + PAGE_SIZE - 1),
+      );
+      if (error || !data?.length) return;
 
-    queryClient.setQueryData(
-      ["expenses", bookId],
-      (old: Expense[] | undefined) => [...(old ?? []), ...(data as Expense[])],
-    );
+      queryClient.setQueryData(
+        ["expenses", bookId],
+        (old: Expense[] | undefined) => [...(old ?? []), ...(data as Expense[])],
+      );
+    } catch {
+      // Ignore pagination errors
+    }
   };
 
   return {
@@ -525,55 +515,17 @@ export function useExpenses(bookId: string) {
 }
 
 const DEFAULT_CATEGORIES = [
-  {
-    id: "groceries",
-    name: "Groceries",
-    icon: "shopping-bag",
-    color: "#10B981",
-    is_default: true,
-  },
-  {
-    id: "transport",
-    name: "Transport",
-    icon: "truck",
-    color: "#3B82F6",
-    is_default: true,
-  },
-  {
-    id: "bills",
-    name: "Bills",
-    icon: "credit-card",
-    color: "#F97316",
-    is_default: true,
-  },
-  {
-    id: "entertainment",
-    name: "Entertainment",
-    icon: "film",
-    color: "#8B5CF6",
-    is_default: true,
-  },
-  {
-    id: "health",
-    name: "Health",
-    icon: "heart",
-    color: "#EF4444",
-    is_default: true,
-  },
-  {
-    id: "other",
-    name: "Other",
-    icon: "tag",
-    color: "#6B7280",
-    is_default: true,
-  },
+  { id: "groceries", name: "Groceries", icon: "shopping-bag", color: "#10B981", is_default: true },
+  { id: "transport", name: "Transport", icon: "truck", color: "#3B82F6", is_default: true },
+  { id: "bills", name: "Bills", icon: "credit-card", color: "#F97316", is_default: true },
+  { id: "entertainment", name: "Entertainment", icon: "film", color: "#8B5CF6", is_default: true },
+  { id: "health", name: "Health", icon: "heart", color: "#EF4444", is_default: true },
+  { id: "other", name: "Other", icon: "tag", color: "#6B7280", is_default: true },
 ];
 
 export function useCategories() {
   const { isOnline } = useOfflineSync();
-  const [localCategories, setLocalCategories] = useState<
-    typeof DEFAULT_CATEGORIES
-  >([]);
+  const [localCategories, setLocalCategories] = useState<typeof DEFAULT_CATEGORIES>([]);
 
   useEffect(() => {
     let active = true;
@@ -589,9 +541,7 @@ export function useCategories() {
         if (!active) return;
         setLocalCategories(DEFAULT_CATEGORIES);
       });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, []);
 
   return useQuery({
@@ -599,8 +549,7 @@ export function useCategories() {
     queryFn: async () => {
       const cached = await db.categories.get("default");
       if (!isOnline) {
-        return (cached?.data ??
-          DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
+        return (cached?.data ?? DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
       }
 
       try {
@@ -623,8 +572,7 @@ export function useCategories() {
         }
         return (data ?? DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
       } catch {
-        return (cached?.data ??
-          DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
+        return (cached?.data ?? DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
       }
     },
     staleTime: 300_000,

@@ -20,10 +20,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
-import { useBooks } from "@/hooks/useBooks";
+import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { motion } from "framer-motion";
-import { BookOpen, Loader2, Plus, Trash2, Users } from "lucide-react";
+import { BookOpen, Edit, Loader2, Plus, Trash2, Users } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -43,34 +43,68 @@ export default function Books() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isOnline } = useOfflineSync();
-  const { books, isLoading, createBook, deleteBook, isBookOwner } = useBooks();
+  const { books, isLoading, createBook, updateBook, deleteBook, isBookOwner } =
+    useBooks();
   const [open, setOpen] = useState(false);
+  const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("INR");
   const [color, setColor] = useState(COLORS[0]);
 
-  const handleCreate = async () => {
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+    setCurrency("INR");
+    setColor(COLORS[0]);
+    setEditingBook(null);
+  };
+
+  const openEditDialog = (book: Book, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setName(book.name);
+    setDescription(book.description ?? "");
+    setCurrency(book.currency);
+    setColor(book.color);
+    setEditingBook(book);
+    setOpen(true);
+  };
+
+  const handleSave = async () => {
     if (!name.trim()) {
       toast.error("Book name is required");
       return;
     }
 
-    const payload = {
-      name: name.trim(),
-      description: description.trim() || undefined,
-      currency,
-      color,
-    };
-
     try {
-      await createBook.mutateAsync(payload);
-      toast.success("Book created!");
+      if (editingBook) {
+        await updateBook.mutateAsync({
+          bookId: editingBook.id,
+          name: name.trim(),
+          description: description.trim() || undefined,
+          currency,
+          color,
+        });
+        toast.success(
+          isOnline
+            ? "Book updated!"
+            : "Book updated offline. Will sync when online.",
+        );
+      } else {
+        await createBook.mutateAsync({
+          name: name.trim(),
+          description: description.trim() || undefined,
+          currency,
+          color,
+        });
+        toast.success(
+          isOnline
+            ? "Book created!"
+            : "Book saved offline. Will sync when online.",
+        );
+      }
       setOpen(false);
-      setName("");
-      setDescription("");
-      setCurrency("INR");
-      setColor(COLORS[0]);
+      resetForm();
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -86,7 +120,13 @@ export default function Books() {
               Organize your expenses into separate books
             </p>
           </div>
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog
+            open={open}
+            onOpenChange={(v) => {
+              if (!v) resetForm();
+              setOpen(v);
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="h-4 w-4 mr-2" />
@@ -96,7 +136,7 @@ export default function Books() {
             <DialogContent fullscreen className="flex flex-col">
               <DialogHeader className="pb-6 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
                 <DialogTitle className="text-xl">
-                  Create Expense Book
+                  {editingBook ? "Edit Book" : "Create Expense Book"}
                 </DialogTitle>
               </DialogHeader>
               <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
@@ -167,13 +207,13 @@ export default function Books() {
               <DialogFooter>
                 <Button
                   className="w-full h-11 sm:w-auto"
-                  onClick={handleCreate}
-                  disabled={createBook.isPending}
+                  onClick={handleSave}
+                  disabled={createBook.isPending || updateBook.isPending}
                 >
-                  {createBook.isPending ? (
+                  {(createBook.isPending || updateBook.isPending) && (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : null}
-                  Create Book
+                  )}
+                  {editingBook ? "Save Changes" : "Create Book"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -233,7 +273,15 @@ export default function Books() {
                         >
                           <BookOpen className="h-5 w-5" />
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1">
+                          {book._offline && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] text-amber-600 border-amber-500/30"
+                            >
+                              Offline
+                            </Badge>
+                          )}
                           {userRole && (
                             <Badge
                               variant="outline"
@@ -243,22 +291,32 @@ export default function Books() {
                             </Badge>
                           )}
                           {ownerCheck && (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                if (
-                                  confirm(
-                                    "Delete this book and all its expenses?",
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-primary"
+                                onClick={(e) => openEditDialog(book, e)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (
+                                    confirm(
+                                      "Delete this book and all its expenses?",
+                                    )
                                   )
-                                )
-                                  deleteBook.mutate(book.id);
-                              }}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                                    deleteBook.mutate(book.id);
+                                }}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </div>
