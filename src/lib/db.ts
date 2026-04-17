@@ -35,6 +35,7 @@ export interface CachedBook {
 export interface CachedExpenses {
   id: string;
   expenses: unknown[];
+  userId?: string;
   cachedAt: number;
 }
 
@@ -53,6 +54,7 @@ export interface CachedDashboard {
 export interface DeletedExpense {
   id: string;
   bookId: string;
+  userId?: string;
   data: unknown;
   deletedAt: number;
 }
@@ -74,6 +76,14 @@ export class ExpenseFlowDB extends Dexie {
       categories: "id",
       dashboard: "id",
       deletedExpenses: "id, bookId, deletedAt",
+    });
+    this.version(2).stores({
+      syncQueue: "id, type, createdAt, userId, retryCount",
+      books: "id, cachedAt",
+      expenses: "id, userId, cachedAt",
+      categories: "id",
+      dashboard: "id",
+      deletedExpenses: "id, bookId, userId, deletedAt",
     });
   }
 }
