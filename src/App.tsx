@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/hooks/useAuth";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
+import { PWAUpdatePrompt } from "@/components/PWAUpdatePrompt";
 import Dashboard from "./pages/Dashboard";
 import Auth from "./pages/Auth";
 import Books from "./pages/Books";
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <PWAUpdatePrompt />
           </OfflineSyncProvider>
         </AuthProvider>
       </BrowserRouter>

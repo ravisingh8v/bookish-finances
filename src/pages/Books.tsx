@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -23,7 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { motion } from "framer-motion";
-import { BookOpen, Edit, Loader2, Plus, Trash2, Users } from "lucide-react";
+import { BookOpen, Copy, Edit, Loader2, Plus, Trash2, Users, WifiOff } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -43,8 +44,10 @@ export default function Books() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isOnline } = useOfflineSync();
-  const { books, isLoading, createBook, updateBook, deleteBook, isBookOwner } =
+  const { books, isLoading, createBook, updateBook, deleteBook, duplicateBook, isBookOwner } =
     useBooks();
+  const [duplicating, setDuplicating] = useState<Book | null>(null);
+  const [copyMembers, setCopyMembers] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [name, setName] = useState("");
@@ -303,6 +306,25 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!isOnline) {
+                                    toast.error(
+                                      "Book duplication requires internet connection",
+                                    );
+                                    return;
+                                  }
+                                  setCopyMembers(false);
+                                  setDuplicating(book);
+                                }}
+                                title="Duplicate book"
+                              >
+                                <Copy className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -345,6 +367,81 @@ export default function Books() {
           </div>
         )}
       </div>
+
+      {/* Duplicate book dialog */}
+      <Dialog
+        open={!!duplicating}
+        onOpenChange={(v) => {
+          if (!v) setDuplicating(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Duplicate Book</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            {!isOnline ? (
+              <div className="flex items-center gap-2 text-sm text-amber-600 bg-amber-500/10 p-3 rounded-lg">
+                <WifiOff className="h-4 w-4" />
+                Book duplication requires internet connection
+              </div>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  This will create a copy of{" "}
+                  <span className="font-medium text-foreground">
+                    {duplicating?.name}
+                  </span>{" "}
+                  with all its expenses.
+                </p>
+                <label className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer hover:bg-muted/50 transition-colors">
+                  <Checkbox
+                    checked={copyMembers}
+                    onCheckedChange={(c) => setCopyMembers(c === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <p className="text-sm font-medium">Copy members as well</p>
+                    <p className="text-xs text-muted-foreground">
+                      Include all current members in the duplicated book
+                    </p>
+                  </div>
+                </label>
+              </>
+            )}
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDuplicating(null)}
+              disabled={duplicateBook.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (!duplicating || !isOnline) return;
+                try {
+                  await duplicateBook.mutateAsync({
+                    bookId: duplicating.id,
+                    copyMembers,
+                  });
+                  toast.success("Book duplicated!");
+                  setDuplicating(null);
+                } catch (e: any) {
+                  toast.error(e.message || "Failed to duplicate book");
+                }
+              }}
+              disabled={!isOnline || duplicateBook.isPending}
+            >
+              {duplicateBook.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              )}
+              Duplicate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
