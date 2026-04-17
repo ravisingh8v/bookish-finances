@@ -108,7 +108,9 @@ export function useBooks() {
     getCachedBooksAsync().then((books) => {
       if (active) setLocalBooks(books);
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   const booksQuery = useQuery({
@@ -119,8 +121,9 @@ export function useBooks() {
       if (!user) return [];
 
       if (!isOnline) {
-        return cachedBooks.sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        return cachedBooks.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         );
       }
 
@@ -142,12 +145,15 @@ export function useBooks() {
         return books;
       } catch (err) {
         if (isOfflineLikeError(err)) {
-          return cachedBooks.sort((a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+          return cachedBooks.sort(
+            (a, b) =>
+              new Date(b.created_at).getTime() -
+              new Date(a.created_at).getTime(),
           );
         }
-        return cachedBooks.sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        return cachedBooks.sort(
+          (a, b) =>
+            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
         );
       }
     },
@@ -300,6 +306,85 @@ export function useBooks() {
     },
   });
 
+  const duplicateBook = useMutation({
+    mutationFn: async ({
+      bookId,
+      includemembers = false,
+    }: {
+      bookId: string;
+      includemembers?: boolean;
+    }) => {
+      if (!isOnline) {
+        throw new Error("Book duplication requires internet connection");
+      }
+
+      const bookToDuplicate = (booksQuery.data ?? []).find(
+        (b) => b.id === bookId,
+      );
+      if (!bookToDuplicate) {
+        throw new Error("Book not found");
+      }
+
+      const tempId = `temp_${crypto.randomUUID()}`;
+      const now = new Date().toISOString();
+      const userId = user?.id || getUserId();
+
+      if (!userId) {
+        throw new Error("User ID not available. Please log in again.");
+      }
+
+      // Queue the duplication action
+      await queueAction({
+        type: "duplicate_book",
+        payload: {
+          sourceBookId: bookId,
+          bookName: `${bookToDuplicate.name} (Copy)`,
+          bookDescription: bookToDuplicate.description,
+          currency: bookToDuplicate.currency,
+          color: bookToDuplicate.color,
+          icon: bookToDuplicate.icon,
+          includemembers,
+          tempId,
+        },
+        tempId,
+        userId,
+      });
+
+      // Create optimistic book
+      const optimisticBook: Book = {
+        id: tempId,
+        name: `${bookToDuplicate.name} (Copy)`,
+        description: bookToDuplicate.description,
+        currency: bookToDuplicate.currency,
+        color: bookToDuplicate.color,
+        icon: bookToDuplicate.icon,
+        created_at: now,
+        updated_at: now,
+        created_by: userId,
+        members: [{ user_id: userId, role: "owner" }],
+        my_access: [{ user_id: userId, role: "owner" }],
+        _offline: true,
+      };
+
+      queryClient.setQueryData(["books"], (old: Book[] | undefined) => [
+        optimisticBook,
+        ...(old ?? []),
+      ]);
+      upsertStoredBook(optimisticBook);
+      await db.books.put({
+        id: tempId,
+        data: optimisticBook,
+        cachedAt: Date.now(),
+      });
+
+      if (isOnline) {
+        void syncNow();
+      }
+
+      return optimisticBook;
+    },
+  });
+
   const isBookOwner = (book: Pick<Book, "members">) =>
     book.members?.some(
       (member) => member.user_id === user?.id && member.role === "owner",
@@ -311,6 +396,7 @@ export function useBooks() {
     createBook,
     updateBook,
     deleteBook,
+    duplicateBook,
     isBookOwner,
   };
 }

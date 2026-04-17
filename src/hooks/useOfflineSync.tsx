@@ -1,13 +1,3 @@
-import {
-  createContext,
-  ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { type TablesUpdate } from "@/integrations/supabase/types";
 import { createSyncActionId, db, type SyncAction } from "@/lib/db";
@@ -24,6 +14,16 @@ import {
   upsertPersistedQueueAction,
   upsertStoredBook,
 } from "@/lib/offlineJournal";
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  createContext,
+  ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useAuth } from "./useAuth";
 import { useOnlineStatus } from "./useOnlineStatus";
 
@@ -242,11 +242,14 @@ async function replaceBookReference(tempBookId: string, realBookId: string) {
     });
   }
 
-  updateStoredBook<Record<string, unknown> & { id: string }>(tempBookId, (book) => ({
-    ...book,
-    id: realBookId,
-    _offline: false,
-  }));
+  updateStoredBook<Record<string, unknown> & { id: string }>(
+    tempBookId,
+    (book) => ({
+      ...book,
+      id: realBookId,
+      _offline: false,
+    }),
+  );
   renameStoredExpenseBucket<Record<string, unknown> & { book_id?: string }>(
     tempBookId,
     realBookId,
@@ -307,7 +310,10 @@ async function resolveMemberUserId(payload: AddMemberPayload) {
   return data.user_id;
 }
 
-async function processAction(action: SyncAction, userId: string): Promise<boolean> {
+async function processAction(
+  action: SyncAction,
+  userId: string,
+): Promise<boolean> {
   try {
     switch (action.type) {
       case "create_book": {
@@ -368,6 +374,116 @@ async function processAction(action: SyncAction, userId: string): Promise<boolea
           })
           .eq("id", payload.bookId);
         if (error) throw error;
+        break;
+      }
+      case "duplicate_book": {
+        const payload = action.payload as Record<string, unknown>;
+        const sourceBookId = payload.sourceBookId as string;
+        const bookName = payload.bookName as string;
+        const bookDescription = payload.bookDescription as string | null;
+        const currency = payload.currency as string;
+        const color = payload.color as string;
+        const icon = payload.icon as string;
+        const includemembers = payload.includemembers as boolean;
+        const tempId = payload.tempId as string;
+
+        // Create the new book
+        const { data: newBook, error: createError } = await supabase
+          .from("expense_books")
+          .insert({
+            name: bookName,
+            description: bookDescription ?? null,
+            currency,
+            color,
+            icon,
+            created_by: userId,
+          })
+          .select()
+          .single();
+        if (createError) throw createError;
+
+        // Add creator as owner
+        const { error: memberError } = await supabase
+          .from("book_members")
+          .insert({ book_id: newBook.id, user_id: userId, role: "owner" });
+        if (memberError) throw memberError;
+
+        // Copy members if requested
+        if (includemembers) {
+          const { data: sourceMembers, error: getMembersError } = await supabase
+            .from("book_members")
+            .select("*")
+            .eq("book_id", sourceBookId);
+          if (getMembersError) throw getMembersError;
+
+          // Copy members except the current user (already added as owner)
+          const membersToAdd = (sourceMembers || [])
+            .filter((m) => m.user_id !== userId)
+            .map((m) => ({
+              book_id: newBook.id,
+              user_id: m.user_id,
+              role: m.role,
+            }));
+
+          if (membersToAdd.length > 0) {
+            const { error: addMembersError } = await supabase
+              .from("book_members")
+              .insert(membersToAdd);
+            if (addMembersError) throw addMembersError;
+          }
+        }
+
+        // Copy all expenses
+        const { data: sourceExpenses, error: getExpensesError } = await supabase
+          .from("expenses")
+          .select("*, categories(name, icon, color)")
+          .eq("book_id", sourceBookId);
+        if (getExpensesError) throw getExpensesError;
+
+        if (sourceExpenses && sourceExpenses.length > 0) {
+          const expensesToInsert = sourceExpenses.map((expense) => ({
+            book_id: newBook.id,
+            title: (expense as Record<string, unknown>).title,
+            amount: (expense as Record<string, unknown>).amount,
+            date: (expense as Record<string, unknown>).date,
+            category_id:
+              (expense as Record<string, unknown>).category_id || null,
+            expense_type:
+              (expense as Record<string, unknown>).expense_type ?? "debit",
+            payment_method:
+              (expense as Record<string, unknown>).payment_method ?? "cash",
+            notes: (expense as Record<string, unknown>).notes ?? null,
+            tags: (expense as Record<string, unknown>).tags ?? [],
+            paid_by: (expense as Record<string, unknown>).paid_by ?? userId,
+            created_by:
+              (expense as Record<string, unknown>).created_by ?? userId,
+          }));
+
+          const { error: insertExpensesError } = await supabase
+            .from("expenses")
+            .insert(expensesToInsert);
+          if (insertExpensesError) throw insertExpensesError;
+        }
+
+        // Update the reference in our cache
+        await replaceBookReference(tempId, newBook.id);
+
+        await db.books.put({
+          id: newBook.id,
+          data: {
+            ...newBook,
+            members: [{ user_id: userId, role: "owner" }],
+            my_access: [{ user_id: userId, role: "owner" }],
+            _offline: false,
+          },
+          cachedAt: Date.now(),
+        });
+        upsertStoredBook({
+          ...newBook,
+          members: [{ user_id: userId, role: "owner" }],
+          my_access: [{ user_id: userId, role: "owner" }],
+          _offline: false,
+        });
         break;
       }
       case "delete_book": {

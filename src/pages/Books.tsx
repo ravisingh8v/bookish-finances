@@ -1,4 +1,13 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -23,7 +32,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { motion } from "framer-motion";
-import { BookOpen, Edit, Loader2, Plus, Trash2, Users } from "lucide-react";
+import {
+  BookOpen,
+  Copy,
+  Edit,
+  Loader2,
+  Plus,
+  Trash2,
+  Users,
+} from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -43,14 +60,24 @@ export default function Books() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isOnline } = useOfflineSync();
-  const { books, isLoading, createBook, updateBook, deleteBook, isBookOwner } =
-    useBooks();
+  const {
+    books,
+    isLoading,
+    createBook,
+    updateBook,
+    deleteBook,
+    duplicateBook,
+    isBookOwner,
+  } = useBooks();
   const [open, setOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("INR");
   const [color, setColor] = useState(COLORS[0]);
+  const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
+  const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
+  const [includemembers, setIncludemembers] = useState(false);
 
   const resetForm = () => {
     setName("");
@@ -58,6 +85,33 @@ export default function Books() {
     setCurrency("INR");
     setColor(COLORS[0]);
     setEditingBook(null);
+  };
+
+  const handleDuplicate = (bookId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!isOnline) {
+      toast.error("Book duplication requires internet connection");
+      return;
+    }
+    setDuplicateBookId(bookId);
+    setIncludemembers(false);
+    setDuplicateDialogOpen(true);
+  };
+
+  const handleConfirmDuplicate = async () => {
+    if (!duplicateBookId) return;
+
+    try {
+      await duplicateBook.mutateAsync({
+        bookId: duplicateBookId,
+        includemembers,
+      });
+      toast.success("Book duplicated! It will sync when online.");
+      setDuplicateDialogOpen(false);
+      setDuplicateBookId(null);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const openEditDialog = (book: Book, e: React.MouseEvent) => {
@@ -303,6 +357,24 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-blue-600 disabled:opacity-50"
+                                onClick={(e) => handleDuplicate(book.id, e)}
+                                disabled={duplicateBook.isPending || !isOnline}
+                                title={
+                                  !isOnline
+                                    ? "Book duplication requires internet"
+                                    : "Duplicate this book"
+                                }
+                              >
+                                {duplicateBook.isPending ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Copy className="h-4 w-4" />
+                                )}
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -345,6 +417,56 @@ export default function Books() {
           </div>
         )}
       </div>
+
+      <AlertDialog
+        open={duplicateDialogOpen}
+        onOpenChange={setDuplicateDialogOpen}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Duplicate Book</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4 mt-4">
+              <p>Do you want to copy members as well?</p>
+              <div className="flex items-center gap-3 bg-muted p-3 rounded-lg">
+                <input
+                  type="checkbox"
+                  id="include-members"
+                  checked={includemembers}
+                  onChange={(e) => setIncludemembers(e.target.checked)}
+                  className="w-4 h-4"
+                />
+                <label
+                  htmlFor="include-members"
+                  className="text-sm cursor-pointer flex-1"
+                >
+                  Copy members and their roles
+                </label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Expenses will always be copied. New book will be created as a
+                copy with "(Copy)" appended to the name.
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="flex gap-2 justify-end">
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDuplicate}
+              disabled={duplicateBook.isPending}
+              className="bg-primary hover:bg-primary/90"
+            >
+              {duplicateBook.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Duplicating...
+                </>
+              ) : (
+                "Duplicate"
+              )}
+            </AlertDialogAction>
+          </div>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

@@ -1,19 +1,19 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { UpdateNotification } from "@/components/UpdateNotification";
 import { AuthProvider } from "@/hooks/useAuth";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
-import Dashboard from "./pages/Dashboard";
-import Auth from "./pages/Auth";
-import Books from "./pages/Books";
-import BookDetail from "./pages/BookDetail";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
 import Analytics from "./pages/Analytics";
-import SettingsPage from "./pages/SettingsPage";
-import ResetPassword from "./pages/ResetPassword";
+import Auth from "./pages/Auth";
+import BookDetail from "./pages/BookDetail";
+import Books from "./pages/Books";
+import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
-
+import ResetPassword from "./pages/ResetPassword";
+import SettingsPage from "./pages/SettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -22,6 +22,7 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <UpdateNotification />
       <BrowserRouter>
         <AuthProvider>
           <OfflineSyncProvider>

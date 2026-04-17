@@ -4,6 +4,7 @@ export type SyncActionType =
   | "create_book"
   | "update_book"
   | "delete_book"
+  | "duplicate_book"
   | "create_expense"
   | "update_expense"
   | "delete_expense"

@@ -22,12 +22,30 @@ function attachBrowserNetworkEvents() {
   }
 
   browserEventsAttached = true;
-  window.addEventListener("online", () => {
+
+  // Sync initial state with navigator.onLine
+  setInferredReachability(navigator.onLine);
+
+  const handleOnline = () => {
     setInferredReachability(true);
-  });
-  window.addEventListener("offline", () => {
+  };
+
+  const handleOffline = () => {
     setInferredReachability(false);
-  });
+  };
+
+  // Use capture phase to ensure we catch all events
+  window.addEventListener("online", handleOnline, true);
+  window.addEventListener("offline", handleOffline, true);
+
+  // Also listen to visibility changes and sync connectivity checks
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      // Recheck connectivity when tab becomes visible
+      setInferredReachability(navigator.onLine);
+    }
+  };
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 }
 
 export function subscribeToNetworkStatus(listener: NetworkListener) {
