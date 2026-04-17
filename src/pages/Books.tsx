@@ -23,7 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { motion } from "framer-motion";
-import { BookOpen, Edit, Loader2, Plus, Trash2, Users } from "lucide-react";
+import { BookOpen, Copy, Edit, Loader2, Plus, Trash2, Users, WifiOff } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -43,8 +43,10 @@ export default function Books() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { isOnline } = useOfflineSync();
-  const { books, isLoading, createBook, updateBook, deleteBook, isBookOwner } =
+  const { books, isLoading, createBook, updateBook, deleteBook, duplicateBook, isBookOwner } =
     useBooks();
+  const [duplicating, setDuplicating] = useState<Book | null>(null);
+  const [copyMembers, setCopyMembers] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [name, setName] = useState("");
@@ -299,6 +301,25 @@ export default function Books() {
                                 onClick={(e) => openEditDialog(book, e)}
                               >
                                 <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!isOnline) {
+                                    toast.error(
+                                      "Book duplication requires internet connection",
+                                    );
+                                    return;
+                                  }
+                                  setCopyMembers(false);
+                                  setDuplicating(book);
+                                }}
+                                title="Duplicate book"
+                              >
+                                <Copy className="h-4 w-4" />
                               </Button>
                               <Button
                                 variant="ghost"
