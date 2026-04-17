@@ -300,6 +300,84 @@ export function useBooks() {
     },
   });
 
+  const duplicateBook = useMutation({
+    mutationFn: async ({
+      bookId,
+      copyMembers,
+    }: {
+      bookId: string;
+      copyMembers: boolean;
+    }) => {
+      if (!isOnline) {
+        throw new Error("Book duplication requires internet connection");
+      }
+      if (!user) throw new Error("Not authenticated");
+
+      const source = booksQuery.data?.find((b) => b.id === bookId);
+      if (!source) throw new Error("Book not found");
+
+      // 1. Create new book
+      const { data: newBook, error: bookErr } = await supabase
+        .from("expense_books")
+        .insert({
+          name: `${source.name} (Copy)`,
+          description: source.description,
+          currency: source.currency,
+          color: source.color,
+          icon: source.icon,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+      if (bookErr) throw bookErr;
+
+      // 2. Add owner membership
+      await supabase
+        .from("book_members")
+        .insert({ book_id: newBook.id, user_id: user.id, role: "owner" });
+
+      // 3. Copy other members if requested
+      if (copyMembers && source.members) {
+        const others = source.members
+          .filter((m) => m.user_id !== user.id)
+          .map((m) => ({
+            book_id: newBook.id,
+            user_id: m.user_id,
+            role: m.role,
+          }));
+        if (others.length > 0) {
+          await supabase.from("book_members").insert(others);
+        }
+      }
+
+      // 4. Copy all expenses
+      const { data: srcExpenses } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("book_id", bookId);
+
+      if (srcExpenses && srcExpenses.length > 0) {
+        const newExpenses = srcExpenses.map((e) => ({
+          book_id: newBook.id,
+          title: e.title,
+          amount: e.amount,
+          date: e.date,
+          category_id: e.category_id,
+          expense_type: e.expense_type,
+          payment_method: e.payment_method,
+          notes: e.notes,
+          tags: e.tags,
+          paid_by: user.id,
+          created_by: user.id,
+        }));
+        await supabase.from("expenses").insert(newExpenses);
+      }
+
+      await queryClient.invalidateQueries({ queryKey: ["books"] });
+      return newBook;
+    },
+  });
+
   const isBookOwner = (book: Pick<Book, "members">) =>
     book.members?.some(
       (member) => member.user_id === user?.id && member.role === "owner",
@@ -311,6 +389,7 @@ export function useBooks() {
     createBook,
     updateBook,
     deleteBook,
+    duplicateBook,
     isBookOwner,
   };
 }
