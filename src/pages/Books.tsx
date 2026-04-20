@@ -456,7 +456,7 @@ export default function Books() {
                   value={duplicateName}
                   onChange={(e) => setDuplicateName(e.target.value)}
                   placeholder="Enter duplicated book name"
-                  className="w-full h-10 px-3 rounded-md border border-input focus-visible:outline-primary bg-background text-foreground text-sm"
+                  className="w-full h-10 px-3 rounded-md border border-input focus-visible:outline-primary outline-offset-[2px] bg-background text-foreground text-sm"
                 />
               </div>
               <p className="text-xs text-muted-foreground">

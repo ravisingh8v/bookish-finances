@@ -113,6 +113,36 @@ export default function BookDetail() {
     isFetchingNextPage,
   } = useExpenses(bookId!);
 
+  // Track if this is first data load (for animations)
+  const hasInitialLoadRef = useRef(false);
+  const previousExpensesRef = useRef<typeof expenses>([]);
+  const shouldAnimateRef = useRef(false);
+
+  // Only animate on first load when data comes from server (not cache)
+  useEffect(() => {
+    if (!isLoading && expenses.length > 0 && !hasInitialLoadRef.current) {
+      hasInitialLoadRef.current = true;
+      shouldAnimateRef.current = true;
+      // Reset animation flag after animations complete
+      const timer = setTimeout(
+        () => {
+          shouldAnimateRef.current = false;
+        },
+        expenses.length * 30 + 500,
+      );
+      return () => clearTimeout(timer);
+    }
+    previousExpensesRef.current = expenses;
+  }, [isLoading, expenses]);
+
+  // Helper to determine if an expense should animate
+  const shouldAnimateExpense = (expenseId: string, index: number): boolean => {
+    // Only animate on initial load
+    if (!shouldAnimateRef.current) return false;
+    // Animate all items on initial load
+    return true;
+  };
+
   const observerRef = useRef<IntersectionObserver | null>(null);
   const sentinelRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -730,12 +760,19 @@ export default function BookDetail() {
               <div className="space-y-2">
                 {filtered.map((expense, i) => {
                   const canDelete = isOwner || expense.created_by === user?.id;
+                  const shouldAnimate = shouldAnimateRef.current;
                   return (
                     <motion.div
                       key={expense.id}
-                      initial={{ opacity: 0, x: -10 }}
+                      initial={
+                        shouldAnimate
+                          ? { opacity: 0, x: -10 }
+                          : { opacity: 1, x: 0 }
+                      }
                       animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.03 }}
+                      transition={
+                        shouldAnimate ? { delay: i * 0.03 } : { duration: 0 }
+                      }
                     >
                       <Card className="glass hover:shadow-md transition-shadow group">
                         <CardContent className="p-3 sm:p-4 flex flex-col gap-3">
