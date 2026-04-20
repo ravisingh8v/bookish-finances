@@ -41,11 +41,12 @@ import {
   DropdownMenuTrigger,
 } from "@radix-ui/react-dropdown-menu";
 import { useQuery } from "@tanstack/react-query";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Edit,
   EllipsisVertical,
+  Filter,
   Loader2,
   Plus,
   Search,
@@ -54,6 +55,7 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
+  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -143,6 +145,9 @@ export default function BookDetail() {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<string>("all");
   const [filterMember, setFilterMember] = useState<string>("all");
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [tempFilterType, setTempFilterType] = useState<string>("all");
+  const [tempFilterMember, setTempFilterMember] = useState<string>("all");
 
   // Form state
   const [title, setTitle] = useState("");
@@ -542,8 +547,9 @@ export default function BookDetail() {
               </Card>
             </div>
 
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-3">
+            {/* Filters - Inline for Desktop, Modal for Mobile */}
+            {/* Desktop Inline Filters */}
+            <div className="hidden lg:flex flex-row gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -554,7 +560,7 @@ export default function BookDetail() {
                 />
               </div>
               <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-full sm:w-36">
+                <SelectTrigger className="w-36">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -565,7 +571,7 @@ export default function BookDetail() {
               </Select>
               {members.length > 1 && (
                 <Select value={filterMember} onValueChange={setFilterMember}>
-                  <SelectTrigger className="w-full sm:w-44">
+                  <SelectTrigger className="w-44">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -580,6 +586,100 @@ export default function BookDetail() {
                   </SelectContent>
                 </Select>
               )}
+            </div>
+
+            {/* Mobile/Tablet Filter Modal */}
+            <div className="lg:hidden flex gap-2 items-end">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search expenses..."
+                  className="pl-9"
+                  value={search}
+                  onChange={(e: any) => setSearch(e.target.value)}
+                />
+              </div>
+              <Dialog open={showFilterModal} onOpenChange={setShowFilterModal}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-10 w-10 shrink-0"
+                    onClick={() => {
+                      setTempFilterType(filterType);
+                      setTempFilterMember(filterMember);
+                    }}
+                  >
+                    <Filter className="h-4 w-4" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="w-[calc(100%-1.5rem)] sm:w-full max-w-sm rounded-lg mx-auto">
+                  <DialogHeader className="pb-4 border-b">
+                    <DialogTitle className="text-lg">Filters</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label className="text-sm font-medium">Type</Label>
+                      <Select value={tempFilterType} onValueChange={setTempFilterType}>
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Types</SelectItem>
+                          <SelectItem value="debit">Expenses</SelectItem>
+                          <SelectItem value="credit">Income</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {members.length > 1 && (
+                      <div className="space-y-2">
+                        <Label className="text-sm font-medium">Member</Label>
+                        <Select value={tempFilterMember} onValueChange={setTempFilterMember}>
+                          <SelectTrigger className="h-9">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">All Members</SelectItem>
+                            {members.map((m) => (
+                              <SelectItem key={m.user_id} value={m.user_id}>
+                                {m.profile?.display_name ||
+                                  m.profile?.email ||
+                                  "Unknown"}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                  <DialogFooter className="flex gap-2 border-t pt-4">
+                    <Button
+                      variant="ghost"
+                      onClick={() => {
+                        setTempFilterType("all");
+                        setTempFilterMember("all");
+                      }}
+                    >
+                      Reset
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setShowFilterModal(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        setFilterType(tempFilterType);
+                        setFilterMember(tempFilterMember);
+                        setShowFilterModal(false);
+                      }}
+                    >
+                      Apply
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
             </div>
 
             {/* Offline indicator */}
@@ -632,134 +732,147 @@ export default function BookDetail() {
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ delay: i * 0.03 }}
                     >
-                      <Card className="glass hover:shadow-md transition-shadow group overflow-hidden">
-                        <span
-                          className="absolute right-0 top-0 rounded-l-full px-2 font-medium text-sm"
-                          style={{
-                            backgroundColor: expense.categories?.color
-                              ? `${expense.categories.color}20`
-                              : "hsl(var(--muted))",
-                            color:
-                              expense.categories?.color ??
-                              "hsl(var(--muted-foreground))",
-                          }}
-                        >
-                          {expense.categories?.name ?? "Uncategorized"}
-                        </span>
-                        <CardContent className="p-4 flex items-center gap-3">
-                          <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                            style={{
-                              backgroundColor:
-                                (expense.categories?.color ?? "#6B7280") + "20",
-                              color: expense.categories?.color ?? "#6B7280",
-                            }}
-                          >
-                            {expense.expense_type === "credit" ? (
-                              <TrendingUp className="h-5 w-5" />
-                            ) : (
-                              <TrendingDown className="h-5 w-5" />
-                            )}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="font-medium truncate">
-                              {expense.title}
-                            </p>
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
-                              {expense.payment_method && (
-                                <>
-                                  <span className="capitalize">
-                                    {expense.payment_method}
-                                  </span>
-                                  <span>•</span>
-                                </>
-                              )}
-                              <span>
-                                {new Date(expense.date).toLocaleDateString()}
-                              </span>
-                              {expense._offline && (
-                                <>
-                                  <span>•</span>
-                                  <span className="text-amber-600">
-                                    Pending sync
-                                  </span>
-                                </>
+                      <Card className="glass hover:shadow-md transition-shadow group">
+                        <CardContent className="p-3 sm:p-4 flex flex-col gap-3">
+                          {/* Top Row: Icon, Title, Amount, Actions */}
+                          <div className="flex items-start gap-2 sm:gap-3">
+                            <div
+                              className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
+                              style={{
+                                backgroundColor:
+                                  (expense.categories?.color ?? "#6B7280") + "20",
+                                color: expense.categories?.color ?? "#6B7280",
+                              }}
+                            >
+                              {expense.expense_type === "credit" ? (
+                                <TrendingUp className="h-4 w-4 sm:h-5 sm:w-5" />
+                              ) : (
+                                <TrendingDown className="h-4 w-4 sm:h-5 sm:w-5" />
                               )}
                             </div>
-                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70 mt-0.5">
-                              <span className="inline-flex items-center gap-1">
-                                <span className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold">
-                                  {getInitials(
-                                    expense.creator_profile?.display_name,
-                                  )}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-start gap-2 justify-between mb-1">
+                                <p className="font-medium truncate">
+                                  {expense.title}
+                                </p>
+                                <span
+                                  className="text-[9px] sm:text-[10px] font-medium px-2 py-0.5 rounded-full shrink-0"
+                                  style={{
+                                    backgroundColor: expense.categories?.color
+                                      ? `${expense.categories.color}20`
+                                      : "hsl(var(--muted))",
+                                    color:
+                                      expense.categories?.color ??
+                                      "hsl(var(--muted-foreground))",
+                                  }}
+                                >
+                                  {expense.categories?.name ?? "Uncategorized"}
                                 </span>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap">
+                                {expense.payment_method && (
+                                  <span className="capitalize px-1.5 py-0.5 bg-muted rounded text-[10px]">
+                                    {expense.payment_method}
+                                  </span>
+                                )}
+                                {expense._offline && (
+                                  <span className="text-amber-600 text-[10px] px-1.5 py-0.5 bg-amber-50 rounded">
+                                    Pending sync
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                              <p
+                                className={`font-display font-bold text-sm sm:text-base ${expense.expense_type === "credit" ? "text-success" : "text-destructive"}`}
+                              >
+                                {expense.expense_type === "credit" ? "+" : "-"}
+                                {cur}
+                                {Number(expense.amount).toLocaleString()}
+                              </p>
+                              {(canDelete || canEdit) && (
+                                <DropdownMenu modal>
+                                  <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none h-5 w-5 flex items-center justify-center">
+                                    <EllipsisVertical className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuPortal>
+                                    <DropdownMenuContent
+                                      className="DropdownMenuContent p-1 bg-white text-gray-700 text-sm font-medium z-[999] rounded-lg shadow-lg border"
+                                      sideOffset={5}
+                                    >
+                                      {canEdit && (
+                                        <DropdownMenuItem
+                                          className="DropdownMenuItem p-2 rounded hover:bg-accent hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
+                                          onClick={() => handleEditExpense(expense)}
+                                        >
+                                          <div className="flex gap-2 items-center">
+                                            <Edit className="h-4 w-4" />
+                                            <span>Edit</span>
+                                          </div>
+                                        </DropdownMenuItem>
+                                      )}
+                                      {canDelete && (
+                                        <DropdownMenuItem
+                                          className="DropdownMenuItem p-2 rounded hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
+                                          onClick={() => {
+                                            if (confirm("Delete this expense?"))
+                                              deleteExpense.mutate(expense.id);
+                                          }}
+                                        >
+                                          <div className="flex gap-2 items-center">
+                                            <Trash2 className="h-4 w-4" />
+                                            <span>Delete</span>
+                                          </div>
+                                        </DropdownMenuItem>
+                                      )}
+                                    </DropdownMenuContent>
+                                  </DropdownMenuPortal>
+                                </DropdownMenu>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Middle Row: User Info */}
+                          <div className="flex flex-col gap-1 text-[11px] text-muted-foreground/70 pl-0 sm:pl-10">
+                            <span className="inline-flex items-center gap-1">
+                              <span className="w-4 h-4 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[9px] font-bold shrink-0">
+                                {getInitials(
+                                  expense.creator_profile?.display_name,
+                                )}
+                              </span>
+                              <span className="truncate">
                                 Added by{" "}
                                 {expense.created_by === user?.id
                                   ? "You"
                                   : expense.creator_profile?.display_name ||
                                     "Unknown"}
                               </span>
-                              {expense.paid_by !== expense.created_by &&
-                                expense.payer_profile && (
-                                  <>
-                                    <span>•</span>
-                                    <span>
-                                      Paid by{" "}
-                                      {expense.payer_profile.display_name ||
-                                        "Unknown"}
-                                    </span>
-                                  </>
-                                )}
-                            </div>
+                            </span>
+                            {expense.paid_by !== expense.created_by &&
+                              expense.payer_profile && (
+                                <span className="truncate">
+                                  Paid by{" "}
+                                  {expense.payer_profile.display_name ||
+                                    "Unknown"}
+                                </span>
+                              )}
                           </div>
-                          <p
-                            className={`font-display font-bold text-lg shrink-0 ${expense.expense_type === "credit" ? "text-success" : "text-destructive"}`}
-                          >
-                            {expense.expense_type === "credit" ? "+" : "-"}
-                            {cur}
-                            {Number(expense.amount).toLocaleString()}
-                          </p>
-                          {(canDelete || canEdit) && (
-                            <DropdownMenu modal>
-                              <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none">
-                                <EllipsisVertical className="h-4 w-4" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuPortal>
-                                <DropdownMenuContent
-                                  className="DropdownMenuContent p-1 bg-white text-gray-700 text-sm font-medium z-[999] rounded-lg shadow-lg border"
-                                  sideOffset={5}
-                                >
-                                  {canEdit && (
-                                    <DropdownMenuItem
-                                      className="DropdownMenuItem p-2 rounded hover:bg-accent hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
-                                      onClick={() =>
-                                        handleEditExpense(expense)
-                                      }
-                                    >
-                                      <div className="flex gap-2 items-center">
-                                        <Edit className="h-4 w-4" />
-                                        <span>Edit</span>
-                                      </div>
-                                    </DropdownMenuItem>
-                                  )}
-                                  {canDelete && (
-                                    <DropdownMenuItem
-                                      className="DropdownMenuItem p-2 rounded hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
-                                      onClick={() => {
-                                        if (confirm("Delete this expense?"))
-                                          deleteExpense.mutate(expense.id);
-                                      }}
-                                    >
-                                      <div className="flex gap-2 items-center">
-                                        <Trash2 className="h-4 w-4" />
-                                        <span>Delete</span>
-                                      </div>
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenuPortal>
-                            </DropdownMenu>
-                          )}
+
+                          {/* Bottom Row: Single Timestamp (No Label) */}
+                          <div className="text-[9px] sm:text-[10px] text-muted-foreground/50 pt-1.5 border-t border-border/50 pl-0 sm:pl-10">
+                            {new Date(
+                              expense.updated_at && expense.updated_at !== expense.created_at
+                                ? expense.updated_at
+                                : expense.created_at
+                            ).toLocaleString("en-IN", {
+                              month: "short",
+                              day: "numeric",
+                              year: "2-digit",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                              hour12: true,
+                            })}
+                          </div>
                         </CardContent>
                       </Card>
                     </motion.div>

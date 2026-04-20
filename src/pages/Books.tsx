@@ -77,6 +77,7 @@ export default function Books() {
   const [color, setColor] = useState(COLORS[0]);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
+  const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
 
   const resetForm = () => {
@@ -93,9 +94,13 @@ export default function Books() {
       toast.error("Book duplication requires internet connection");
       return;
     }
-    setDuplicateBookId(bookId);
-    setIncludemembers(false);
-    setDuplicateDialogOpen(true);
+    const book = books.find((b) => b.id === bookId);
+    if (book) {
+      setDuplicateBookId(bookId);
+      setDuplicateName(`${book.name} (Copy)`);
+      setIncludemembers(false);
+      setDuplicateDialogOpen(true);
+    }
   };
 
   const handleConfirmDuplicate = async () => {
@@ -105,6 +110,7 @@ export default function Books() {
       await duplicateBook.mutateAsync({
         bookId: duplicateBookId,
         includemembers,
+        customName: duplicateName,
       });
       toast.success("Book duplicated! It will sync when online.");
       setDuplicateDialogOpen(false);
@@ -409,6 +415,20 @@ export default function Books() {
                           {memberCount}
                         </span>
                       </div>
+                      <div className="text-[9px] sm:text-[10px] text-muted-foreground/50 pt-2 border-t border-border/50">
+                        {new Date(
+                          book.updated_at && book.updated_at !== book.created_at
+                            ? book.updated_at
+                            : book.created_at
+                        ).toLocaleString('en-IN', {
+                          month: 'short',
+                          day: 'numeric',
+                          year: '2-digit',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: true
+                        })}
+                      </div>
                     </CardContent>
                   </Card>
                 </motion.div>
@@ -422,11 +442,26 @@ export default function Books() {
         open={duplicateDialogOpen}
         onOpenChange={setDuplicateDialogOpen}
       >
-        <AlertDialogContent>
+        <AlertDialogContent className="w-[calc(100%-1.5rem)] sm:w-full max-w-sm mx-auto rounded-lg">
           <AlertDialogHeader>
             <AlertDialogTitle>Duplicate Book</AlertDialogTitle>
             <AlertDialogDescription className="space-y-4 mt-4">
-              <p>Do you want to copy members as well?</p>
+              <div className="space-y-2">
+                <label htmlFor="duplicate-name" className="text-sm font-medium">
+                  Book Name
+                </label>
+                <input
+                  id="duplicate-name"
+                  type="text"
+                  value={duplicateName}
+                  onChange={(e) => setDuplicateName(e.target.value)}
+                  placeholder="Enter duplicated book name"
+                  className="w-full h-10 px-3 rounded-md border border-input focus-visible:outline-primary bg-background text-foreground text-sm"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Customize the name for your duplicated book
+              </p>
               <div className="flex items-center gap-3 bg-muted p-3 rounded-lg">
                 <input
                   type="checkbox"
@@ -443,17 +478,16 @@ export default function Books() {
                 </label>
               </div>
               <p className="text-xs text-muted-foreground">
-                Expenses will always be copied. New book will be created as a
-                copy with "(Copy)" appended to the name.
+                Expenses will always be copied.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <div className="flex gap-2 justify-end">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <div className="flex flex-col sm:flex-row gap-2 justify-end">
+            <AlertDialogCancel className="order-2 sm:order-1">Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDuplicate}
               disabled={duplicateBook.isPending}
-              className="bg-primary hover:bg-primary/90"
+              className="order-1 sm:order-2 bg-primary hover:bg-primary/90"
             >
               {duplicateBook.isPending ? (
                 <>

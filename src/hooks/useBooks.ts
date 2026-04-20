@@ -310,9 +310,11 @@ export function useBooks() {
     mutationFn: async ({
       bookId,
       includemembers = false,
+      customName,
     }: {
       bookId: string;
       includemembers?: boolean;
+      customName?: string;
     }) => {
       if (!isOnline) {
         throw new Error("Book duplication requires internet connection");
@@ -333,12 +335,14 @@ export function useBooks() {
         throw new Error("User ID not available. Please log in again.");
       }
 
+      const finalName = customName || `${bookToDuplicate.name} (Copy)`;
+
       // Queue the duplication action
       await queueAction({
         type: "duplicate_book",
         payload: {
           sourceBookId: bookId,
-          bookName: `${bookToDuplicate.name} (Copy)`,
+          bookName: finalName,
           bookDescription: bookToDuplicate.description,
           currency: bookToDuplicate.currency,
           color: bookToDuplicate.color,
@@ -353,7 +357,7 @@ export function useBooks() {
       // Create optimistic book
       const optimisticBook: Book = {
         id: tempId,
-        name: `${bookToDuplicate.name} (Copy)`,
+        name: finalName,
         description: bookToDuplicate.description,
         currency: bookToDuplicate.currency,
         color: bookToDuplicate.color,

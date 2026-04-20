@@ -176,9 +176,12 @@ export function useExpenses(bookId: string) {
       // CRITICAL FIX: Immediately return cached data when offline
       // This prevents the first-time offline switching failure
       if (!isOnline) {
-        return cachedExpenses.sort((a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-        );
+        return cachedExpenses.sort((a, b) => {
+          const aTime = new Date(a.updated_at || a.created_at).getTime();
+          const bTime = new Date(b.updated_at || b.created_at).getTime();
+          if (bTime !== aTime) return bTime - aTime; // Newest first
+          return b.id.localeCompare(a.id); // Tie-breaker by ID
+        });
       }
 
       try {
@@ -187,6 +190,7 @@ export function useExpenses(bookId: string) {
             .from("expenses")
             .select("*, categories(name, icon, color)")
             .eq("book_id", bookId)
+            .order("updated_at", { ascending: false })
             .order("created_at", { ascending: false })
             .limit(MAX_EXPENSES_CACHE),
         );
@@ -233,17 +237,31 @@ export function useExpenses(bookId: string) {
             (expense) =>
               !offlineOnly.some((offline) => offline.id === expense.id),
           ),
-        ];
+        ].sort((a, b) => {
+          // Sort by updated_at/created_at (newest first), then by ID for tie-breaking
+          const aTime = new Date(a.updated_at || a.created_at).getTime();
+          const bTime = new Date(b.updated_at || b.created_at).getTime();
+          if (bTime !== aTime) return bTime - aTime; // Newest first
+          return b.id.localeCompare(a.id); // Tie-breaker by ID
+        });
 
         await putExpenses(bookId, merged, userId);
         return merged;
       } catch (err) {
         if (isOfflineLikeError(err)) {
-          return cachedExpenses.sort((a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-          );
+          return cachedExpenses.sort((a, b) => {
+            const aTime = new Date(a.updated_at || a.created_at).getTime();
+            const bTime = new Date(b.updated_at || b.created_at).getTime();
+            if (bTime !== aTime) return bTime - aTime; // Newest first
+            return b.id.localeCompare(a.id); // Tie-breaker by ID
+          });
         }
-        return cachedExpenses;
+        return cachedExpenses.sort((a, b) => {
+          const aTime = new Date(a.updated_at || a.created_at).getTime();
+          const bTime = new Date(b.updated_at || b.created_at).getTime();
+          if (bTime !== aTime) return bTime - aTime; // Newest first
+          return b.id.localeCompare(a.id); // Tie-breaker by ID
+        });
       }
     },
     enabled: !!user && !!bookId && !!userId,

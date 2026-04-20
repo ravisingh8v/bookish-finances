@@ -457,6 +457,8 @@ async function processAction(
             paid_by: (expense as Record<string, unknown>).paid_by ?? userId,
             created_by:
               (expense as Record<string, unknown>).created_by ?? userId,
+            created_at: (expense as Record<string, unknown>).created_at,
+            updated_at: (expense as Record<string, unknown>).updated_at,
           }));
 
           const { error: insertExpensesError } = await supabase

@@ -11,12 +11,12 @@ export function OfflineStatusBar() {
   const { isOnline, syncStatus, pendingCount, syncNow } =
     useOfflineSync();
 
-  // ONLY show: when offline OR when there are sync errors/pending items
-  // Hide completely when online and synced - sync happens silently
-  const showBar =
-    !isOnline ||
-    syncStatus === "error" ||
-    (pendingCount > 0 && syncStatus !== "success");
+  // Only show the bar in these cases:
+  // 1. When offline (no internet)
+  // 2. When actively syncing data
+  // 3. When sync has an error
+  // Hide completely when online with no pending issues
+  const shouldShow = !isOnline || syncStatus === "syncing" || syncStatus === "error";
 
   let bgClass = "bg-amber-500/90 text-amber-950";
   let icon = <CloudOff className="h-3.5 w-3.5" />;
@@ -38,7 +38,7 @@ export function OfflineStatusBar() {
 
   return (
     <AnimatePresence mode="wait">
-      {showBar && (
+      {shouldShow && (
         <motion.div
           key="status-bar"
           initial={{ opacity: 0, y: -10 }}
