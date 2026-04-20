@@ -1,22 +1,17 @@
 import { useOfflineSync } from "@/hooks/useOfflineSync";
-import {
-  AlertCircle,
-  CloudOff,
-  Loader2,
-  RefreshCw,
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import { AlertCircle, CloudOff, Loader2, RefreshCw } from "lucide-react";
 
 export function OfflineStatusBar() {
-  const { isOnline, syncStatus, pendingCount, syncNow } =
-    useOfflineSync();
+  const { isOnline, syncStatus, pendingCount, syncNow } = useOfflineSync();
 
   // Only show the bar in these cases:
   // 1. When offline (no internet)
   // 2. When actively syncing data
   // 3. When sync has an error
   // Hide completely when online with no pending issues
-  const shouldShow = !isOnline || syncStatus === "syncing" || syncStatus === "error";
+  const shouldShow =
+    !isOnline || syncStatus === "syncing" || syncStatus === "error";
 
   let bgClass = "bg-amber-500/90 text-amber-950";
   let icon = <CloudOff className="h-3.5 w-3.5" />;

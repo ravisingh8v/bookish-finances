@@ -419,14 +419,14 @@ export default function Books() {
                         {new Date(
                           book.updated_at && book.updated_at !== book.created_at
                             ? book.updated_at
-                            : book.created_at
-                        ).toLocaleString('en-IN', {
-                          month: 'short',
-                          day: 'numeric',
-                          year: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: true
+                            : book.created_at,
+                        ).toLocaleString("en-IN", {
+                          month: "short",
+                          day: "numeric",
+                          year: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
                         })}
                       </div>
                     </CardContent>
@@ -483,7 +483,9 @@ export default function Books() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col sm:flex-row gap-2 justify-end">
-            <AlertDialogCancel className="order-2 sm:order-1">Cancel</AlertDialogCancel>
+            <AlertDialogCancel className="order-2 sm:order-1">
+              Cancel
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDuplicate}
               disabled={duplicateBook.isPending}

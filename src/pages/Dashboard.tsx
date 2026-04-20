@@ -1,5 +1,4 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -8,7 +7,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,9 +30,9 @@ import {
   Copy,
   Edit,
   Loader2,
+  Trash2,
   TrendingDown,
   TrendingUp,
-  Trash2,
   Users,
   Wallet,
 } from "lucide-react";
@@ -115,7 +113,9 @@ export default function Dashboard() {
         color: editColor,
       });
       toast.success(
-        isOnline ? "Book updated!" : "Book updated offline. Will sync when online.",
+        isOnline
+          ? "Book updated!"
+          : "Book updated offline. Will sync when online.",
       );
       setOpenEdit(false);
       resetEditForm();
@@ -431,16 +431,17 @@ export default function Dashboard() {
                         </div>
                         <div className="text-[9px] sm:text-[10px] text-muted-foreground/50 pt-2 border-t border-border/50">
                           {new Date(
-                            book.updated_at && book.updated_at !== book.created_at
+                            book.updated_at &&
+                              book.updated_at !== book.created_at
                               ? book.updated_at
-                              : book.created_at
-                          ).toLocaleString('en-IN', {
-                            month: 'short',
-                            day: 'numeric',
-                            year: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
-                            hour12: true
+                              : book.created_at,
+                          ).toLocaleString("en-IN", {
+                            month: "short",
+                            day: "numeric",
+                            year: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
                           })}
                         </div>
                       </CardContent>
@@ -453,10 +454,13 @@ export default function Dashboard() {
         </div>
 
         {/* Edit Book Dialog */}
-        <Dialog open={openEdit} onOpenChange={(v) => {
-          if (!v) resetEditForm();
-          setOpenEdit(v);
-        }}>
+        <Dialog
+          open={openEdit}
+          onOpenChange={(v) => {
+            if (!v) resetEditForm();
+            setOpenEdit(v);
+          }}
+        >
           <DialogContent fullscreen className="flex flex-col">
             <DialogHeader className="pb-6 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
               <DialogTitle className="text-xl">Edit Book</DialogTitle>
@@ -464,7 +468,10 @@ export default function Dashboard() {
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
               <div className="space-y-4">
                 <div className="space-y-3">
-                  <Label htmlFor="edit-book-name" className="text-sm font-medium">
+                  <Label
+                    htmlFor="edit-book-name"
+                    className="text-sm font-medium"
+                  >
                     Name
                   </Label>
                   <Input
@@ -476,7 +483,10 @@ export default function Dashboard() {
                   />
                 </div>
                 <div className="space-y-3">
-                  <Label htmlFor="edit-book-desc" className="text-sm font-medium">
+                  <Label
+                    htmlFor="edit-book-desc"
+                    className="text-sm font-medium"
+                  >
                     Description (optional)
                   </Label>
                   <Input
@@ -542,7 +552,10 @@ export default function Dashboard() {
         </Dialog>
 
         {/* Duplicate Book Dialog */}
-        <Dialog open={duplicateDialogOpen} onOpenChange={setDuplicateDialogOpen}>
+        <Dialog
+          open={duplicateDialogOpen}
+          onOpenChange={setDuplicateDialogOpen}
+        >
           <DialogContent className="w-[calc(100%-1.5rem)] sm:w-full max-w-sm mx-auto rounded-lg">
             <DialogHeader>
               <DialogTitle>Duplicate Book</DialogTitle>

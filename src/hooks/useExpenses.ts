@@ -1,7 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/db";
 import { isOfflineLikeError, withNetworkTimeout } from "@/lib/network";
-import { getStoredExpenses, setStoredExpenses, getCurrentUserId } from "@/lib/offlineJournal";
+import {
+  getCurrentUserId,
+  getStoredExpenses,
+  setStoredExpenses,
+} from "@/lib/offlineJournal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -98,7 +102,11 @@ function optimisticExpense(
   };
 }
 
-async function putExpenses(bookId: string, expenses: Expense[], userId?: string) {
+async function putExpenses(
+  bookId: string,
+  expenses: Expense[],
+  userId?: string,
+) {
   setStoredExpenses(bookId, expenses.slice(0, MAX_EXPENSES_CACHE), userId);
   await db.expenses.put({
     id: bookId,
@@ -124,12 +132,20 @@ async function updateCachedExpenses(
   });
 }
 
-async function getCachedExpenses(bookId: string, userId?: string): Promise<Expense[]> {
+async function getCachedExpenses(
+  bookId: string,
+  userId?: string,
+): Promise<Expense[]> {
   try {
     const uid = userId || getCurrentUserId();
     const cached = await db.expenses.get(bookId);
     // Only return if userId matches (for isolation)
-    if (cached && cached.userId === uid && Array.isArray(cached.expenses) && cached.expenses.length > 0) {
+    if (
+      cached &&
+      cached.userId === uid &&
+      Array.isArray(cached.expenses) &&
+      cached.expenses.length > 0
+    ) {
       return cached.expenses as Expense[];
     }
   } catch {
@@ -163,7 +179,9 @@ export function useExpenses(bookId: string) {
       if (active) setLocalExpenses(expenses);
     });
 
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [bookId, userId]);
 
   const expensesQuery = useQuery({
@@ -280,19 +298,17 @@ export function useExpenses(bookId: string) {
         throw new Error("User ID not available. Please log in again.");
       }
 
-      const optimistic = optimisticExpense(
-        payload,
-        uid,
-        profile,
-        tempId,
-        true,
-      );
+      const optimistic = optimisticExpense(payload, uid, profile, tempId, true);
 
       queryClient.setQueryData(
         ["expenses", bookId],
         (old: Expense[] | undefined) => [optimistic, ...(old ?? [])],
       );
-      await updateCachedExpenses(bookId, (current) => [optimistic, ...current], uid);
+      await updateCachedExpenses(
+        bookId,
+        (current) => [optimistic, ...current],
+        uid,
+      );
       await queueAction({
         type: "create_expense",
         payload: { ...payload, tempId, paid_by: uid, created_by: uid },
@@ -333,10 +349,14 @@ export function useExpenses(bookId: string) {
               : expense,
           ),
       );
-      await updateCachedExpenses(bookId, (current) =>
-        current.map((expense) =>
-          expense.id === params.expenseId ? { ...expense, ...patch } : expense,
-        ),
+      await updateCachedExpenses(
+        bookId,
+        (current) =>
+          current.map((expense) =>
+            expense.id === params.expenseId
+              ? { ...expense, ...patch }
+              : expense,
+          ),
         uid,
       );
 
@@ -387,8 +407,9 @@ export function useExpenses(bookId: string) {
         (old: Expense[] | undefined) =>
           (old ?? []).filter((expense) => expense.id !== expenseId),
       );
-      await updateCachedExpenses(bookId, (current) =>
-        current.filter((expense) => expense.id !== expenseId),
+      await updateCachedExpenses(
+        bookId,
+        (current) => current.filter((expense) => expense.id !== expenseId),
         uid,
       );
 
@@ -458,10 +479,14 @@ export function useExpenses(bookId: string) {
           return [{ ...expense, _offline: !isOnline }, ...current];
         },
       );
-      await updateCachedExpenses(bookId, (current) => {
-        if (current.some((entry) => entry.id === expense.id)) return current;
-        return [{ ...expense, _offline: !isOnline }, ...current];
-      }, uid);
+      await updateCachedExpenses(
+        bookId,
+        (current) => {
+          if (current.some((entry) => entry.id === expense.id)) return current;
+          return [{ ...expense, _offline: !isOnline }, ...current];
+        },
+        uid,
+      );
       await db.deletedExpenses.delete(expenseId);
 
       const restorePayload = {
@@ -530,7 +555,10 @@ export function useExpenses(bookId: string) {
 
       queryClient.setQueryData(
         ["expenses", bookId],
-        (old: Expense[] | undefined) => [...(old ?? []), ...(data as Expense[])],
+        (old: Expense[] | undefined) => [
+          ...(old ?? []),
+          ...(data as Expense[]),
+        ],
       );
     } catch {
       // Ignore pagination errors
@@ -551,17 +579,55 @@ export function useExpenses(bookId: string) {
 }
 
 const DEFAULT_CATEGORIES = [
-  { id: "groceries", name: "Groceries", icon: "shopping-bag", color: "#10B981", is_default: true },
-  { id: "transport", name: "Transport", icon: "truck", color: "#3B82F6", is_default: true },
-  { id: "bills", name: "Bills", icon: "credit-card", color: "#F97316", is_default: true },
-  { id: "entertainment", name: "Entertainment", icon: "film", color: "#8B5CF6", is_default: true },
-  { id: "health", name: "Health", icon: "heart", color: "#EF4444", is_default: true },
-  { id: "other", name: "Other", icon: "tag", color: "#6B7280", is_default: true },
+  {
+    id: "groceries",
+    name: "Groceries",
+    icon: "shopping-bag",
+    color: "#10B981",
+    is_default: true,
+  },
+  {
+    id: "transport",
+    name: "Transport",
+    icon: "truck",
+    color: "#3B82F6",
+    is_default: true,
+  },
+  {
+    id: "bills",
+    name: "Bills",
+    icon: "credit-card",
+    color: "#F97316",
+    is_default: true,
+  },
+  {
+    id: "entertainment",
+    name: "Entertainment",
+    icon: "film",
+    color: "#8B5CF6",
+    is_default: true,
+  },
+  {
+    id: "health",
+    name: "Health",
+    icon: "heart",
+    color: "#EF4444",
+    is_default: true,
+  },
+  {
+    id: "other",
+    name: "Other",
+    icon: "tag",
+    color: "#6B7280",
+    is_default: true,
+  },
 ];
 
 export function useCategories() {
   const { isOnline } = useOfflineSync();
-  const [localCategories, setLocalCategories] = useState<typeof DEFAULT_CATEGORIES>([]);
+  const [localCategories, setLocalCategories] = useState<
+    typeof DEFAULT_CATEGORIES
+  >([]);
 
   useEffect(() => {
     let active = true;
@@ -577,7 +643,9 @@ export function useCategories() {
         if (!active) return;
         setLocalCategories(DEFAULT_CATEGORIES);
       });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, []);
 
   return useQuery({
@@ -585,7 +653,8 @@ export function useCategories() {
     queryFn: async () => {
       const cached = await db.categories.get("default");
       if (!isOnline) {
-        return (cached?.data ?? DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
+        return (cached?.data ??
+          DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
       }
 
       try {
@@ -608,7 +677,8 @@ export function useCategories() {
         }
         return (data ?? DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
       } catch {
-        return (cached?.data ?? DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
+        return (cached?.data ??
+          DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
       }
     },
     staleTime: 300_000,

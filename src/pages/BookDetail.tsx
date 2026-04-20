@@ -55,7 +55,6 @@ import {
   TrendingDown,
   TrendingUp,
   Users,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
@@ -620,7 +619,10 @@ export default function BookDetail() {
                   <div className="space-y-4 py-4">
                     <div className="space-y-2">
                       <Label className="text-sm font-medium">Type</Label>
-                      <Select value={tempFilterType} onValueChange={setTempFilterType}>
+                      <Select
+                        value={tempFilterType}
+                        onValueChange={setTempFilterType}
+                      >
                         <SelectTrigger className="h-9">
                           <SelectValue />
                         </SelectTrigger>
@@ -634,7 +636,10 @@ export default function BookDetail() {
                     {members.length > 1 && (
                       <div className="space-y-2">
                         <Label className="text-sm font-medium">Member</Label>
-                        <Select value={tempFilterMember} onValueChange={setTempFilterMember}>
+                        <Select
+                          value={tempFilterMember}
+                          onValueChange={setTempFilterMember}
+                        >
                           <SelectTrigger className="h-9">
                             <SelectValue />
                           </SelectTrigger>
@@ -740,7 +745,8 @@ export default function BookDetail() {
                               className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
                               style={{
                                 backgroundColor:
-                                  (expense.categories?.color ?? "#6B7280") + "20",
+                                  (expense.categories?.color ?? "#6B7280") +
+                                  "20",
                                 color: expense.categories?.color ?? "#6B7280",
                               }}
                             >
@@ -803,7 +809,9 @@ export default function BookDetail() {
                                       {canEdit && (
                                         <DropdownMenuItem
                                           className="DropdownMenuItem p-2 rounded hover:bg-accent hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
-                                          onClick={() => handleEditExpense(expense)}
+                                          onClick={() =>
+                                            handleEditExpense(expense)
+                                          }
                                         >
                                           <div className="flex gap-2 items-center">
                                             <Edit className="h-4 w-4" />
@@ -861,9 +869,10 @@ export default function BookDetail() {
                           {/* Bottom Row: Single Timestamp (No Label) */}
                           <div className="text-[9px] sm:text-[10px] text-muted-foreground/50 pt-1.5 border-t border-border/50 pl-0 sm:pl-10">
                             {new Date(
-                              expense.updated_at && expense.updated_at !== expense.created_at
+                              expense.updated_at &&
+                                expense.updated_at !== expense.created_at
                                 ? expense.updated_at
-                                : expense.created_at
+                                : expense.created_at,
                             ).toLocaleString("en-IN", {
                               month: "short",
                               day: "numeric",
