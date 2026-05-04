@@ -73,6 +73,50 @@ export default function Books() {
     duplicateBook,
     isBookOwner,
   } = useBooks();
+
+  const balanceQuery = useQuery({
+    queryKey: ["books-total-balance"],
+    queryFn: async () => {
+      if (!user) return { income: 0, expense: 0 };
+      if (!isOnline) {
+        const cached = await db.dashboard.get("stats");
+        if (cached?.data) {
+          const d = cached.data as any;
+          return { income: d.totalIncome ?? 0, expense: d.totalExpense ?? 0 };
+        }
+        const all = await db.expenses.toArray();
+        const expenses = all.flatMap((i) => (i.expenses ?? []) as any[]);
+        return {
+          income: expenses
+            .filter((e) => e.expense_type === "credit")
+            .reduce((s, e) => s + Number(e.amount), 0),
+          expense: expenses
+            .filter((e) => e.expense_type === "debit")
+            .reduce((s, e) => s + Number(e.amount), 0),
+        };
+      }
+      const { data } = await withNetworkTimeout(
+        supabase
+          .from("expenses")
+          .select(
+            "amount, expense_type, expense_books!inner(book_members!inner(user_id))",
+          )
+          .eq("expense_books.book_members.user_id", user.id)
+          .eq("paid_by", user.id),
+      );
+      const income = (data ?? [])
+        .filter((e: any) => e.expense_type === "credit")
+        .reduce((s: number, e: any) => s + Number(e.amount), 0);
+      const expense = (data ?? [])
+        .filter((e: any) => e.expense_type === "debit")
+        .reduce((s: number, e: any) => s + Number(e.amount), 0);
+      return { income, expense };
+    },
+    enabled: !!user,
+  });
+  const balance =
+    (balanceQuery.data?.income ?? 0) - (balanceQuery.data?.expense ?? 0);
+
   const [open, setOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [name, setName] = useState("");
