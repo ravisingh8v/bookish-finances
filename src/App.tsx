@@ -27,8 +27,9 @@ const App = () => (
         <AuthProvider>
           <OfflineSyncProvider>
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Books />} />
               <Route path="/auth" element={<Auth />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/books" element={<Books />} />
               <Route path="/books/:bookId" element={<BookDetail />} />
               <Route path="/analytics" element={<Analytics />} />
