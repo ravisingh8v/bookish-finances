@@ -31,15 +31,19 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
+import { supabase } from "@/integrations/supabase/client";
+import { db } from "@/lib/db";
+import { withNetworkTimeout } from "@/lib/network";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   BookOpen,
   Copy,
-  Edit,
   Loader2,
   Plus,
   Trash2,
   Users,
+  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
