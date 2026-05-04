@@ -394,24 +394,6 @@ export default function BookDetail() {
                       </div>
                       <div className="space-y-3">
                         <Label
-                          htmlFor="expense-amount"
-                          className="text-sm font-medium"
-                        >
-                          Amount
-                        </Label>
-                        <Input
-                          id="expense-amount"
-                          type="number"
-                          inputMode="decimal"
-                          autoFocus
-                          placeholder="0.00"
-                          value={amount}
-                          onChange={(e) => setAmount(e.target.value)}
-                          className="h-14 text-2xl font-display font-semibold"
-                        />
-                      </div>
-                      <div className="space-y-3">
-                        <Label
                           htmlFor="expense-title"
                           className="text-sm font-medium"
                         >
@@ -425,20 +407,38 @@ export default function BookDetail() {
                           className="h-11"
                         />
                       </div>
-                      <div className="space-y-3">
-                        <Label
-                          htmlFor="expense-date"
-                          className="text-sm font-medium"
-                        >
-                          Date
-                        </Label>
-                        <Input
-                          id="expense-date"
-                          type="date"
-                          value={date}
-                          onChange={(e) => setDate(e.target.value)}
-                          className="h-11"
-                        />
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="space-y-3">
+                          <Label
+                            htmlFor="expense-amount"
+                            className="text-sm font-medium"
+                          >
+                            Amount
+                          </Label>
+                          <Input
+                            id="expense-amount"
+                            type="number"
+                            placeholder="0.00"
+                            value={amount}
+                            onChange={(e) => setAmount(e.target.value)}
+                            className="h-11"
+                          />
+                        </div>
+                        <div className="space-y-3">
+                          <Label
+                            htmlFor="expense-date"
+                            className="text-sm font-medium"
+                          >
+                            Date
+                          </Label>
+                          <Input
+                            id="expense-date"
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className="h-11"
+                          />
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-3">

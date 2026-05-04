@@ -37,7 +37,6 @@ export interface CachedExpenses {
   id: string;
   expenses: unknown[];
   cachedAt: number;
-  userId?: string;
 }
 
 export interface CachedCategories {
@@ -57,7 +56,6 @@ export interface DeletedExpense {
   bookId: string;
   data: unknown;
   deletedAt: number;
-  userId?: string;
 }
 
 export class ExpenseFlowDB extends Dexie {

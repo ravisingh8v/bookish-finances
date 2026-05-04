@@ -463,7 +463,7 @@ async function processAction(
 
           const { error: insertExpensesError } = await supabase
             .from("expenses")
-            .insert(expensesToInsert as any);
+            .insert(expensesToInsert);
           if (insertExpensesError) throw insertExpensesError;
         }
 

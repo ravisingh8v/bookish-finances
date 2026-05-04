@@ -31,19 +31,15 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
-import { supabase } from "@/integrations/supabase/client";
-import { db } from "@/lib/db";
-import { withNetworkTimeout } from "@/lib/network";
-import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   BookOpen,
   Copy,
+  Edit,
   Loader2,
   Plus,
   Trash2,
   Users,
-  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -73,50 +69,6 @@ export default function Books() {
     duplicateBook,
     isBookOwner,
   } = useBooks();
-
-  const balanceQuery = useQuery({
-    queryKey: ["books-total-balance"],
-    queryFn: async () => {
-      if (!user) return { income: 0, expense: 0 };
-      if (!isOnline) {
-        const cached = await db.dashboard.get("stats");
-        if (cached?.data) {
-          const d = cached.data as any;
-          return { income: d.totalIncome ?? 0, expense: d.totalExpense ?? 0 };
-        }
-        const all = await db.expenses.toArray();
-        const expenses = all.flatMap((i) => (i.expenses ?? []) as any[]);
-        return {
-          income: expenses
-            .filter((e) => e.expense_type === "credit")
-            .reduce((s, e) => s + Number(e.amount), 0),
-          expense: expenses
-            .filter((e) => e.expense_type === "debit")
-            .reduce((s, e) => s + Number(e.amount), 0),
-        };
-      }
-      const { data } = await withNetworkTimeout(
-        supabase
-          .from("expenses")
-          .select(
-            "amount, expense_type, expense_books!inner(book_members!inner(user_id))",
-          )
-          .eq("expense_books.book_members.user_id", user.id)
-          .eq("paid_by", user.id),
-      );
-      const income = (data ?? [])
-        .filter((e: any) => e.expense_type === "credit")
-        .reduce((s: number, e: any) => s + Number(e.amount), 0);
-      const expense = (data ?? [])
-        .filter((e: any) => e.expense_type === "debit")
-        .reduce((s: number, e: any) => s + Number(e.amount), 0);
-      return { income, expense };
-    },
-    enabled: !!user,
-  });
-  const balance =
-    (balanceQuery.data?.income ?? 0) - (balanceQuery.data?.expense ?? 0);
-
   const [open, setOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [name, setName] = useState("");
@@ -221,41 +173,6 @@ export default function Books() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        {/* Total Balance hero */}
-        <Card
-          className="glass border-0 overflow-hidden relative"
-          style={{
-            background:
-              "linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--accent) / 0.08))",
-          }}
-        >
-          <CardContent className="p-5 sm:p-6">
-            <div className="flex items-center justify-between gap-4">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
-                  <Wallet className="h-3.5 w-3.5" />
-                  Total Balance
-                </div>
-                <p className="text-3xl sm:text-4xl font-display font-bold mt-2 truncate">
-                  ₹{balance.toLocaleString("en-IN")}
-                </p>
-                <div className="flex items-center gap-4 mt-2 text-xs">
-                  <span className="text-success">
-                    ↑ ₹{(balanceQuery.data?.income ?? 0).toLocaleString("en-IN")}
-                  </span>
-                  <span className="text-destructive">
-                    ↓ ₹
-                    {(balanceQuery.data?.expense ?? 0).toLocaleString("en-IN")}
-                  </span>
-                </div>
-              </div>
-              <div className="hidden sm:flex w-14 h-14 rounded-2xl bg-primary/10 items-center justify-center text-primary shrink-0">
-                <Wallet className="h-7 w-7" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-display font-bold">Expense Books</h1>
@@ -401,37 +318,22 @@ export default function Books() {
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
                 >
-                  <Card className="glass transition-all sm:hover:shadow-lg group">
+                  <Card
+                    className="glass hover:shadow-lg transition-all cursor-pointer group"
+                    onClick={() => navigate(`/books/${book.id}`)}
+                  >
                     <CardContent className="p-5 space-y-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            if (ownerCheck) openEditDialog(book, e);
+                      <div className="flex items-start justify-between">
+                        <div
+                          className="w-10 h-10 rounded-xl flex items-center justify-center"
+                          style={{
+                            backgroundColor: book.color + "20",
+                            color: book.color,
                           }}
-                          className="flex items-start gap-3 text-left flex-1 min-w-0"
                         >
-                          <div
-                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                            style={{
-                              backgroundColor: book.color + "20",
-                              color: book.color,
-                            }}
-                          >
-                            <BookOpen className="h-5 w-5" />
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <h3 className="font-display font-semibold truncate">
-                              {book.name}
-                            </h3>
-                            {book.description && (
-                              <p className="text-xs text-muted-foreground truncate mt-0.5">
-                                {book.description}
-                              </p>
-                            )}
-                          </div>
-                        </button>
-                        <div className="flex items-center gap-1 shrink-0">
+                          <BookOpen className="h-5 w-5" />
+                        </div>
+                        <div className="flex items-center gap-1">
                           {book._offline && (
                             <Badge
                               variant="outline"
@@ -443,7 +345,7 @@ export default function Books() {
                           {userRole && (
                             <Badge
                               variant="outline"
-                              className="text-[10px] capitalize hidden sm:inline-flex"
+                              className="text-[10px] capitalize"
                             >
                               {userRole}
                             </Badge>
@@ -453,9 +355,22 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-9 w-9 text-muted-foreground active:text-blue-600 sm:hover:text-blue-600 disabled:opacity-50"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-primary"
+                                onClick={(e) => openEditDialog(book, e)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-blue-600 disabled:opacity-50"
                                 onClick={(e) => handleDuplicate(book.id, e)}
                                 disabled={duplicateBook.isPending || !isOnline}
+                                title={
+                                  !isOnline
+                                    ? "Book duplication requires internet"
+                                    : "Duplicate this book"
+                                }
                               >
                                 {duplicateBook.isPending ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -466,7 +381,7 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-9 w-9 text-muted-foreground active:text-destructive sm:hover:text-destructive"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (
@@ -483,21 +398,36 @@ export default function Books() {
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between pt-2 border-t border-border/50">
-                        <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                          <span>{book.currency}</span>
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {memberCount}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/books/${book.id}`)}
-                          className="text-sm text-primary font-medium px-3 py-1.5 rounded-md active:bg-primary/10 sm:hover:bg-primary/10"
-                        >
-                          Open →
-                        </button>
+                      <div>
+                        <h3 className="font-display font-semibold truncate">
+                          {book.name}
+                        </h3>
+                        {book.description && (
+                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                            {book.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{book.currency}</span>
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          {memberCount}
+                        </span>
+                      </div>
+                      <div className="text-[9px] sm:text-[10px] text-muted-foreground/50 pt-2 border-t border-border/50">
+                        {new Date(
+                          book.updated_at && book.updated_at !== book.created_at
+                            ? book.updated_at
+                            : book.created_at,
+                        ).toLocaleString("en-IN", {
+                          month: "short",
+                          day: "numeric",
+                          year: "2-digit",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          hour12: true,
+                        })}
                       </div>
                     </CardContent>
                   </Card>
