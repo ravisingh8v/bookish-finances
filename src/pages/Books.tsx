@@ -221,6 +221,41 @@ export default function Books() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* Total Balance hero */}
+        <Card
+          className="glass border-0 overflow-hidden relative"
+          style={{
+            background:
+              "linear-gradient(135deg, hsl(var(--primary) / 0.15), hsl(var(--accent) / 0.08))",
+          }}
+        >
+          <CardContent className="p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-muted-foreground">
+                  <Wallet className="h-3.5 w-3.5" />
+                  Total Balance
+                </div>
+                <p className="text-3xl sm:text-4xl font-display font-bold mt-2 truncate">
+                  ₹{balance.toLocaleString("en-IN")}
+                </p>
+                <div className="flex items-center gap-4 mt-2 text-xs">
+                  <span className="text-success">
+                    ↑ ₹{(balanceQuery.data?.income ?? 0).toLocaleString("en-IN")}
+                  </span>
+                  <span className="text-destructive">
+                    ↓ ₹
+                    {(balanceQuery.data?.expense ?? 0).toLocaleString("en-IN")}
+                  </span>
+                </div>
+              </div>
+              <div className="hidden sm:flex w-14 h-14 rounded-2xl bg-primary/10 items-center justify-center text-primary shrink-0">
+                <Wallet className="h-7 w-7" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-display font-bold">Expense Books</h1>
