@@ -101,7 +101,7 @@ export default function BookDetail() {
   const { bookId } = useParams<{ bookId: string }>();
   const { user } = useAuth();
   const { isOnline } = useOfflineSync();
-  const { books } = useBooks();
+  const { books, updateBook, isBookOwner } = useBooks();
   const cachedBook = books.find((candidate) => candidate.id === bookId);
   const {
     expenses,
@@ -188,6 +188,36 @@ export default function BookDetail() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+
+  // Edit Book modal state
+  const [editBookOpen, setEditBookOpen] = useState(false);
+  const [editBookName, setEditBookName] = useState("");
+  const [editBookDesc, setEditBookDesc] = useState("");
+  const [editBookColor, setEditBookColor] = useState("#10B981");
+  const BOOK_COLORS = ["#10B981","#3B82F6","#8B5CF6","#F59E0B","#EF4444","#EC4899","#06B6D4"];
+  const openEditBook = () => {
+    if (!book) return;
+    if (!isBookOwner(book as any)) return;
+    setEditBookName(book.name);
+    setEditBookDesc(book.description ?? "");
+    setEditBookColor(book.color ?? "#10B981");
+    setEditBookOpen(true);
+  };
+  const saveEditBook = async () => {
+    if (!book) return;
+    if (!editBookName.trim()) { toast.error("Name required"); return; }
+    try {
+      await updateBook.mutateAsync({
+        bookId: book.id,
+        name: editBookName.trim(),
+        description: editBookDesc.trim() || undefined,
+        currency: book.currency,
+        color: editBookColor,
+      });
+      toast.success("Book updated");
+      setEditBookOpen(false);
+    } catch (e: any) { toast.error(e.message); }
+  };
 
   const bookQuery = useQuery({
     queryKey: ["book", bookId],
@@ -333,14 +363,21 @@ export default function BookDetail() {
             </Button>
           </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg sm:text-2xl font-display font-bold truncate">
-              {book?.name ?? "Loading..."}
-            </h1>
-            {book?.description && (
-              <p className="text-muted-foreground text-xs sm:text-sm truncate">
-                {book.description}
-              </p>
-            )}
+            <button
+              type="button"
+              onClick={openEditBook}
+              className="text-left w-full"
+              title="Edit book"
+            >
+              <h1 className="text-lg sm:text-2xl font-display font-bold truncate hover:underline decoration-dotted">
+                {book?.name ?? "Loading..."}
+              </h1>
+              {book?.description && (
+                <p className="text-muted-foreground text-xs sm:text-sm truncate">
+                  {book.description}
+                </p>
+              )}
+            </button>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button
