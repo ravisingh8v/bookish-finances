@@ -2,10 +2,11 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { UpdateNotification } from "@/components/UpdateNotification";
+import { ScrollToTop } from "@/components/ScrollToTop";
 import { AuthProvider } from "@/hooks/useAuth";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Analytics from "./pages/Analytics";
 import Auth from "./pages/Auth";
 import BookDetail from "./pages/BookDetail";
@@ -26,8 +27,10 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <OfflineSyncProvider>
+            <ScrollToTop />
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Navigate to="/books" replace />} />
+              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/auth" element={<Auth />} />
               <Route path="/books" element={<Books />} />
               <Route path="/books/:bookId" element={<BookDetail />} />
