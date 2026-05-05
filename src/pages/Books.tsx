@@ -221,12 +221,13 @@ export default function Books() {
                     <Label htmlFor="book-desc" className="text-sm font-medium">
                       Description (optional)
                     </Label>
-                    <Input
+                    <Textarea
                       id="book-desc"
                       placeholder="What's this book for?"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      className="h-11"
+                      rows={3}
+                      className="resize-none"
                     />
                   </div>
                   <div className="space-y-3">
