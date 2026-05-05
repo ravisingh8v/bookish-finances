@@ -1005,6 +1005,45 @@ export default function BookDetail() {
             </div>
           </SheetContent>
         </Sheet>
+
+        {/* Edit Book Dialog */}
+        <Dialog open={editBookOpen} onOpenChange={setEditBookOpen}>
+          <DialogContent fullscreen className="flex flex-col">
+            <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
+              <DialogTitle className="text-xl">Edit Book</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Name</Label>
+                <Input value={editBookName} onChange={(e) => setEditBookName(e.target.value)} className="h-11" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Description</Label>
+                <Textarea value={editBookDesc} onChange={(e) => setEditBookDesc(e.target.value)} rows={3} className="resize-none" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Color</Label>
+                <div className="flex flex-wrap gap-3">
+                  {BOOK_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setEditBookColor(c)}
+                      className={`w-10 h-10 rounded-full border-2 ${editBookColor === c ? "ring-2 ring-primary border-primary" : "border-border"}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button className="w-full h-11 sm:w-auto" onClick={saveEditBook} disabled={updateBook.isPending}>
+                {updateBook.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
