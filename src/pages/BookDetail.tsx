@@ -59,6 +59,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { formatINR } from "@/lib/utils";
 
 const PAYMENT_METHODS = [
   "cash",
@@ -100,7 +101,7 @@ export default function BookDetail() {
   const { bookId } = useParams<{ bookId: string }>();
   const { user } = useAuth();
   const { isOnline } = useOfflineSync();
-  const { books } = useBooks();
+  const { books, updateBook, isBookOwner } = useBooks();
   const cachedBook = books.find((candidate) => candidate.id === bookId);
   const {
     expenses,
@@ -187,6 +188,36 @@ export default function BookDetail() {
   const [paymentMethod, setPaymentMethod] = useState("cash");
   const [notes, setNotes] = useState("");
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
+
+  // Edit Book modal state
+  const [editBookOpen, setEditBookOpen] = useState(false);
+  const [editBookName, setEditBookName] = useState("");
+  const [editBookDesc, setEditBookDesc] = useState("");
+  const [editBookColor, setEditBookColor] = useState("#10B981");
+  const BOOK_COLORS = ["#10B981","#3B82F6","#8B5CF6","#F59E0B","#EF4444","#EC4899","#06B6D4"];
+  const openEditBook = () => {
+    if (!book) return;
+    if (!isBookOwner(book as any)) return;
+    setEditBookName(book.name);
+    setEditBookDesc(book.description ?? "");
+    setEditBookColor(book.color ?? "#10B981");
+    setEditBookOpen(true);
+  };
+  const saveEditBook = async () => {
+    if (!book) return;
+    if (!editBookName.trim()) { toast.error("Name required"); return; }
+    try {
+      await updateBook.mutateAsync({
+        bookId: book.id,
+        name: editBookName.trim(),
+        description: editBookDesc.trim() || undefined,
+        currency: book.currency,
+        color: editBookColor,
+      });
+      toast.success("Book updated");
+      setEditBookOpen(false);
+    } catch (e: any) { toast.error(e.message); }
+  };
 
   const bookQuery = useQuery({
     queryKey: ["book", bookId],
@@ -332,14 +363,21 @@ export default function BookDetail() {
             </Button>
           </Link>
           <div className="flex-1 min-w-0">
-            <h1 className="text-lg sm:text-2xl font-display font-bold truncate">
-              {book?.name ?? "Loading..."}
-            </h1>
-            {book?.description && (
-              <p className="text-muted-foreground text-xs sm:text-sm truncate">
-                {book.description}
-              </p>
-            )}
+            <button
+              type="button"
+              onClick={openEditBook}
+              className="text-left w-full"
+              title="Edit book"
+            >
+              <h1 className="text-lg sm:text-2xl font-display font-bold truncate hover:underline decoration-dotted">
+                {book?.name ?? "Loading..."}
+              </h1>
+              {book?.description && (
+                <p className="text-muted-foreground text-xs sm:text-sm truncate">
+                  {book.description}
+                </p>
+              )}
+            </button>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button
@@ -392,21 +430,6 @@ export default function BookDetail() {
                           </button>
                         ))}
                       </div>
-                      <div className="space-y-3">
-                        <Label
-                          htmlFor="expense-title"
-                          className="text-sm font-medium"
-                        >
-                          Title
-                        </Label>
-                        <Input
-                          id="expense-title"
-                          placeholder="What did you spend on?"
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          className="h-11"
-                        />
-                      </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-3">
                           <Label
@@ -418,6 +441,7 @@ export default function BookDetail() {
                           <Input
                             id="expense-amount"
                             type="number"
+                            inputMode="decimal"
                             placeholder="0.00"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
@@ -436,9 +460,24 @@ export default function BookDetail() {
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="h-11"
+                            className="h-11 max-w-full"
                           />
                         </div>
+                      </div>
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="expense-title"
+                          className="text-sm font-medium"
+                        >
+                          Title
+                        </Label>
+                        <Input
+                          id="expense-title"
+                          placeholder="What did you spend on?"
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          className="h-11"
+                        />
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-3">
@@ -548,7 +587,7 @@ export default function BookDetail() {
                   </p>
                   <p className="text-base sm:text-xl font-display font-bold text-success truncate">
                     {cur}
-                    {totalIncome.toLocaleString()}
+                    {formatINR(totalIncome)}
                   </p>
                 </CardContent>
               </Card>
@@ -559,7 +598,7 @@ export default function BookDetail() {
                   </p>
                   <p className="text-base sm:text-xl font-display font-bold text-destructive truncate">
                     {cur}
-                    {totalExpense.toLocaleString()}
+                    {formatINR(totalExpense)}
                   </p>
                 </CardContent>
               </Card>
@@ -570,7 +609,7 @@ export default function BookDetail() {
                   </p>
                   <p className="text-base sm:text-xl font-display font-bold truncate">
                     {cur}
-                    {(totalIncome - totalExpense).toLocaleString()}
+                    {formatINR(totalIncome - totalExpense)}
                   </p>
                 </CardContent>
               </Card>
@@ -966,6 +1005,45 @@ export default function BookDetail() {
             </div>
           </SheetContent>
         </Sheet>
+
+        {/* Edit Book Dialog */}
+        <Dialog open={editBookOpen} onOpenChange={setEditBookOpen}>
+          <DialogContent fullscreen className="flex flex-col">
+            <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
+              <DialogTitle className="text-xl">Edit Book</DialogTitle>
+            </DialogHeader>
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Name</Label>
+                <Input value={editBookName} onChange={(e) => setEditBookName(e.target.value)} className="h-11" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Description</Label>
+                <Textarea value={editBookDesc} onChange={(e) => setEditBookDesc(e.target.value)} rows={3} className="resize-none" />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-sm font-medium">Color</Label>
+                <div className="flex flex-wrap gap-3">
+                  {BOOK_COLORS.map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setEditBookColor(c)}
+                      className={`w-10 h-10 rounded-full border-2 ${editBookColor === c ? "ring-2 ring-primary border-primary" : "border-border"}`}
+                      style={{ backgroundColor: c }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button className="w-full h-11 sm:w-auto" onClick={saveEditBook} disabled={updateBook.isPending}>
+                {updateBook.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

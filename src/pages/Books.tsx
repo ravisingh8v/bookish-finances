@@ -28,9 +28,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
+import { db } from "@/lib/db";
+import { formatINR } from "@/lib/utils";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   BookOpen,
@@ -79,6 +83,26 @@ export default function Books() {
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
+
+  const { data: bookTotals = {} } = useQuery({
+    queryKey: ["book-totals", books.length],
+    queryFn: async () => {
+      const all = await db.expenses.toArray();
+      const totals: Record<string, number> = {};
+      for (const entry of all) {
+        const list = (entry.expenses ?? []) as any[];
+        let sum = 0;
+        for (const e of list) {
+          const amt = Number(e.amount) || 0;
+          sum += e.expense_type === "credit" ? amt : -amt;
+        }
+        totals[entry.id] = sum;
+      }
+      return totals;
+    },
+    enabled: books.length > 0,
+    staleTime: 10_000,
+  });
 
   const resetForm = () => {
     setName("");
@@ -217,12 +241,13 @@ export default function Books() {
                     <Label htmlFor="book-desc" className="text-sm font-medium">
                       Description (optional)
                     </Label>
-                    <Input
+                    <Textarea
                       id="book-desc"
                       placeholder="What's this book for?"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      className="h-11"
+                      rows={3}
+                      className="resize-none"
                     />
                   </div>
                   <div className="space-y-3">
@@ -322,7 +347,7 @@ export default function Books() {
                     className="glass hover:shadow-lg transition-all cursor-pointer group"
                     onClick={() => navigate(`/books/${book.id}`)}
                   >
-                    <CardContent className="p-5 space-y-3">
+                    <CardContent className="p-4 space-y-2">
                       <div className="flex items-start justify-between">
                         <div
                           className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -409,13 +434,15 @@ export default function Books() {
                         )}
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{book.currency}</span>
+                        <span className="font-medium text-foreground/80">
+                          {book.currency} {formatINR(bookTotals[book.id] ?? 0)}
+                        </span>
                         <span className="flex items-center gap-1">
                           <Users className="h-3 w-3" />
                           {memberCount}
                         </span>
                       </div>
-                      <div className="text-[9px] sm:text-[10px] text-muted-foreground/50 pt-2 border-t border-border/50">
+                      <div className="text-[9px] sm:text-[10px] text-muted-foreground/50 pt-1.5 border-t border-border/50">
                         {new Date(
                           book.updated_at && book.updated_at !== book.created_at
                             ? book.updated_at

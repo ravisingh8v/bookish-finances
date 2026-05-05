@@ -39,6 +39,8 @@ import {
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { formatINR } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "JPY"];
 const COLORS = [
@@ -227,19 +229,19 @@ export default function Dashboard() {
   const statCards = [
     {
       title: "Total Balance",
-      value: `₹${stats.balance.toLocaleString()}`,
+      value: `₹${formatINR(stats.balance)}`,
       icon: Wallet,
       color: "text-primary",
     },
     {
       title: "Income",
-      value: `₹${stats.totalIncome.toLocaleString()}`,
+      value: `₹${formatINR(stats.totalIncome)}`,
       icon: TrendingUp,
       color: "text-success",
     },
     {
       title: "Expenses",
-      value: `₹${stats.totalExpense.toLocaleString()}`,
+      value: `₹${formatINR(stats.totalExpense)}`,
       icon: TrendingDown,
       color: "text-destructive",
     },
@@ -489,12 +491,13 @@ export default function Dashboard() {
                   >
                     Description (optional)
                   </Label>
-                  <Input
+                  <Textarea
                     id="edit-book-desc"
                     placeholder="What's this book for?"
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value)}
-                    className="h-11"
+                    rows={3}
+                    className="resize-none"
                   />
                 </div>
                 <div className="space-y-3">
