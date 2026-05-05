@@ -84,12 +84,27 @@ function getCategoryCacheId(userId?: string) {
 }
 
 function sortCategories(categories: Category[]) {
-  return [...categories].sort((a, b) => {
-    if (a.is_default !== b.is_default) {
-      return a.is_default ? -1 : 1;
-    }
-    return a.name.localeCompare(b.name);
-  });
+  return categories
+    .map((category) => ({
+      ...category,
+      name:
+        category.name.trim().toLowerCase() === "miscellaneous"
+          ? "Other"
+          : category.name,
+    }))
+    .sort((a, b) => {
+      if (a.is_default !== b.is_default) {
+        return a.is_default ? -1 : 1;
+      }
+
+      const aIsOther = a.name.trim().toLowerCase() === "other";
+      const bIsOther = b.name.trim().toLowerCase() === "other";
+      if (aIsOther !== bIsOther) {
+        return aIsOther ? 1 : -1;
+      }
+
+      return a.name.localeCompare(b.name);
+    });
 }
 
 function getCustomCategoryColor(name: string) {
@@ -333,6 +348,9 @@ export function useExpenses(bookId: string) {
   });
 
   const expenses = (expensesQuery.data ?? []) as Expense[];
+  const invalidateBookTotals = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+  };
 
   const createExpense = useMutation({
     mutationFn: async (payload: ExpensePayload) => {
@@ -354,6 +372,7 @@ export function useExpenses(bookId: string) {
         (current) => [optimistic, ...current],
         uid,
       );
+      await invalidateBookTotals();
       await queueAction({
         type: "create_expense",
         payload: { ...payload, tempId, paid_by: uid, created_by: uid },
@@ -406,6 +425,7 @@ export function useExpenses(bookId: string) {
           ),
         uid,
       );
+      await invalidateBookTotals();
 
       const queued = await getQueuedActions();
       const pendingCreate = queued.find(
@@ -459,6 +479,7 @@ export function useExpenses(bookId: string) {
         (current) => current.filter((expense) => expense.id !== expenseId),
         uid,
       );
+      await invalidateBookTotals();
 
       if (expenseId.startsWith("temp_")) {
         await cancelQueuedCreate(expenseId);
@@ -534,6 +555,7 @@ export function useExpenses(bookId: string) {
         },
         uid,
       );
+      await invalidateBookTotals();
       await db.deletedExpenses.delete(expenseId);
 
       const restorePayload = {

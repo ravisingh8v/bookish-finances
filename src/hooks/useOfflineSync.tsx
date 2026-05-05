@@ -436,7 +436,7 @@ async function processAction(
         // Copy all expenses
         const { data: sourceExpenses, error: getExpensesError } = await supabase
           .from("expenses")
-          .select("*, categories(name, icon, color)")
+          .select("*")
           .eq("book_id", sourceBookId);
         if (getExpensesError) throw getExpensesError;
 
@@ -529,17 +529,25 @@ async function processAction(
             paid_by: payload.paid_by ?? userId,
             created_by: payload.created_by ?? userId,
           })
-          .select("*, categories(name, icon, color)")
+          .select("*")
           .single();
         if (error) throw error;
 
+        const cached = await db.expenses.get(payload.book_id);
+        const previousExpense = cached?.expenses.find(
+          (expense) =>
+            (expense as Record<string, unknown>).id === action.tempId,
+        ) as Record<string, unknown> | undefined;
+
         const updatedExpense = {
           ...data,
+          categories:
+            (previousExpense?.categories as Record<string, unknown> | null) ??
+            null,
           creator_profile: null,
           payer_profile: null,
           _offline: false,
         };
-        const cached = await db.expenses.get(payload.book_id);
         if (cached) {
           const updatedExpenses = cached.expenses.map((expense) =>
             (expense as Record<string, unknown>).id === action.tempId
@@ -812,6 +820,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
         setLastSyncedAt(Date.now());
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["books"] }),
+          queryClient.invalidateQueries({ queryKey: ["book-totals"] }),
           queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] }),
           queryClient.invalidateQueries({ queryKey: ["categories"] }),
         ]);
@@ -852,6 +861,18 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
   }, [refreshCount]);
 
   useEffect(() => {
+    // Workbox background sync registration
+    if (
+      "serviceWorker" in navigator &&
+      "sync" in (navigator as any).serviceWorker
+    ) {
+      navigator.serviceWorker.ready
+        .then((reg) => {
+          reg.sync.register("background-sync-queue");
+        })
+        .catch(console.error);
+    }
+
     const retrySync = () => {
       if (document.visibilityState === "hidden") return;
       void syncNow();
@@ -859,6 +880,14 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener("focus", retrySync);
     document.addEventListener("visibilitychange", retrySync);
+
+    // SW message listener for Workbox sync triggers
+    navigator.serviceWorker.addEventListener("message", (event) => {
+      if (event.data?.type === "SYNC_NOW") {
+        void syncNow();
+      }
+    });
+
     return () => {
       window.removeEventListener("focus", retrySync);
       document.removeEventListener("visibilitychange", retrySync);

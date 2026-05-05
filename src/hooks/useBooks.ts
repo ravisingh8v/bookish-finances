@@ -141,7 +141,15 @@ export function useBooks() {
 
         const books = (data ?? []) as Book[];
         await cacheBooks(books);
-        void preloadExpenses(books.map((book) => book.id));
+        void preloadExpenses(books.map((book) => book.id), user.id).then(
+          (cachedAnyExpenses) => {
+            if (!cachedAnyExpenses) return;
+            void Promise.all([
+              queryClient.invalidateQueries({ queryKey: ["book-totals"] }),
+              queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] }),
+            ]);
+          },
+        );
         return books;
       } catch (err) {
         if (isOfflineLikeError(err)) {
@@ -405,7 +413,9 @@ export function useBooks() {
   };
 }
 
-async function preloadExpenses(bookIds: string[]) {
+async function preloadExpenses(bookIds: string[], userId?: string) {
+  let cachedAnyExpenses = false;
+
   await Promise.all(
     bookIds.slice(0, MAX_BOOKS_CACHE).map(async (bookId) => {
       try {
@@ -447,10 +457,16 @@ async function preloadExpenses(bookIds: string[]) {
           _offline: false,
         }));
 
-        setStoredExpenses(bookId, enriched);
+        if (enriched.length > 0) {
+          cachedAnyExpenses = true;
+        }
+
+        const currentUserId = userId || getUserId();
+        setStoredExpenses(bookId, enriched, currentUserId);
         await db.expenses.put({
           id: bookId,
           expenses: enriched,
+          userId: currentUserId,
           cachedAt: Date.now(),
         });
       } catch {
@@ -458,4 +474,6 @@ async function preloadExpenses(bookIds: string[]) {
       }
     }),
   );
+
+  return cachedAnyExpenses;
 }

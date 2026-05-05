@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 interface UpdateReadyEvent {
   type: "update-ready";
@@ -7,9 +7,23 @@ interface UpdateReadyEvent {
   };
 }
 
-type PWAEvent = UpdateReadyEvent;
+interface InstallReadyEvent {
+  type: "install-ready";
+  payload: {
+    promptEvent: BeforeInstallPromptEvent;
+  };
+}
+
+declare global {
+  interface BeforeInstallPromptEvent extends Event {
+    prompt(): Promise<void>;
+  }
+}
+
+type PWAEvent = UpdateReadyEvent | InstallReadyEvent;
 
 let updateReadyCallback: ((event: UpdateReadyEvent) => void) | null = null;
+let installReadyCallback: ((event: InstallReadyEvent) => void) | null = null;
 
 export function onPWAUpdateReady(callback: (event: UpdateReadyEvent) => void) {
   updateReadyCallback = callback;
@@ -24,81 +38,79 @@ export function emitPWAUpdateReady(registration: ServiceWorkerRegistration) {
   }
 }
 
-export function usePWAUpdate() {
+export function emitPWAInstallReady(promptEvent: any) {
+  if (installReadyCallback) {
+    installReadyCallback({
+      type: "install-ready",
+      payload: { promptEvent },
+    });
+  }
+}
+
+export function onPWAInstallReady(
+  callback: (event: InstallReadyEvent) => void,
+) {
+  installReadyCallback = callback;
+}
+
+export function usePWAStatus() {
   const [updateAvailable, setUpdateAvailable] = useState(false);
+  const [isInstallable, setIsInstallable] = useState(false);
   const [registration, setRegistration] =
     useState<ServiceWorkerRegistration | null>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<Event | null>(null);
 
   useEffect(() => {
-    const handleUpdateReady = (event: UpdateReadyEvent) => {
-      setUpdateAvailable(true);
-      setRegistration(event.payload.registration);
+    const handlePWAEvent = (event: PWAEvent) => {
+      if (event.type === "update-ready") {
+        setUpdateAvailable(true);
+        setRegistration(event.payload.registration);
+      } else if (event.type === "install-ready") {
+        setIsInstallable(true);
+        setDeferredPrompt(event.payload.promptEvent);
+      }
     };
 
-    onPWAUpdateReady(handleUpdateReady);
+    onPWAUpdateReady((e: UpdateReadyEvent) => handlePWAEvent(e));
+    onPWAInstallReady((e: InstallReadyEvent) => handlePWAEvent(e));
 
+    // Check for updates on mount/online
+    checkForUpdates();
+
+    const handleOnline = () => checkForUpdates();
+    window.addEventListener("online", handleOnline);
     return () => {
+      window.removeEventListener("online", handleOnline);
       updateReadyCallback = null;
+      installReadyCallback = null;
     };
   }, []);
 
-  const applyUpdate = () => {
-    if (!registration?.waiting) {
-      console.warn("No waiting service worker found");
-      return;
-    }
+  const applyUpdate = useCallback(() => {
+    if (!registration?.waiting) return false;
 
-    // Listen for controller change before posting message
-    let controllerChangeListener: (() => void) | null = null;
-    const onControllerChange = () => {
-      if (controllerChangeListener) {
-        window.removeEventListener(
-          "controllerchange",
-          controllerChangeListener,
-        );
-        controllerChangeListener = null;
-      }
-      // Small delay to ensure new service worker has taken control
-      setTimeout(() => {
-        window.location.reload();
-      }, 100);
-    };
+    registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    setTimeout(() => window.location.reload(), 250);
+    setUpdateAvailable(false);
+    return true;
+  }, [registration]);
 
-    controllerChangeListener = onControllerChange;
-    window.addEventListener("controllerchange", onControllerChange);
+  const promptInstall = () => {
+    if (!deferredPrompt) return false;
 
-    // Tell the waiting service worker to take control
-    registration.waiting.postMessage({
-      type: "SKIP_WAITING",
-    });
-
-    // Timeout fallback in case controller change doesn't fire
-    const timeoutId = setTimeout(() => {
-      if (controllerChangeListener) {
-        window.removeEventListener(
-          "controllerchange",
-          controllerChangeListener,
-        );
-        window.location.reload();
-      }
-    }, 2000);
-
-    const cleanup = () => {
-      clearTimeout(timeoutId);
-      if (controllerChangeListener) {
-        window.removeEventListener(
-          "controllerchange",
-          controllerChangeListener,
-        );
-      }
-    };
-
-    window.addEventListener("beforeunload", cleanup);
+    (deferredPrompt as BeforeInstallPromptEvent).prompt();
+    // Hide prompt after user sees it
+    setIsInstallable(false);
+    setDeferredPrompt(null);
+    return true;
   };
 
   return {
     updateAvailable,
+    isInstallable,
     applyUpdate,
+    promptInstall,
+    checkForUpdates,
   };
 }
 

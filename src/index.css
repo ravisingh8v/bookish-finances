@@ -138,6 +138,43 @@
     min-width: 0;
     max-width: 100%;
   }
+
+  @supports (-webkit-touch-callout: none) {
+    input[type="date"].ios-date-input {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 100%;
+      min-width: 0;
+      overflow: hidden;
+      line-height: 1.25rem;
+    }
+
+    input[type="date"].ios-date-input::-webkit-date-and-time-value {
+      min-height: 1.5rem;
+      text-align: left;
+    }
+
+    input[type="date"].ios-date-input::-webkit-datetime-edit {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      padding: 0;
+    }
+
+    input[type="date"].ios-date-input::-webkit-datetime-edit-fields-wrapper {
+      display: flex;
+      min-width: 0;
+      flex: 1 1 auto;
+      align-items: center;
+    }
+
+    input[type="date"].ios-date-input::-webkit-calendar-picker-indicator {
+      flex: 0 0 auto;
+      margin: 0;
+      padding: 0;
+      opacity: 0.9;
+    }
+  }
 }
 
 @layer utilities {

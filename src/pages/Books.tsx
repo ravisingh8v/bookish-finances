@@ -29,14 +29,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useAuth } from "@/hooks/useAuth";
+import { getUserId, useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
-import { db } from "@/lib/db";
+import { getBookTotalsFromCache } from "@/lib/cachedExpenseTotals";
 import { formatINR } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
+  ArrowLeft,
   BookOpen,
   Copy,
   Edit,
@@ -62,7 +63,7 @@ const COLORS = [
 
 export default function Books() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { isOnline } = useOfflineSync();
   const {
     books,
@@ -90,22 +91,19 @@ export default function Books() {
     setColor(COLORS[0]);
     setEditingBook(null);
   };
+  const bookIdsKey = books
+    .map((book) => book.id)
+    .sort((a, b) => a.localeCompare(b))
+    .join("|");
+  const cacheUserId = user?.id || getUserId();
 
   const { data: bookTotals = {} } = useQuery({
-    queryKey: ["book-totals", books.length],
+    queryKey: ["book-totals", bookIdsKey, cacheUserId],
     queryFn: async () => {
-      const all = await db.expenses.toArray();
-      const totals: Record<string, number> = {};
-      for (const entry of all) {
-        const list = (entry.expenses ?? []) as any[];
-        let sum = 0;
-        for (const e of list) {
-          const amt = Number(e.amount) || 0;
-          sum += e.expense_type === "credit" ? amt : -amt;
-        }
-        totals[entry.id] = sum;
-      }
-      return totals;
+      return await getBookTotalsFromCache(
+        books.map((book) => book.id),
+        cacheUserId,
+      );
     },
     enabled: books.length > 0,
     staleTime: 10_000,
@@ -195,7 +193,7 @@ export default function Books() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 mt-5">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-display font-bold">Expense Books</h1>
@@ -217,8 +215,16 @@ export default function Books() {
               </Button>
             </DialogTrigger>
             <DialogContent fullscreen className="flex flex-col">
-              <DialogHeader className="pb-6 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
+              <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-2 px-4 sm:px-6 z-40 border-b">
                 <DialogTitle className="text-xl text-left">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    onClick={() => setOpen(false)}
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </Button>
                   {editingBook ? "Edit Book" : "Create Expense Book"}
                 </DialogTitle>
               </DialogHeader>
@@ -379,7 +385,7 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-primary"
+                                className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-primary"
                                 onClick={(e) => openEditDialog(book, e)}
                               >
                                 <Edit className="h-4 w-4" />
@@ -387,7 +393,7 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-blue-600 disabled:opacity-50"
+                                className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-blue-600 disabled:opacity-50"
                                 onClick={(e) => handleDuplicate(book.id, e)}
                                 disabled={duplicateBook.isPending || !isOnline}
                                 title={
@@ -405,7 +411,7 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-destructive"
+                                className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (
@@ -433,7 +439,12 @@ export default function Books() {
                         )}
                       </div>
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span className="font-medium text-foreground/80">
+                        <span
+                          className={
+                            "font-medium " +
+                            ` ${bookTotals[book.id] < 0 ? "text-red-600" : bookTotals[book.id] != 0 ? "text-green-600" : "text-foreground/80"}`
+                          }
+                        >
                           {book.currency} {formatINR(bookTotals[book.id] ?? 0)}
                         </span>
                         <span className="flex items-center gap-1">
@@ -482,7 +493,7 @@ export default function Books() {
                   value={duplicateName}
                   onChange={(e) => setDuplicateName(e.target.value)}
                   placeholder="Enter duplicated book name"
-                  className="w-full h-10 px-3 rounded-md border border-input focus-visible:outline-primary outline-offset-[2px] bg-background text-foreground text-sm"
+                  className="w-full h-10 rounded-md border border-input bg-white px-3 text-base text-foreground outline-offset-[2px] focus-visible:outline-primary"
                 />
               </div>
               <p className="text-xs text-muted-foreground">

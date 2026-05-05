@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/web-manifest-combined",
+  "name": "Bookish Finances",
+  "short_name": "Bookish",
+  "description": "Shared expense tracker for books/groups",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ],
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0f766e",
+  "background_color": "#ffffff",
+  "categories": ["finance", "productivity"],
+  "orientation": "portrait-primary"
+}

@@ -1,14 +1,15 @@
 import { Button } from "@/components/ui/button";
-import { usePWAUpdate } from "@/lib/pwa";
+import { usePWAStatus } from "@/lib/pwa";
 import { AnimatePresence, motion } from "framer-motion";
-import { Download, X } from "lucide-react";
+import { Download, Package, X } from "lucide-react";
 import { useState } from "react";
 
 export function UpdateNotification() {
-  const { updateAvailable, applyUpdate } = usePWAUpdate();
+  const { updateAvailable, isInstallable, applyUpdate, promptInstall } =
+    usePWAStatus();
   const [dismissed, setDismissed] = useState(false);
 
-  if (!updateAvailable || dismissed) {
+  if ((!updateAvailable && !isInstallable) || dismissed) {
     return null;
   }
 
@@ -23,11 +24,19 @@ export function UpdateNotification() {
       >
         <div className="bg-primary text-primary-foreground rounded-lg shadow-lg p-4 pr-3 flex items-center gap-3 max-w-sm">
           <div className="flex-1 flex items-center gap-3">
-            <Download className="h-5 w-5 flex-shrink-0 animate-pulse" />
+            {updateAvailable ? (
+              <Download className="h-5 w-5 flex-shrink-0 animate-pulse" />
+            ) : (
+              <Package className="h-5 w-5 flex-shrink-0 animate-pulse" />
+            )}
             <div>
-              <p className="font-semibold text-sm">Update available</p>
+              <p className="font-semibold text-sm">
+                {updateAvailable ? "Update available" : "Install App"}
+              </p>
               <p className="text-xs opacity-90">
-                A new version is ready to use
+                {updateAvailable
+                  ? "New version ready to install"
+                  : "Add to home screen for PWA experience"}
               </p>
             </div>
           </div>
@@ -36,9 +45,14 @@ export function UpdateNotification() {
               size="sm"
               variant="ghost"
               className="h-8 px-2 text-xs sm:hover:bg-white/20"
-              onClick={() => applyUpdate()}
+              onClick={() => {
+                const success = updateAvailable
+                  ? applyUpdate()
+                  : promptInstall();
+                if (success) setDismissed(true);
+              }}
             >
-              Update
+              {updateAvailable ? "Update" : "Install"}
             </Button>
             <Button
               size="sm"

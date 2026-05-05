@@ -53,6 +53,19 @@ export function CategoryPicker({
   );
   const canCreate = normalizedSearch.length > 0 && !matchingCategory;
 
+  const getFallbackCategoryId = (excludeId?: string) => {
+    const availableCategories = categories.filter(
+      (category) => category.id !== excludeId,
+    );
+    return (
+      availableCategories.find(
+        (category) => category.name.trim().toLowerCase() === "other",
+      )?.id ??
+      availableCategories[0]?.id ??
+      ""
+    );
+  };
+
   const handleCreate = async () => {
     if (!canCreate || isCreating) return;
     setIsCreating(true);
@@ -72,7 +85,7 @@ export function CategoryPicker({
     try {
       await onDeleteCategory(categoryId);
       if (value === categoryId) {
-        onValueChange("");
+        onValueChange(getFallbackCategoryId(categoryId));
       }
     } finally {
       setDeletingId(null);
@@ -95,7 +108,7 @@ export function CategoryPicker({
           type="button"
           variant="outline"
           disabled={disabled}
-          className="h-11 w-full justify-between px-3 font-normal"
+          className="h-11 w-full justify-between bg-white px-3 font-normal"
         >
           <span
             className={cn(
@@ -103,16 +116,16 @@ export function CategoryPicker({
               !selectedCategory && "text-muted-foreground",
             )}
           >
-            {selectedCategory?.name ?? "Select or create category"}
+            {selectedCategory?.name ?? "Select category"}
           </span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-60" />
         </Button>
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[min(var(--radix-popover-trigger-width),22rem)] max-w-[calc(100vw-2rem)] overflow-hidden p-0"
+        className="w-[min(var(--radix-popover-trigger-width),22rem)] max-w-[calc(100vw-2rem)] overflow-hidden bg-white p-0"
       >
-        <div className="border-b bg-background p-3">
+        <div className="border-b bg-white p-3">
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -125,7 +138,7 @@ export function CategoryPicker({
               }
             }}
             placeholder="Search or type to create"
-            className="h-10"
+            className="h-10 bg-white"
           />
         </div>
         <ScrollArea
@@ -134,24 +147,6 @@ export function CategoryPicker({
           onTouchMoveCapture={(event) => event.stopPropagation()}
         >
           <div className="p-2">
-            <button
-              type="button"
-              onClick={() => {
-                onValueChange("");
-                setOpen(false);
-              }}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition-colors sm:hover:bg-accent",
-                value === "" && "bg-accent text-accent-foreground",
-              )}
-            >
-              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <Tag className="h-4 w-4" />
-              </span>
-              <span className="flex-1 truncate">No category</span>
-              {value === "" && <Check className="h-4 w-4" />}
-            </button>
-
             {canCreate && (
               <button
                 type="button"

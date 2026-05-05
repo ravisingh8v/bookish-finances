@@ -96,6 +96,26 @@ function getInitials(name?: string | null) {
     .slice(0, 2);
 }
 
+function getRequiredCategoryId(
+  categories: { id: string; name: string }[],
+  preferredId?: string | null,
+) {
+  if (
+    preferredId &&
+    categories.some((category) => category.id === preferredId)
+  ) {
+    return preferredId;
+  }
+
+  return (
+    categories.find(
+      (category) => category.name.trim().toLowerCase() === "other",
+    )?.id ??
+    categories[0]?.id ??
+    ""
+  );
+}
+
 const getCurrencySymbol = (c: string) =>
   ({ INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" })[c] ?? c + " ";
 
@@ -195,6 +215,14 @@ export default function BookDetail() {
   const [notes, setNotes] = useState("");
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (categories.length === 0) return;
+    const nextCategoryId = getRequiredCategoryId(categories, categoryId);
+    if (nextCategoryId && nextCategoryId !== categoryId) {
+      setCategoryId(nextCategoryId);
+    }
+  }, [categories, categoryId]);
+
   // Edit Book modal state
   const [editBookOpen, setEditBookOpen] = useState(false);
   const [editBookName, setEditBookName] = useState("");
@@ -279,7 +307,7 @@ export default function BookDetail() {
     setTitle("");
     setAmount("");
     setDate(new Date().toISOString().split("T")[0]);
-    setCategoryId("");
+    setCategoryId(getRequiredCategoryId(categories));
     setExpenseType("debit");
     setPaymentMethod("cash");
     setNotes("");
@@ -292,7 +320,7 @@ export default function BookDetail() {
     setDate(
       expense.date?.split("T")[0] ?? new Date().toISOString().split("T")[0],
     );
-    setCategoryId(expense.category_id ?? "");
+    setCategoryId(getRequiredCategoryId(categories, expense.category_id));
     setExpenseType(expense.expense_type ?? "debit");
     setPaymentMethod(expense.payment_method ?? "cash");
     setNotes(expense.notes ?? "");
@@ -313,18 +341,20 @@ export default function BookDetail() {
     const selectedCategory = categories.find(
       (category) => category.id === categoryId,
     );
+    if (!selectedCategory) {
+      toast.error("Category is required");
+      return;
+    }
     const payload = {
       title: title.trim(),
       amount: Number(amount),
       date,
-      category_id: categoryId || undefined,
-      category: selectedCategory
-        ? {
-            name: selectedCategory.name,
-            icon: selectedCategory.icon,
-            color: selectedCategory.color,
-          }
-        : null,
+      category_id: selectedCategory.id,
+      category: {
+        name: selectedCategory.name,
+        icon: selectedCategory.icon,
+        color: selectedCategory.color,
+      },
       expense_type: expenseType,
       payment_method: paymentMethod,
       notes: notes.trim() || undefined,
@@ -469,8 +499,8 @@ export default function BookDetail() {
                   </Button>
                 </DialogTrigger>
                 <DialogContent fullscreen className="flex flex-col">
-                  <DialogHeader className="pb-6 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
-                    <DialogTitle className="text-xl text-left">
+                  <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-2 px-4 sm:px-6 z-40 border-b">
+                    <DialogTitle className="text-xl leading-[1.75]  text-left">
                       <Button
                         variant="ghost"
                         size="icon"
@@ -489,14 +519,14 @@ export default function BookDetail() {
                           <button
                             key={t.value}
                             onClick={() => setExpenseType(t.value)}
-                            className={`rounded-xl border px-3 py-3 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
+                            className={`rounded-xl  border px-3 py-3 text-sm font-medium transition-all flex items-center justify-center gap-2 ${
                               expenseType === t.value
                                 ? t.value === "debit"
                                   ? "border-destructive bg-destructive/10 text-destructive"
                                   : "border-primary bg-primary/10 text-primary"
                                 : t.value === "debit"
-                                  ? "border-border text-destructive sm:hover:border-destructive sm:hover:bg-destructive/10 sm:hover:text-destructive"
-                                  : "border-border text-primary sm:hover:border-primary sm:hover:bg-primary/10"
+                                  ? "border-border bg-white text-destructive sm:hover:border-destructive sm:hover:bg-destructive/10 sm:hover:text-destructive"
+                                  : "border-border bg-white text-primary sm:hover:border-primary sm:hover:bg-primary/10"
                             }`}
                           >
                             <t.icon className="h-4 w-4" />
@@ -522,35 +552,36 @@ export default function BookDetail() {
                             className="h-11"
                           />
                         </div>
+
                         <div className="space-y-3">
                           <Label
-                            htmlFor="expense-date"
+                            htmlFor="expense-title"
                             className="text-sm font-medium"
                           >
-                            Date
+                            Title
                           </Label>
                           <Input
-                            id="expense-date"
-                            type="date"
-                            value={date}
-                            onChange={(e) => setDate(e.target.value)}
-                            className="h-11 max-w-full"
+                            id="expense-title"
+                            placeholder="What did you spend on?"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            className="h-11"
                           />
                         </div>
                       </div>
                       <div className="space-y-3">
                         <Label
-                          htmlFor="expense-title"
+                          htmlFor="expense-date"
                           className="text-sm font-medium"
                         >
-                          Title
+                          Date
                         </Label>
                         <Input
-                          id="expense-title"
-                          placeholder="What did you spend on?"
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          className="h-11"
+                          id="expense-date"
+                          type="date"
+                          value={date}
+                          onChange={(e) => setDate(e.target.value)}
+                          className="ios-date-input h-11 max-w-full"
                         />
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -643,35 +674,35 @@ export default function BookDetail() {
           {/* Main content */}
           <div className="flex-1 space-y-6 min-w-0">
             {/* Summary Cards */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-4">
+            <div className="grid grid-cols-1 gap-2 min-[420px]:grid-cols-3 sm:gap-4">
               <Card className="glass">
-                <CardContent className="p-3 sm:p-4">
+                <CardContent className="min-w-0 p-3 sm:p-4">
                   <p className="text-xs sm:text-sm text-muted-foreground">
                     Income
                   </p>
-                  <p className="text-base sm:text-xl font-display font-bold text-success truncate">
+                  <p className="font-display font-bold leading-tight text-success text-[clamp(1rem,4vw,1.25rem)] sm:text-xl [overflow-wrap:anywhere]">
                     {cur}
                     {formatINR(totalIncome)}
                   </p>
                 </CardContent>
               </Card>
               <Card className="glass">
-                <CardContent className="p-3 sm:p-4">
+                <CardContent className="min-w-0 p-3 sm:p-4">
                   <p className="text-xs sm:text-sm text-muted-foreground">
                     Expenses
                   </p>
-                  <p className="text-base sm:text-xl font-display font-bold text-destructive truncate">
+                  <p className="font-display font-bold leading-tight text-destructive text-[clamp(1rem,4vw,1.25rem)] sm:text-xl [overflow-wrap:anywhere]">
                     {cur}
                     {formatINR(totalExpense)}
                   </p>
                 </CardContent>
               </Card>
               <Card className="glass">
-                <CardContent className="p-3 sm:p-4">
+                <CardContent className="min-w-0 p-3 sm:p-4">
                   <p className="text-xs sm:text-sm text-muted-foreground">
                     Balance
                   </p>
-                  <p className="text-base sm:text-xl font-display font-bold truncate">
+                  <p className="font-display font-bold leading-tight text-[clamp(1rem,4vw,1.25rem)] sm:text-xl [overflow-wrap:anywhere]">
                     {cur}
                     {formatINR(totalIncome - totalExpense)}
                   </p>

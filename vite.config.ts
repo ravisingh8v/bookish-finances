@@ -4,6 +4,7 @@ import { defineConfig, loadEnv } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 const buildId = new Date().toISOString();
+const ONE_DAY_IN_SECONDS = 24 * 60 * 60;
 const ONE_WEEK_IN_SECONDS = 7 * 24 * 60 * 60;
 const ONE_MONTH_IN_SECONDS = 30 * 24 * 60 * 60;
 
@@ -39,8 +40,8 @@ export default defineConfig(({ mode }) => {
       react(),
       VitePWA({
         includeAssets: ["favicon.ico", "robots.txt", "placeholder.svg"],
-        injectRegister: false,
-        registerType: "autoUpdate",
+        injectRegister: "script",
+        registerType: "prompt",
         workbox: {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
@@ -55,13 +56,13 @@ export default defineConfig(({ mode }) => {
               handler: "NetworkFirst",
               options: {
                 cacheName: "app-pages",
-                networkTimeoutSeconds: 3,
+                networkTimeoutSeconds: 5,
                 cacheableResponse: {
                   statuses: [0, 200],
                 },
                 expiration: {
                   maxEntries: 32,
-                  maxAgeSeconds: ONE_WEEK_IN_SECONDS,
+                  maxAgeSeconds: ONE_DAY_IN_SECONDS,
                 },
               },
             },
@@ -79,7 +80,7 @@ export default defineConfig(({ mode }) => {
                 },
                 expiration: {
                   maxEntries: 64,
-                  maxAgeSeconds: ONE_MONTH_IN_SECONDS,
+                  maxAgeSeconds: ONE_WEEK_IN_SECONDS,
                 },
               },
             },

@@ -18,13 +18,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { useAuth } from "@/hooks/useAuth";
+import { getUserId, useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabase } from "@/integrations/supabase/client";
+import { getDashboardStatsFromCache } from "@/lib/cachedExpenseTotals";
 import { db } from "@/lib/db";
 import { withNetworkTimeout } from "@/lib/network";
-import { formatINR } from "@/lib/utils";
+import { formatCompactINR, formatINR } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -64,6 +65,12 @@ export default function Dashboard() {
     isBookOwner,
   } = useBooks();
   const { isOnline } = useOfflineSync();
+  const cacheUserId = user?.id || getUserId();
+  const dashboardStatsCacheId = `stats:${cacheUserId || "_anonymous"}`;
+  const dashboardBookIdsKey = books
+    .map((book) => book.id)
+    .sort((a, b) => a.localeCompare(b))
+    .join("|");
 
   // Edit dialog state
   const [openEdit, setOpenEdit] = useState(false);
@@ -160,10 +167,10 @@ export default function Dashboard() {
   };
 
   const statsQuery = useQuery({
-    queryKey: ["dashboard-stats"],
+    queryKey: ["dashboard-stats", cacheUserId, dashboardBookIdsKey],
     queryFn: async () => {
       if (!isOnline) {
-        const cached = await db.dashboard.get("stats");
+        const cached = await db.dashboard.get(dashboardStatsCacheId);
         if (cached?.data)
           return cached.data as {
             totalExpense: number;
@@ -172,23 +179,15 @@ export default function Dashboard() {
             count: number;
           };
 
-        const all = await db.expenses.toArray();
-        const expenses = all.flatMap((item) => (item.expenses ?? []) as any[]);
-        const totalExpense =
-          expenses
-            .filter((e) => e.expense_type === "debit")
-            .reduce((s, e) => s + Number(e.amount), 0) ?? 0;
-        const totalIncome =
-          expenses
-            .filter((e) => e.expense_type === "credit")
-            .reduce((s, e) => s + Number(e.amount), 0) ?? 0;
-        const data = {
-          totalExpense,
-          totalIncome,
-          balance: totalIncome - totalExpense,
-          count: expenses.length,
-        };
-        await db.dashboard.put({ id: "stats", data, cachedAt: Date.now() });
+        const data = await getDashboardStatsFromCache(
+          books.map((book) => book.id),
+          cacheUserId,
+        );
+        await db.dashboard.put({
+          id: dashboardStatsCacheId,
+          data,
+          cachedAt: Date.now(),
+        });
         return data;
       }
 
@@ -209,12 +208,18 @@ export default function Dashboard() {
         expenses
           ?.filter((e) => e.expense_type === "credit")
           .reduce((s, e) => s + Number(e.amount), 0) ?? 0;
-      return {
+      const data = {
         totalExpense,
         totalIncome,
         balance: totalIncome - totalExpense,
         count: expenses?.length ?? 0,
       };
+      await db.dashboard.put({
+        id: dashboardStatsCacheId,
+        data,
+        cachedAt: Date.now(),
+      });
+      return data;
     },
     enabled: !!user,
   });
@@ -249,54 +254,70 @@ export default function Dashboard() {
       title: "Books",
       value: books.length.toString(),
       icon: BookOpen,
-      color: "text-accent",
+      color: "text-blue-600",
     },
   ];
+
+  const getCompactDashboardValue = (title: string) => {
+    switch (title) {
+      case "Total Balance":
+        return {
+          display: `₹${formatCompactINR(stats.balance)}`,
+          full: `₹${formatINR(stats.balance)}`,
+        };
+      case "Income":
+        return {
+          display: `₹${formatCompactINR(stats.totalIncome)}`,
+          full: `₹${formatINR(stats.totalIncome)}`,
+        };
+      case "Expenses":
+        return {
+          display: `₹${formatCompactINR(stats.totalExpense)}`,
+          full: `₹${formatINR(stats.totalExpense)}`,
+        };
+      default:
+        return {
+          display: title === "Books" ? books.length.toString() : "",
+          full: title === "Books" ? books.length.toString() : "",
+        };
+    }
+  };
 
   return (
     <DashboardLayout>
       <div className="space-y-8">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          <h1 className="text-3xl font-display font-bold">
-            Welcome, {profile?.display_name ?? "there"} 👋
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Here's your financial overview
-          </p>
-        </motion.div>
-
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-          {statCards.map((stat, i) => (
-            <motion.div
-              key={stat.title}
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
-            >
-              <Card className="glass sm:hover:shadow-lg transition-shadow">
-                <CardContent className="p-5">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-muted-foreground">
-                        {stat.title}
-                      </p>
-                      <p className="text-2xl font-display font-bold mt-1">
-                        {stat.value}
-                      </p>
+          {statCards.map((stat, i) => {
+            const compactValue = getCompactDashboardValue(stat.title);
+            return (
+              <motion.div
+                key={stat.title}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.1 }}
+              >
+                <Card className="glass sm:hover:shadow-lg transition-shadow">
+                  <CardContent className="p-3 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1" title={compactValue.full}>
+                        <p className="text-[11px] sm:text-sm text-muted-foreground">
+                          {stat.title}
+                        </p>
+                        <p className="mt-1 font-display font-bold leading-tight text-[clamp(0.95rem,4.2vw,1.5rem)] [overflow-wrap:anywhere]">
+                          {compactValue.display}
+                        </p>
+                      </div>
+                      <div
+                        className={`h-9 w-9 shrink-0 rounded-xl bg-muted flex items-center justify-center sm:h-10 sm:w-10 ${stat.color}`}
+                      >
+                        <stat.icon className="h-5 w-5" />
+                      </div>
                     </div>
-                    <div
-                      className={`w-10 h-10 rounded-xl bg-muted flex items-center justify-center ${stat.color}`}
-                    >
-                      <stat.icon className="h-5 w-5" />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </motion.div>
-          ))}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            );
+          })}
         </div>
 
         <div>

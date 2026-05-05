@@ -4,7 +4,9 @@ type NetworkListener = () => void;
 const listeners = new Set<NetworkListener>();
 let inferredReachability =
   typeof navigator === "undefined" ? true : navigator.onLine;
+let stableOnline = inferredReachability;
 let browserEventsAttached = false;
+let debounceTimeout: NodeJS.Timeout | null = null;
 
 function emitNetworkChange() {
   listeners.forEach((listener) => listener());
@@ -13,7 +15,15 @@ function emitNetworkChange() {
 function setInferredReachability(next: boolean) {
   if (inferredReachability === next) return;
   inferredReachability = next;
-  emitNetworkChange();
+
+  // Debounce stableOnline changes
+  if (debounceTimeout) {
+    clearTimeout(debounceTimeout);
+  }
+  debounceTimeout = setTimeout(() => {
+    stableOnline = inferredReachability;
+    emitNetworkChange();
+  }, 500); // 500ms debounce for stable status
 }
 
 function attachBrowserNetworkEvents() {
@@ -58,12 +68,14 @@ export function subscribeToNetworkStatus(listener: NetworkListener) {
 
 export function getNetworkStatusSnapshot() {
   attachBrowserNetworkEvents();
-
   if (typeof navigator === "undefined") {
     return true;
   }
-
   return navigator.onLine && inferredReachability;
+}
+
+export function getStableOnlineStatus() {
+  return stableOnline;
 }
 
 function createTimeoutError() {
