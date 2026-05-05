@@ -47,7 +47,7 @@ export function OfflineStatusBar() {
           {isOnline && syncStatus === "error" && (
             <button
               onClick={syncNow}
-              className="ml-2 flex items-center gap-1 opacity-80 hover:opacity-100 underline underline-offset-2"
+              className="ml-2 flex items-center gap-1 opacity-80 sm:hover:opacity-100 underline underline-offset-2"
             >
               <RefreshCw className="h-3 w-3" />
               Retry

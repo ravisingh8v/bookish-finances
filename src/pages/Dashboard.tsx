@@ -17,12 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/db";
 import { withNetworkTimeout } from "@/lib/network";
+import { formatINR } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
@@ -39,8 +41,6 @@ import {
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
-import { formatINR } from "@/lib/utils";
-import { Textarea } from "@/components/ui/textarea";
 
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "JPY"];
 const COLORS = [
@@ -276,7 +276,7 @@ export default function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
             >
-              <Card className="glass hover:shadow-lg transition-shadow">
+              <Card className="glass sm:hover:shadow-lg transition-shadow">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between">
                     <div>
@@ -302,7 +302,10 @@ export default function Dashboard() {
         <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-display font-semibold">Recent Books</h2>
-            <Link to="/books" className="text-sm text-primary hover:underline">
+            <Link
+              to="/books"
+              className="text-sm text-primary sm:hover:underline"
+            >
               View all →
             </Link>
           </div>
@@ -324,7 +327,7 @@ export default function Dashboard() {
                 </p>
                 <Link
                   to="/books"
-                  className="text-primary text-sm mt-2 inline-block hover:underline"
+                  className="text-primary text-sm mt-2 inline-block sm:hover:underline"
                 >
                   Create your first book →
                 </Link>
@@ -344,7 +347,7 @@ export default function Dashboard() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: i * 0.05 }}
                   >
-                    <Card className="glass hover:shadow-lg transition-all hover:-translate-y-0.5 group relative">
+                    <Card className="glass sm:hover:shadow-lg transition-all sm:hover:-translate-y-0.5 group relative">
                       <CardContent className="p-5 space-y-3">
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -371,7 +374,7 @@ export default function Dashboard() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-primary"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-primary"
                                 onClick={(e) => openEditDialog(book, e)}
                               >
                                 <Edit className="h-4 w-4" />
@@ -379,7 +382,7 @@ export default function Dashboard() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-blue-600 disabled:opacity-50"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-blue-600 disabled:opacity-50"
                                 onClick={(e) => handleDuplicate(book.id, e)}
                                 disabled={duplicateBook.isPending || !isOnline}
                                 title={
@@ -397,7 +400,7 @@ export default function Dashboard() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-destructive"
                                 onClick={(e) => {
                                   e.preventDefault();
                                   e.stopPropagation();
@@ -422,7 +425,7 @@ export default function Dashboard() {
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <Link
                             to={`/books/${book.id}`}
-                            className="text-primary hover:underline font-medium"
+                            className="text-primary sm:hover:underline font-medium"
                           >
                             View book →
                           </Link>
@@ -530,7 +533,7 @@ export default function Dashboard() {
                         className={`w-10 h-10 rounded-full transition-transform border-2 ${
                           editColor === c
                             ? "ring-2 ring-primary scale-110 border-primary"
-                            : "hover:scale-105 border-border"
+                            : "sm:hover:scale-105 border-border"
                         }`}
                         style={{ backgroundColor: c }}
                       />
@@ -606,7 +609,7 @@ export default function Dashboard() {
               <Button
                 onClick={handleConfirmDuplicate}
                 disabled={duplicateBook.isPending}
-                className="order-1 sm:order-2 bg-primary hover:bg-primary/90"
+                className="order-1 sm:order-2 bg-primary sm:hover:bg-primary/90"
               >
                 {duplicateBook.isPending ? (
                   <>

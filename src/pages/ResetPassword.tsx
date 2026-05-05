@@ -1,13 +1,19 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { toast } from "sonner";
-import { Lock, Loader2, Eye, EyeOff, Wallet } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { motion } from "framer-motion";
+import { Eye, EyeOff, Loader2, Lock, Wallet } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -19,7 +25,9 @@ export default function ResetPassword() {
 
   useEffect(() => {
     // Listen for PASSWORD_RECOVERY event
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY") {
         setIsRecovery(true);
       }
@@ -57,7 +65,9 @@ export default function ResetPassword() {
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md glass-strong">
           <CardContent className="p-8 text-center space-y-4">
-            <p className="text-muted-foreground">Invalid or expired reset link.</p>
+            <p className="text-muted-foreground">
+              Invalid or expired reset link.
+            </p>
             <Button onClick={() => navigate("/auth")}>Back to Login</Button>
           </CardContent>
         </Card>
@@ -67,14 +77,22 @@ export default function ResetPassword() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-md">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="w-full max-w-md"
+      >
         <Card className="glass-strong shadow-xl border-border/50">
           <CardHeader className="text-center space-y-3">
             <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center">
               <Wallet className="h-7 w-7 text-primary" />
             </div>
-            <CardTitle className="text-2xl font-display">Set New Password</CardTitle>
-            <CardDescription>Choose a strong password for your account</CardDescription>
+            <CardTitle className="text-2xl font-display">
+              Set New Password
+            </CardTitle>
+            <CardDescription>
+              Choose a strong password for your account
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -82,11 +100,26 @@ export default function ResetPassword() {
                 <Label htmlFor="new-password">New Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="new-password" type={showPassword ? "text" : "password"} placeholder="••••••••" className="pl-10 pr-10"
-                    value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  <Input
+                    id="new-password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="pl-10 pr-10"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground sm:hover:text-foreground"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -94,12 +127,22 @@ export default function ResetPassword() {
                 <Label htmlFor="confirm-password">Confirm Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input id="confirm-password" type="password" placeholder="••••••••" className="pl-10"
-                    value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required minLength={6} />
+                  <Input
+                    id="confirm-password"
+                    type="password"
+                    placeholder="••••••••"
+                    className="pl-10"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                  />
                 </div>
               </div>
               <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                {loading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : null}
                 Update Password
               </Button>
             </form>

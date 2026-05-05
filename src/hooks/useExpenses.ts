@@ -12,6 +12,17 @@ import { toast } from "sonner";
 import { getUserId, useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
 
+export interface Category {
+  id: string;
+  name: string;
+  icon: string;
+  color: string;
+  is_default: boolean;
+  book_id?: string | null;
+  created_by?: string | null;
+  created_at?: string;
+}
+
 export interface Expense {
   id: string;
   book_id: string;
@@ -27,7 +38,7 @@ export interface Expense {
   created_by: string;
   created_at: string;
   updated_at: string;
-  categories: { name: string; icon: string; color: string } | null;
+  categories: Pick<Category, "name" | "icon" | "color"> | null;
   creator_profile?: {
     display_name: string | null;
     email: string | null;
@@ -45,6 +56,7 @@ type ExpensePayload = {
   amount: number;
   date?: string;
   category_id?: string;
+  category?: Pick<Category, "name" | "icon" | "color"> | null;
   expense_type?: string;
   payment_method?: string;
   notes?: string;
@@ -57,6 +69,7 @@ type ExpenseUpdate = {
   amount?: number;
   date?: string;
   category_id?: string;
+  category?: Pick<Category, "name" | "icon" | "color"> | null;
   expense_type?: string;
   payment_method?: string;
   notes?: string;
@@ -65,6 +78,38 @@ type ExpenseUpdate = {
 
 const MAX_EXPENSES_CACHE = 50;
 const PAGE_SIZE = 20;
+
+function getCategoryCacheId(userId?: string) {
+  return `categories:${userId || getCurrentUserId() || "_anonymous"}`;
+}
+
+function sortCategories(categories: Category[]) {
+  return [...categories].sort((a, b) => {
+    if (a.is_default !== b.is_default) {
+      return a.is_default ? -1 : 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+}
+
+function getCustomCategoryColor(name: string) {
+  const palette = [
+    "#0F766E",
+    "#2563EB",
+    "#B45309",
+    "#BE123C",
+    "#7C3AED",
+    "#0891B2",
+    "#4F46E5",
+    "#16A34A",
+  ];
+  let hash = 0;
+  for (const char of name.trim().toLowerCase()) {
+    hash = (hash << 5) - hash + char.charCodeAt(0);
+    hash |= 0;
+  }
+  return palette[Math.abs(hash) % palette.length];
+}
 
 function optimisticExpense(
   payload: ExpensePayload,
@@ -89,7 +134,7 @@ function optimisticExpense(
     created_by: userId,
     created_at: now,
     updated_at: now,
-    categories: null,
+    categories: payload.category ?? null,
     creator_profile: {
       display_name: profile?.display_name ?? null,
       email: profile?.email ?? null,
@@ -333,6 +378,8 @@ export function useExpenses(bookId: string) {
         amount: params.amount,
         date: params.date,
         category_id: params.category_id ?? null,
+        categories:
+          params.category_id === undefined ? undefined : (params.category ?? null),
         expense_type: params.expense_type,
         payment_method: params.payment_method,
         notes: params.notes,
@@ -578,7 +625,7 @@ export function useExpenses(bookId: string) {
   };
 }
 
-const DEFAULT_CATEGORIES = [
+const DEFAULT_CATEGORIES: Category[] = [
   {
     id: "groceries",
     name: "Groceries",
@@ -624,19 +671,34 @@ const DEFAULT_CATEGORIES = [
 ];
 
 export function useCategories() {
+  const { user } = useAuth();
   const { isOnline } = useOfflineSync();
-  const [localCategories, setLocalCategories] = useState<
-    typeof DEFAULT_CATEGORIES
-  >([]);
+  const queryClient = useQueryClient();
+  const userId = user?.id || getUserId();
+  const cacheId = getCategoryCacheId(userId);
+  const [localCategories, setLocalCategories] = useState<Category[]>([]);
+
+  const updateCategoryCache = async (nextCategories: Category[]) => {
+    const sorted = sortCategories(nextCategories);
+    setLocalCategories(sorted);
+    queryClient.setQueryData(["categories", cacheId], sorted);
+    await db.categories.put({
+      id: cacheId,
+      data: sorted,
+      cachedAt: Date.now(),
+      userId,
+    });
+    return sorted;
+  };
 
   useEffect(() => {
     let active = true;
     db.categories
-      .get("default")
+      .get(cacheId)
       .then((cached) => {
         if (!active) return;
         setLocalCategories(
-          (cached?.data ?? DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES,
+          sortCategories((cached?.data ?? DEFAULT_CATEGORIES) as Category[]),
         );
       })
       .catch(() => {
@@ -646,15 +708,17 @@ export function useCategories() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [cacheId]);
 
-  return useQuery({
-    queryKey: ["categories"],
+  const categoriesQuery = useQuery({
+    queryKey: ["categories", cacheId],
     queryFn: async () => {
-      const cached = await db.categories.get("default");
+      const cached = await db.categories.get(cacheId);
+      if (!userId) {
+        return DEFAULT_CATEGORIES;
+      }
       if (!isOnline) {
-        return (cached?.data ??
-          DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
+        return sortCategories((cached?.data ?? DEFAULT_CATEGORIES) as Category[]);
       }
 
       try {
@@ -662,26 +726,111 @@ export function useCategories() {
           supabase
             .from("categories")
             .select("*")
-            .eq("is_default", true)
+            .or(`is_default.eq.true,created_by.eq.${userId}`)
+            .order("is_default", { ascending: false })
             .order("name"),
         );
         if (error) throw error;
 
         if (data) {
-          await db.categories.put({
-            id: "default",
-            data,
-            cachedAt: Date.now(),
-          });
-          setLocalCategories(data as typeof DEFAULT_CATEGORIES);
+          await updateCategoryCache(data as Category[]);
         }
-        return (data ?? DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
+        return sortCategories((data ?? DEFAULT_CATEGORIES) as Category[]);
       } catch {
-        return (cached?.data ??
-          DEFAULT_CATEGORIES) as typeof DEFAULT_CATEGORIES;
+        return sortCategories((cached?.data ?? DEFAULT_CATEGORIES) as Category[]);
       }
     },
     staleTime: 300_000,
     placeholderData: localCategories,
   });
+
+  const createCategory = useMutation({
+    mutationFn: async (rawName: string) => {
+      const name = rawName.trim();
+      if (!name) {
+        throw new Error("Category name is required");
+      }
+
+      const existing = (queryClient.getQueryData(["categories", cacheId]) as
+        | Category[]
+        | undefined)?.find(
+        (category) => category.name.trim().toLowerCase() === name.toLowerCase(),
+      );
+      if (existing) {
+        return existing;
+      }
+
+      if (!userId) {
+        throw new Error("User not available. Please sign in again.");
+      }
+      if (!isOnline) {
+        throw new Error("Creating custom categories requires internet.");
+      }
+
+      const { data, error } = await withNetworkTimeout(
+        supabase
+          .from("categories")
+          .insert({
+            name,
+            color: getCustomCategoryColor(name),
+            icon: "tag",
+            is_default: false,
+            book_id: null,
+            created_by: userId,
+          })
+          .select("*")
+          .single(),
+      );
+      if (error) throw error;
+      return data as Category;
+    },
+    onSuccess: async (category) => {
+      const current =
+        (queryClient.getQueryData(["categories", cacheId]) as Category[]) ??
+        localCategories;
+      await updateCategoryCache([
+        ...current.filter((entry) => entry.id !== category.id),
+        category,
+      ]);
+    },
+  });
+
+  const deleteCategory = useMutation({
+    mutationFn: async (categoryId: string) => {
+      const current =
+        (queryClient.getQueryData(["categories", cacheId]) as Category[]) ??
+        localCategories;
+      const category = current.find((entry) => entry.id === categoryId);
+
+      if (!category) {
+        return categoryId;
+      }
+      if (category.is_default) {
+        throw new Error("Default categories cannot be deleted.");
+      }
+      if (!isOnline) {
+        throw new Error("Deleting custom categories requires internet.");
+      }
+
+      const { error } = await withNetworkTimeout(
+        supabase.from("categories").delete().eq("id", categoryId),
+      );
+      if (error) throw error;
+      return categoryId;
+    },
+    onSuccess: async (categoryId) => {
+      const current =
+        (queryClient.getQueryData(["categories", cacheId]) as Category[]) ??
+        localCategories;
+      await updateCategoryCache(
+        current.filter((category) => category.id !== categoryId),
+      );
+    },
+  });
+
+  return {
+    ...categoriesQuery,
+    createCategory,
+    deleteCategory,
+  };
 }

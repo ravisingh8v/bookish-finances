@@ -35,7 +35,7 @@ export function UpdateNotification() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 px-2 text-xs hover:bg-white/20"
+              className="h-8 px-2 text-xs sm:hover:bg-white/20"
               onClick={() => applyUpdate()}
             >
               Update
@@ -43,7 +43,7 @@ export function UpdateNotification() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 w-8 p-0 hover:bg-white/20"
+              className="h-8 w-8 p-0 sm:hover:bg-white/20"
               onClick={() => setDismissed(true)}
             >
               <X className="h-4 w-4" />

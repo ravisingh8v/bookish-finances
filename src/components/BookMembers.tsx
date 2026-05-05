@@ -23,25 +23,53 @@ import {
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { BookMember, useBookMembers } from "@/hooks/useBookMembers";
-import { Crown, Eye, Loader2, LogOut, MoreVertical, Pencil, Trash2, UserPlus } from "lucide-react";
+import {
+  Crown,
+  Eye,
+  Loader2,
+  LogOut,
+  MoreVertical,
+  Pencil,
+  Trash2,
+  UserPlus,
+} from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
 const ROLE_CONFIG = {
-  owner: { label: "Owner", icon: Crown, color: "bg-amber-500/10 text-amber-600 border-amber-500/20" },
-  editor: { label: "Editor", icon: Pencil, color: "bg-primary/10 text-primary border-primary/20" },
-  viewer: { label: "Viewer", icon: Eye, color: "bg-muted text-muted-foreground border-border" },
+  owner: {
+    label: "Owner",
+    icon: Crown,
+    color: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+  },
+  editor: {
+    label: "Editor",
+    icon: Pencil,
+    color: "bg-primary/10 text-primary border-primary/20",
+  },
+  viewer: {
+    label: "Viewer",
+    icon: Eye,
+    color: "bg-muted text-muted-foreground border-border",
+  },
 };
 
 function getInitials(name?: string | null, email?: string | null) {
-  if (name) return name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2);
+  if (name)
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
   if (email) return email[0].toUpperCase();
   return "?";
 }
 
 export function BookMembers({ bookId }: { bookId: string }) {
   const { user } = useAuth();
-  const { members, isOwner, addMember, removeMember, updateRole } = useBookMembers(bookId);
+  const { members, isOwner, addMember, removeMember, updateRole } =
+    useBookMembers(bookId);
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [role, setRole] = useState("editor");
@@ -61,7 +89,9 @@ export function BookMembers({ bookId }: { bookId: string }) {
 
   const handleRemove = (member: BookMember) => {
     const isSelf = member.user_id === user?.id;
-    const msg = isSelf ? "Leave this book?" : `Remove ${member.profile?.display_name || member.profile?.email}?`;
+    const msg = isSelf
+      ? "Leave this book?"
+      : `Remove ${member.profile?.display_name || member.profile?.email}?`;
     if (confirm(msg)) removeMember.mutate(member.id);
   };
 
@@ -106,8 +136,12 @@ export function BookMembers({ bookId }: { bookId: string }) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="editor">Editor — can add &amp; edit expenses</SelectItem>
-                        <SelectItem value="viewer">Viewer — read only</SelectItem>
+                        <SelectItem value="editor">
+                          Editor — can add &amp; edit expenses
+                        </SelectItem>
+                        <SelectItem value="viewer">
+                          Viewer — read only
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -116,7 +150,9 @@ export function BookMembers({ bookId }: { bookId: string }) {
                     onClick={handleAdd}
                     disabled={addMember.isPending}
                   >
-                    {addMember.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+                    {addMember.isPending && (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    )}
                     Send Invite
                   </Button>
                 </div>
@@ -128,27 +164,41 @@ export function BookMembers({ bookId }: { bookId: string }) {
 
       <div className="space-y-1.5">
         {members.map((member) => {
-          const rc = ROLE_CONFIG[member.role as keyof typeof ROLE_CONFIG] ?? ROLE_CONFIG.viewer;
+          const rc =
+            ROLE_CONFIG[member.role as keyof typeof ROLE_CONFIG] ??
+            ROLE_CONFIG.viewer;
           const isSelf = member.user_id === user?.id;
 
           return (
             <div
               key={member.id}
-              className="flex items-center gap-3 p-2.5 rounded-xl hover:bg-muted/50 transition-colors group"
+              className="flex items-center gap-3 p-2.5 rounded-xl sm:hover:bg-muted/50 transition-colors group"
             >
               <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-xs font-bold shrink-0">
-                {getInitials(member.profile?.display_name, member.profile?.email)}
+                {getInitials(
+                  member.profile?.display_name,
+                  member.profile?.email,
+                )}
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium truncate">
-                  {member.profile?.display_name || member.profile?.email || "Unknown"}
-                  {isSelf && <span className="text-muted-foreground ml-1">(you)</span>}
+                  {member.profile?.display_name ||
+                    member.profile?.email ||
+                    "Unknown"}
+                  {isSelf && (
+                    <span className="text-muted-foreground ml-1">(you)</span>
+                  )}
                 </p>
                 {member.profile?.email && member.profile?.display_name && (
-                  <p className="text-xs text-muted-foreground truncate">{member.profile.email}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {member.profile.email}
+                  </p>
                 )}
               </div>
-              <Badge variant="outline" className={`text-[10px] shrink-0 ${rc.color}`}>
+              <Badge
+                variant="outline"
+                className={`text-[10px] shrink-0 ${rc.color}`}
+              >
                 {rc.label}
               </Badge>
               {(isOwner && !isSelf) || (isSelf && member.role !== "owner") ? (
@@ -165,11 +215,25 @@ export function BookMembers({ bookId }: { bookId: string }) {
                   <DropdownMenuContent align="end">
                     {isOwner && !isSelf && (
                       <>
-                        <DropdownMenuItem onClick={() => updateRole.mutate({ memberId: member.id, role: "editor" })}>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            updateRole.mutate({
+                              memberId: member.id,
+                              role: "editor",
+                            })
+                          }
+                        >
                           <Pencil className="h-3.5 w-3.5 mr-2" />
                           Set as Editor
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => updateRole.mutate({ memberId: member.id, role: "viewer" })}>
+                        <DropdownMenuItem
+                          onClick={() =>
+                            updateRole.mutate({
+                              memberId: member.id,
+                              role: "viewer",
+                            })
+                          }
+                        >
                           <Eye className="h-3.5 w-3.5 mr-2" />
                           Set as Viewer
                         </DropdownMenuItem>

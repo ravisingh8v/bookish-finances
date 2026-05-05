@@ -1,5 +1,7 @@
 import { BookMembers } from "@/components/BookMembers";
+import { CategoryPicker } from "@/components/CategoryPicker";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { EditBookForm } from "@/components/EditBookForm";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -33,6 +35,7 @@ import { useCategories, useExpenses } from "@/hooks/useExpenses";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabase } from "@/integrations/supabase/client";
 import { withNetworkTimeout } from "@/lib/network";
+import { formatINR } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,7 +62,6 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
-import { formatINR } from "@/lib/utils";
 
 const PAYMENT_METHODS = [
   "cash",
@@ -161,7 +163,11 @@ export default function BookDetail() {
     },
     [hasNextPage, isFetchingNextPage, fetchNextPage],
   );
-  const { data: categories } = useCategories();
+  const {
+    data: categories = [],
+    createCategory,
+    deleteCategory,
+  } = useCategories();
   const { members, isOwner, currentUserRole } = useBookMembers(bookId!);
   const [open, setOpen] = useState(false);
   const [showMembers, setShowMembers] = useState(false);
@@ -193,30 +199,38 @@ export default function BookDetail() {
   const [editBookOpen, setEditBookOpen] = useState(false);
   const [editBookName, setEditBookName] = useState("");
   const [editBookDesc, setEditBookDesc] = useState("");
+  const [editBookCurrency, setEditBookCurrency] = useState("INR");
   const [editBookColor, setEditBookColor] = useState("#10B981");
-  const BOOK_COLORS = ["#10B981","#3B82F6","#8B5CF6","#F59E0B","#EF4444","#EC4899","#06B6D4"];
+
   const openEditBook = () => {
     if (!book) return;
-    if (!isBookOwner(book as any)) return;
+    if (!canEditBook) return;
     setEditBookName(book.name);
     setEditBookDesc(book.description ?? "");
+    setEditBookCurrency(book.currency ?? "INR");
     setEditBookColor(book.color ?? "#10B981");
     setEditBookOpen(true);
   };
+
   const saveEditBook = async () => {
     if (!book) return;
-    if (!editBookName.trim()) { toast.error("Name required"); return; }
+    if (!editBookName.trim()) {
+      toast.error("Name required");
+      return;
+    }
     try {
       await updateBook.mutateAsync({
         bookId: book.id,
         name: editBookName.trim(),
-        description: editBookDesc.trim() || undefined,
-        currency: book.currency,
+        description: editBookDesc.trim() || "",
+        currency: editBookCurrency,
         color: editBookColor,
       });
       toast.success("Book updated");
       setEditBookOpen(false);
-    } catch (e: any) { toast.error(e.message); }
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const bookQuery = useQuery({
@@ -238,6 +252,7 @@ export default function BookDetail() {
   )?.role;
   const effectiveRole = currentUserRole ?? cachedUserRole;
   const canEdit = effectiveRole === "owner" || effectiveRole === "editor";
+  const canEditBook = effectiveRole === "owner";
 
   if (!bookQuery.isLoading && !book) {
     return (
@@ -295,11 +310,21 @@ export default function BookDetail() {
       return;
     }
 
+    const selectedCategory = categories.find(
+      (category) => category.id === categoryId,
+    );
     const payload = {
       title: title.trim(),
       amount: Number(amount),
       date,
       category_id: categoryId || undefined,
+      category: selectedCategory
+        ? {
+            name: selectedCategory.name,
+            icon: selectedCategory.icon,
+            color: selectedCategory.color,
+          }
+        : null,
       expense_type: expenseType,
       payment_method: paymentMethod,
       notes: notes.trim() || undefined,
@@ -352,6 +377,31 @@ export default function BookDetail() {
     .reduce((s, e) => s + Number(e.amount), 0);
   const cur = getCurrencySymbol(book?.currency ?? "INR");
 
+  const handleCreateCategory = async (name: string) => {
+    try {
+      const category = await createCategory.mutateAsync(name);
+      toast.success(`Category "${category.name}" created`);
+      return category;
+    } catch (error: any) {
+      toast.error(error.message);
+      throw error;
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    const category = categories.find((entry) => entry.id === categoryId);
+    try {
+      const deletedId = await deleteCategory.mutateAsync(categoryId);
+      toast.success(
+        category ? `Deleted "${category.name}"` : "Category deleted",
+      );
+      return deletedId;
+    } catch (error: any) {
+      toast.error(error.message);
+      throw error;
+    }
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -363,21 +413,37 @@ export default function BookDetail() {
             </Button>
           </Link>
           <div className="flex-1 min-w-0">
-            <button
-              type="button"
-              onClick={openEditBook}
-              className="text-left w-full"
-              title="Edit book"
-            >
-              <h1 className="text-lg sm:text-2xl font-display font-bold truncate hover:underline decoration-dotted">
-                {book?.name ?? "Loading..."}
-              </h1>
-              {book?.description && (
-                <p className="text-muted-foreground text-xs sm:text-sm truncate">
-                  {book.description}
-                </p>
-              )}
-            </button>
+            {canEditBook ? (
+              <button
+                type="button"
+                onClick={openEditBook}
+                className="w-full text-left"
+                title="Edit book"
+              >
+                <div className="flex items-center gap-2">
+                  <h1 className="min-w-0 truncate text-lg font-display font-bold decoration-dotted sm:hover:underline sm:text-2xl">
+                    {book?.name ?? "Loading..."}
+                  </h1>
+                  <Edit className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </div>
+                {book?.description && (
+                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                    {book.description}
+                  </p>
+                )}
+              </button>
+            ) : (
+              <>
+                <h1 className="truncate text-lg font-display font-bold sm:text-2xl">
+                  {book?.name ?? "Loading..."}
+                </h1>
+                {book?.description && (
+                  <p className="truncate text-xs text-muted-foreground sm:text-sm">
+                    {book.description}
+                  </p>
+                )}
+              </>
+            )}
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button
@@ -404,7 +470,15 @@ export default function BookDetail() {
                 </DialogTrigger>
                 <DialogContent fullscreen className="flex flex-col">
                   <DialogHeader className="pb-6 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
-                    <DialogTitle className="text-xl">
+                    <DialogTitle className="text-xl text-left">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-9 w-9 shrink-0"
+                        onClick={() => setOpen(false)}
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                      </Button>
                       {editingExpenseId ? "Edit Expense" : "Add Expense"}
                     </DialogTitle>
                   </DialogHeader>
@@ -421,8 +495,8 @@ export default function BookDetail() {
                                   ? "border-destructive bg-destructive/10 text-destructive"
                                   : "border-primary bg-primary/10 text-primary"
                                 : t.value === "debit"
-                                  ? "border-border text-destructive hover:border-destructive hover:bg-destructive/10 hover:text-destructive"
-                                  : "border-border text-primary hover:border-primary hover:bg-primary/10"
+                                  ? "border-border text-destructive sm:hover:border-destructive sm:hover:bg-destructive/10 sm:hover:text-destructive"
+                                  : "border-border text-primary sm:hover:border-primary sm:hover:bg-primary/10"
                             }`}
                           >
                             <t.icon className="h-4 w-4" />
@@ -487,24 +561,14 @@ export default function BookDetail() {
                           >
                             Category
                           </Label>
-                          <Select
+                          <CategoryPicker
+                            id="expense-category"
+                            categories={categories}
                             value={categoryId}
                             onValueChange={setCategoryId}
-                          >
-                            <SelectTrigger
-                              id="expense-category"
-                              className="h-11"
-                            >
-                              <SelectValue placeholder="Select" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {categories?.map((c) => (
-                                <SelectItem key={c.id} value={c.id}>
-                                  {c.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            onCreateCategory={handleCreateCategory}
+                            onDeleteCategory={handleDeleteCategory}
+                          />
                         </div>
                         <div className="space-y-3">
                           <Label
@@ -813,7 +877,7 @@ export default function BookDetail() {
                         shouldAnimate ? { delay: i * 0.03 } : { duration: 0 }
                       }
                     >
-                      <Card className="glass hover:shadow-md transition-shadow group">
+                      <Card className="glass sm:hover:shadow-md transition-shadow group">
                         <CardContent className="p-3 sm:p-4 flex flex-col gap-3">
                           {/* Top Row: Icon, Title, Amount, Actions */}
                           <div className="flex items-start gap-2 sm:gap-3">
@@ -875,7 +939,7 @@ export default function BookDetail() {
                               {(canDelete || canEdit) && (
                                 <DropdownMenu modal>
                                   <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none h-5 w-5 flex items-center justify-center">
-                                    <EllipsisVertical className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                    <EllipsisVertical className="h-4 w-4 text-muted-foreground sm:hover:text-foreground" />
                                   </DropdownMenuTrigger>
                                   <DropdownMenuPortal>
                                     <DropdownMenuContent
@@ -884,7 +948,7 @@ export default function BookDetail() {
                                     >
                                       {canEdit && (
                                         <DropdownMenuItem
-                                          className="DropdownMenuItem p-2 rounded hover:bg-accent hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
+                                          className="DropdownMenuItem p-2 rounded sm:hover:bg-accent sm:hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
                                           onClick={() =>
                                             handleEditExpense(expense)
                                           }
@@ -897,7 +961,7 @@ export default function BookDetail() {
                                       )}
                                       {canDelete && (
                                         <DropdownMenuItem
-                                          className="DropdownMenuItem p-2 rounded hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
+                                          className="DropdownMenuItem p-2 rounded sm:hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
                                           onClick={() => {
                                             if (confirm("Delete this expense?"))
                                               deleteExpense.mutate(expense.id);
@@ -1009,39 +1073,34 @@ export default function BookDetail() {
         {/* Edit Book Dialog */}
         <Dialog open={editBookOpen} onOpenChange={setEditBookOpen}>
           <DialogContent fullscreen className="flex flex-col">
-            <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
-              <DialogTitle className="text-xl">Edit Book</DialogTitle>
+            <DialogHeader className="pb-6 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
+              <DialogTitle className="text-xl text-left">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 shrink-0"
+                  onClick={() => setEditBookOpen(false)}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                Edit Book
+              </DialogTitle>
             </DialogHeader>
-            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Name</Label>
-                <Input value={editBookName} onChange={(e) => setEditBookName(e.target.value)} className="h-11" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Description</Label>
-                <Textarea value={editBookDesc} onChange={(e) => setEditBookDesc(e.target.value)} rows={3} className="resize-none" />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-sm font-medium">Color</Label>
-                <div className="flex flex-wrap gap-3">
-                  {BOOK_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      type="button"
-                      onClick={() => setEditBookColor(c)}
-                      className={`w-10 h-10 rounded-full border-2 ${editBookColor === c ? "ring-2 ring-primary border-primary" : "border-border"}`}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
-              </div>
+            <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+              <EditBookForm
+                name={editBookName}
+                setName={setEditBookName}
+                description={editBookDesc}
+                setDescription={setEditBookDesc}
+                currency={editBookCurrency}
+                setCurrency={setEditBookCurrency}
+                color={editBookColor}
+                setColor={setEditBookColor}
+                onSave={saveEditBook}
+                isSaving={updateBook.isPending}
+                buttonText="Save Changes"
+              />
             </div>
-            <DialogFooter>
-              <Button className="w-full h-11 sm:w-auto" onClick={saveEditBook} disabled={updateBook.isPending}>
-                {updateBook.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                Save Changes
-              </Button>
-            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

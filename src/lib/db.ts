@@ -44,6 +44,7 @@ export interface CachedCategories {
   id: string;
   data: unknown[];
   cachedAt: number;
+  userId?: string;
 }
 
 export interface CachedDashboard {

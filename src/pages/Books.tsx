@@ -83,6 +83,13 @@ export default function Books() {
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
+  const resetForm = () => {
+    setName("");
+    setDescription("");
+    setCurrency("INR");
+    setColor(COLORS[0]);
+    setEditingBook(null);
+  };
 
   const { data: bookTotals = {} } = useQuery({
     queryKey: ["book-totals", books.length],
@@ -103,14 +110,6 @@ export default function Books() {
     enabled: books.length > 0,
     staleTime: 10_000,
   });
-
-  const resetForm = () => {
-    setName("");
-    setDescription("");
-    setCurrency("INR");
-    setColor(COLORS[0]);
-    setEditingBook(null);
-  };
 
   const handleDuplicate = (bookId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -177,7 +176,7 @@ export default function Books() {
       } else {
         await createBook.mutateAsync({
           name: name.trim(),
-          description: description.trim() || undefined,
+          description: description.trim() || "",
           currency,
           color,
         });
@@ -219,7 +218,7 @@ export default function Books() {
             </DialogTrigger>
             <DialogContent fullscreen className="flex flex-col">
               <DialogHeader className="pb-6 sticky top-0 bg-background/95 backdrop-blur-sm pt-4 px-4 sm:px-6 z-40 border-b">
-                <DialogTitle className="text-xl">
+                <DialogTitle className="text-xl text-left">
                   {editingBook ? "Edit Book" : "Create Expense Book"}
                 </DialogTitle>
               </DialogHeader>
@@ -280,7 +279,7 @@ export default function Books() {
                           className={`w-10 h-10 rounded-full transition-transform border-2 ${
                             color === c
                               ? "ring-2 ring-primary scale-110 border-primary"
-                              : "hover:scale-105 border-border"
+                              : "sm:hover:scale-105 border-border"
                           }`}
                           style={{ backgroundColor: c }}
                         />
@@ -344,7 +343,7 @@ export default function Books() {
                   transition={{ delay: i * 0.05 }}
                 >
                   <Card
-                    className="glass hover:shadow-lg transition-all cursor-pointer group"
+                    className="glass sm:hover:shadow-lg transition-all cursor-pointer group"
                     onClick={() => navigate(`/books/${book.id}`)}
                   >
                     <CardContent className="p-4 space-y-2">
@@ -380,7 +379,7 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-primary"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-primary"
                                 onClick={(e) => openEditDialog(book, e)}
                               >
                                 <Edit className="h-4 w-4" />
@@ -388,7 +387,7 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-blue-600 disabled:opacity-50"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-blue-600 disabled:opacity-50"
                                 onClick={(e) => handleDuplicate(book.id, e)}
                                 disabled={duplicateBook.isPending || !isOnline}
                                 title={
@@ -406,7 +405,7 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground hover:text-destructive"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (
@@ -516,7 +515,7 @@ export default function Books() {
             <AlertDialogAction
               onClick={handleConfirmDuplicate}
               disabled={duplicateBook.isPending}
-              className="order-1 sm:order-2 bg-primary hover:bg-primary/90"
+              className="order-1 sm:order-2 bg-primary sm:hover:bg-primary/90"
             >
               {duplicateBook.isPending ? (
                 <>
