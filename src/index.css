@@ -116,6 +116,7 @@
     @apply bg-background text-foreground font-sans antialiased;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-x: none;
   }
 
   h1, h2, h3, h4, h5, h6 {
