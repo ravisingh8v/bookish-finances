@@ -392,21 +392,6 @@ export default function BookDetail() {
                           </button>
                         ))}
                       </div>
-                      <div className="space-y-3">
-                        <Label
-                          htmlFor="expense-title"
-                          className="text-sm font-medium"
-                        >
-                          Title
-                        </Label>
-                        <Input
-                          id="expense-title"
-                          placeholder="What did you spend on?"
-                          value={title}
-                          onChange={(e) => setTitle(e.target.value)}
-                          className="h-11"
-                        />
-                      </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-3">
                           <Label
@@ -418,6 +403,7 @@ export default function BookDetail() {
                           <Input
                             id="expense-amount"
                             type="number"
+                            inputMode="decimal"
                             placeholder="0.00"
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
@@ -436,9 +422,24 @@ export default function BookDetail() {
                             type="date"
                             value={date}
                             onChange={(e) => setDate(e.target.value)}
-                            className="h-11"
+                            className="h-11 max-w-full"
                           />
                         </div>
+                      </div>
+                      <div className="space-y-3">
+                        <Label
+                          htmlFor="expense-title"
+                          className="text-sm font-medium"
+                        >
+                          Title
+                        </Label>
+                        <Input
+                          id="expense-title"
+                          placeholder="What did you spend on?"
+                          value={title}
+                          onChange={(e) => setTitle(e.target.value)}
+                          className="h-11"
+                        />
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-3">
