@@ -122,11 +122,20 @@
     @apply font-display;
   }
 
-  /* Prevent hover styles from sticking on touch devices */
+  /* Disable hover-based effects on touch devices to avoid sticky :hover after tap */
   @media (hover: none) {
     .group:hover .group-hover\:opacity-100 {
       opacity: 1;
     }
+    *:hover {
+      transition: none !important;
+    }
+  }
+
+  /* Prevent native date input from overflowing on iOS */
+  input[type="date"] {
+    min-width: 0;
+    max-width: 100%;
   }
 }
 
