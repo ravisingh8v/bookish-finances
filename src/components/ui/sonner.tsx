@@ -13,7 +13,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
       duration={2000}
       closeButton
       position="top-center"
-      onClick={() => toast.dismiss()}
       toastOptions={{
         classNames: {
           toast:
