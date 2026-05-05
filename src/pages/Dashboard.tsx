@@ -491,12 +491,13 @@ export default function Dashboard() {
                   >
                     Description (optional)
                   </Label>
-                  <Input
+                  <Textarea
                     id="edit-book-desc"
                     placeholder="What's this book for?"
                     value={editDescription}
                     onChange={(e) => setEditDescription(e.target.value)}
-                    className="h-11"
+                    rows={3}
+                    className="resize-none"
                   />
                 </div>
                 <div className="space-y-3">
