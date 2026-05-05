@@ -59,6 +59,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { toast } from "sonner";
+import { formatINR } from "@/lib/utils";
 
 const PAYMENT_METHODS = [
   "cash",
@@ -549,7 +550,7 @@ export default function BookDetail() {
                   </p>
                   <p className="text-base sm:text-xl font-display font-bold text-success truncate">
                     {cur}
-                    {totalIncome.toLocaleString()}
+                    {formatINR(totalIncome)}
                   </p>
                 </CardContent>
               </Card>
@@ -560,7 +561,7 @@ export default function BookDetail() {
                   </p>
                   <p className="text-base sm:text-xl font-display font-bold text-destructive truncate">
                     {cur}
-                    {totalExpense.toLocaleString()}
+                    {formatINR(totalExpense)}
                   </p>
                 </CardContent>
               </Card>
@@ -571,7 +572,7 @@ export default function BookDetail() {
                   </p>
                   <p className="text-base sm:text-xl font-display font-bold truncate">
                     {cur}
-                    {(totalIncome - totalExpense).toLocaleString()}
+                    {formatINR(totalIncome - totalExpense)}
                   </p>
                 </CardContent>
               </Card>
