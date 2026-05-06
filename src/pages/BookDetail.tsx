@@ -505,7 +505,10 @@ export default function BookDetail() {
                         variant="ghost"
                         size="icon"
                         className="h-9 w-9 shrink-0"
-                        onClick={() => setOpen(false)}
+                        onClick={() => {
+                          setOpen(false);
+                          resetForm();
+                        }}
                       >
                         <ArrowLeft className="h-4 w-4" />
                       </Button>
@@ -550,6 +553,7 @@ export default function BookDetail() {
                             value={amount}
                             onChange={(e) => setAmount(e.target.value)}
                             className="h-11"
+                            autoFocus
                           />
                         </div>
 

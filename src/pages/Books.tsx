@@ -221,7 +221,10 @@ export default function Books() {
                     variant="ghost"
                     size="icon"
                     className="h-9 w-9 shrink-0"
-                    onClick={() => setOpen(false)}
+                    onClick={() => {
+                      setOpen(false);
+                      resetForm();
+                    }}
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
@@ -236,6 +239,7 @@ export default function Books() {
                     </Label>
                     <Input
                       id="book-name"
+                      autoFocus
                       placeholder="e.g., Trip with Friends"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
