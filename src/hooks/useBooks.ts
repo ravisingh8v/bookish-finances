@@ -44,11 +44,19 @@ type BookUpdate = BookInput & {
   bookId: string;
 };
 
+function sortBooksByCreatedDesc(books: Book[]) {
+  return [...books].sort(
+    (a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+}
+
 async function cacheBooks(books: Book[]) {
-  setStoredBooks(books);
+  const sortedBooks = sortBooksByCreatedDesc(books);
+  setStoredBooks(sortedBooks);
   await db.books.clear();
   await Promise.all(
-    books.slice(0, MAX_BOOKS_CACHE).map((book) =>
+    sortedBooks.slice(0, MAX_BOOKS_CACHE).map((book) =>
       db.books.put({
         id: book.id,
         data: book,
@@ -81,11 +89,13 @@ async function getCachedBooksAsync(): Promise<Book[]> {
       .reverse()
       .limit(MAX_BOOKS_CACHE)
       .toArray();
-    if (cached.length > 0) return cached.map((entry) => entry.data as Book);
+    if (cached.length > 0) {
+      return sortBooksByCreatedDesc(cached.map((entry) => entry.data as Book));
+    }
   } catch {
     // IndexedDB may fail
   }
-  return getCachedBooksSync();
+  return sortBooksByCreatedDesc(getCachedBooksSync());
 }
 
 export function useBooks() {
@@ -106,7 +116,7 @@ export function useBooks() {
   useEffect(() => {
     let active = true;
     getCachedBooksAsync().then((books) => {
-      if (active) setLocalBooks(books);
+      if (active) setLocalBooks(sortBooksByCreatedDesc(books));
     });
     return () => {
       active = false;
@@ -121,10 +131,7 @@ export function useBooks() {
       if (!user) return [];
 
       if (!isOnline) {
-        return cachedBooks.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
+        return sortBooksByCreatedDesc(cachedBooks);
       }
 
       try {
@@ -139,7 +146,7 @@ export function useBooks() {
         );
         if (error) throw error;
 
-        const books = (data ?? []) as Book[];
+        const books = sortBooksByCreatedDesc((data ?? []) as Book[]);
         await cacheBooks(books);
         void preloadExpenses(books.map((book) => book.id), user.id).then(
           (cachedAnyExpenses) => {
@@ -153,16 +160,9 @@ export function useBooks() {
         return books;
       } catch (err) {
         if (isOfflineLikeError(err)) {
-          return cachedBooks.sort(
-            (a, b) =>
-              new Date(b.created_at).getTime() -
-              new Date(a.created_at).getTime(),
-          );
+          return sortBooksByCreatedDesc(cachedBooks);
         }
-        return cachedBooks.sort(
-          (a, b) =>
-            new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-        );
+        return sortBooksByCreatedDesc(cachedBooks);
       }
     },
     enabled: !!user,
@@ -423,6 +423,7 @@ async function preloadExpenses(bookIds: string[], userId?: string) {
           .from("expenses")
           .select("*, categories(name, icon, color)")
           .eq("book_id", bookId)
+          .order("date", { ascending: false })
           .order("created_at", { ascending: false })
           .limit(20);
         if (error) return;

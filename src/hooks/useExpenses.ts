@@ -79,6 +79,28 @@ type ExpenseUpdate = {
 const MAX_EXPENSES_CACHE = 50;
 const PAGE_SIZE = 20;
 
+function getExpenseDateKey(expense: Pick<Expense, "date">) {
+  return expense.date?.split("T")[0] ?? "";
+}
+
+function getTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function sortExpensesByDateDesc(expenses: Expense[]) {
+  return [...expenses].sort((a, b) => {
+    const dateDiff = getExpenseDateKey(b).localeCompare(getExpenseDateKey(a));
+    if (dateDiff !== 0) return dateDiff;
+
+    const createdDiff = getTimestamp(b.created_at) - getTimestamp(a.created_at);
+    if (createdDiff !== 0) return createdDiff;
+
+    return b.id.localeCompare(a.id);
+  });
+}
+
 function getCategoryCacheId(userId?: string) {
   return `categories:${userId || getCurrentUserId() || "_anonymous"}`;
 }
@@ -167,10 +189,15 @@ async function putExpenses(
   expenses: Expense[],
   userId?: string,
 ) {
-  setStoredExpenses(bookId, expenses.slice(0, MAX_EXPENSES_CACHE), userId);
+  const sortedExpenses = sortExpensesByDateDesc(expenses);
+  setStoredExpenses(
+    bookId,
+    sortedExpenses.slice(0, MAX_EXPENSES_CACHE),
+    userId,
+  );
   await db.expenses.put({
     id: bookId,
-    expenses: expenses.slice(0, MAX_EXPENSES_CACHE),
+    expenses: sortedExpenses.slice(0, MAX_EXPENSES_CACHE),
     userId: userId || getCurrentUserId(),
     cachedAt: Date.now(),
   });
@@ -182,7 +209,7 @@ async function updateCachedExpenses(
   userId?: string,
 ) {
   const current = getStoredExpenses<Expense>(bookId, userId);
-  const next = updater(current);
+  const next = sortExpensesByDateDesc(updater(current));
   setStoredExpenses(bookId, next.slice(0, MAX_EXPENSES_CACHE), userId);
   await db.expenses.put({
     id: bookId,
@@ -236,7 +263,7 @@ export function useExpenses(bookId: string) {
     let active = true;
 
     getCachedExpenses(bookId, userId).then((expenses) => {
-      if (active) setLocalExpenses(expenses);
+      if (active) setLocalExpenses(sortExpensesByDateDesc(expenses));
     });
 
     return () => {
@@ -254,12 +281,7 @@ export function useExpenses(bookId: string) {
       // CRITICAL FIX: Immediately return cached data when offline
       // This prevents the first-time offline switching failure
       if (!isOnline) {
-        return cachedExpenses.sort((a, b) => {
-          const aTime = new Date(a.updated_at || a.created_at).getTime();
-          const bTime = new Date(b.updated_at || b.created_at).getTime();
-          if (bTime !== aTime) return bTime - aTime; // Newest first
-          return b.id.localeCompare(a.id); // Tie-breaker by ID
-        });
+        return sortExpensesByDateDesc(cachedExpenses);
       }
 
       try {
@@ -268,7 +290,7 @@ export function useExpenses(bookId: string) {
             .from("expenses")
             .select("*, categories(name, icon, color)")
             .eq("book_id", bookId)
-            .order("updated_at", { ascending: false })
+            .order("date", { ascending: false })
             .order("created_at", { ascending: false })
             .limit(MAX_EXPENSES_CACHE),
         );
@@ -309,37 +331,22 @@ export function useExpenses(bookId: string) {
         const offlineOnly = cachedExpenses.filter((expense) =>
           expense.id.startsWith("temp_"),
         );
-        const merged = [
+        const mergedExpenses = [
           ...offlineOnly,
           ...remoteExpenses.filter(
             (expense) =>
               !offlineOnly.some((offline) => offline.id === expense.id),
           ),
-        ].sort((a, b) => {
-          // Sort by updated_at/created_at (newest first), then by ID for tie-breaking
-          const aTime = new Date(a.updated_at || a.created_at).getTime();
-          const bTime = new Date(b.updated_at || b.created_at).getTime();
-          if (bTime !== aTime) return bTime - aTime; // Newest first
-          return b.id.localeCompare(a.id); // Tie-breaker by ID
-        });
+        ];
+        const merged = sortExpensesByDateDesc(mergedExpenses);
 
         await putExpenses(bookId, merged, userId);
         return merged;
       } catch (err) {
         if (isOfflineLikeError(err)) {
-          return cachedExpenses.sort((a, b) => {
-            const aTime = new Date(a.updated_at || a.created_at).getTime();
-            const bTime = new Date(b.updated_at || b.created_at).getTime();
-            if (bTime !== aTime) return bTime - aTime; // Newest first
-            return b.id.localeCompare(a.id); // Tie-breaker by ID
-          });
+          return sortExpensesByDateDesc(cachedExpenses);
         }
-        return cachedExpenses.sort((a, b) => {
-          const aTime = new Date(a.updated_at || a.created_at).getTime();
-          const bTime = new Date(b.updated_at || b.created_at).getTime();
-          if (bTime !== aTime) return bTime - aTime; // Newest first
-          return b.id.localeCompare(a.id); // Tie-breaker by ID
-        });
+        return sortExpensesByDateDesc(cachedExpenses);
       }
     },
     enabled: !!user && !!bookId && !!userId,
@@ -365,11 +372,12 @@ export function useExpenses(bookId: string) {
 
       queryClient.setQueryData(
         ["expenses", bookId],
-        (old: Expense[] | undefined) => [optimistic, ...(old ?? [])],
+        (old: Expense[] | undefined) =>
+          sortExpensesByDateDesc([optimistic, ...(old ?? [])]),
       );
       await updateCachedExpenses(
         bookId,
-        (current) => [optimistic, ...current],
+        (current) => sortExpensesByDateDesc([optimistic, ...current]),
         uid,
       );
       await invalidateBookTotals();
@@ -409,19 +417,23 @@ export function useExpenses(bookId: string) {
       queryClient.setQueryData(
         ["expenses", bookId],
         (old: Expense[] | undefined) =>
-          (old ?? []).map((expense) =>
-            expense.id === params.expenseId
-              ? { ...expense, ...patch }
-              : expense,
+          sortExpensesByDateDesc(
+            (old ?? []).map((expense) =>
+              expense.id === params.expenseId
+                ? { ...expense, ...patch }
+                : expense,
+            ),
           ),
       );
       await updateCachedExpenses(
         bookId,
         (current) =>
-          current.map((expense) =>
-            expense.id === params.expenseId
-              ? { ...expense, ...patch }
-              : expense,
+          sortExpensesByDateDesc(
+            current.map((expense) =>
+              expense.id === params.expenseId
+                ? { ...expense, ...patch }
+                : expense,
+            ),
           ),
         uid,
       );
@@ -544,14 +556,20 @@ export function useExpenses(bookId: string) {
         (old: Expense[] | undefined) => {
           const current = old ?? [];
           if (current.some((entry) => entry.id === expense.id)) return current;
-          return [{ ...expense, _offline: !isOnline }, ...current];
+          return sortExpensesByDateDesc([
+            { ...expense, _offline: !isOnline },
+            ...current,
+          ]);
         },
       );
       await updateCachedExpenses(
         bookId,
         (current) => {
           if (current.some((entry) => entry.id === expense.id)) return current;
-          return [{ ...expense, _offline: !isOnline }, ...current];
+          return sortExpensesByDateDesc([
+            { ...expense, _offline: !isOnline },
+            ...current,
+          ]);
         },
         uid,
       );
@@ -617,6 +635,7 @@ export function useExpenses(bookId: string) {
           .from("expenses")
           .select("*, categories(name, icon, color)")
           .eq("book_id", bookId)
+          .order("date", { ascending: false })
           .order("created_at", { ascending: false })
           .range(currentCount, currentCount + PAGE_SIZE - 1),
       );
@@ -624,10 +643,8 @@ export function useExpenses(bookId: string) {
 
       queryClient.setQueryData(
         ["expenses", bookId],
-        (old: Expense[] | undefined) => [
-          ...(old ?? []),
-          ...(data as Expense[]),
-        ],
+        (old: Expense[] | undefined) =>
+          sortExpensesByDateDesc([...(old ?? []), ...(data as Expense[])]),
       );
     } catch {
       // Ignore pagination errors

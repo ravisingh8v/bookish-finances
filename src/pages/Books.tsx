@@ -89,6 +89,8 @@ export default function Books() {
   const [includemembers, setIncludemembers] = useState(false);
   const [resyncing, setResyncing] = useState(false);
 
+  const cacheUserId = user?.id || getUserId();
+
   const handleResync = async () => {
     if (!isOnline) {
       toast.error("You need to be online to re-sync data");
@@ -122,8 +124,6 @@ export default function Books() {
     .map((book) => book.id)
     .sort((a, b) => a.localeCompare(b))
     .join("|");
-  const cacheUserId = user?.id || getUserId();
-
   const { data: bookTotals = {} } = useQuery({
     queryKey: ["book-totals", bookIdsKey, cacheUserId, isOnline],
     queryFn: async () => {
@@ -222,17 +222,19 @@ export default function Books() {
   return (
     <DashboardLayout>
       <div className="space-y-6 mt-5">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h1 className="text-2xl font-display font-bold">Expense Books</h1>
             <p className="text-muted-foreground text-sm mt-1">
               Organize your expenses into separate books
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
             <Button
               variant="outline"
               size="sm"
+              className="whitespace-nowrap"
+              aria-label="Re-sync data"
               onClick={handleResync}
               disabled={resyncing || !isOnline}
               title={
@@ -242,11 +244,11 @@ export default function Books() {
               }
             >
               {resyncing ? (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
-                <RefreshCw className="h-4 w-4 mr-2" />
+                <RefreshCw className="h-4 w-4" />
               )}
-              Re-sync Data
+              <span className="hidden sm:inline">Re-sync Data</span>
             </Button>
             <Dialog
               open={open}
@@ -262,104 +264,103 @@ export default function Books() {
                 </Button>
               </DialogTrigger>
 
-            <DialogContent fullscreen className="flex flex-col">
-              <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-2 px-4 sm:px-6 z-40 border-b">
-                <DialogTitle className="text-xl text-left">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-9 w-9 shrink-0"
-                    onClick={() => {
-                      setOpen(false);
-                      resetForm();
-                    }}
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                  </Button>
-                  {editingBook ? "Edit Book" : "Create Expense Book"}
-                </DialogTitle>
-              </DialogHeader>
-              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
-                <div className="space-y-4">
-                  <div className="space-y-3">
-                    <Label htmlFor="book-name" className="text-sm font-medium">
-                      Name
-                    </Label>
-                    <Input
-                      id="book-name"
-                      autoFocus
-                      placeholder="e.g., Trip with Friends"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="h-11"
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <Label htmlFor="book-desc" className="text-sm font-medium">
-                      Description (optional)
-                    </Label>
-                    <Textarea
-                      id="book-desc"
-                      placeholder="What's this book for?"
-                      value={description}
-                      onChange={(e) => setDescription(e.target.value)}
-                      rows={3}
-                      className="resize-none"
-                    />
-                  </div>
-                  <div className="space-y-3">
-                    <Label
-                      htmlFor="book-currency"
-                      className="text-sm font-medium"
+              <DialogContent fullscreen className="flex flex-col">
+                <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-2 px-4 sm:px-6 z-40 border-b">
+                  <DialogTitle className="text-xl text-left">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-9 w-9 shrink-0"
+                      onClick={() => {
+                        setOpen(false);
+                        resetForm();
+                      }}
                     >
-                      Currency
-                    </Label>
-                    <Select value={currency} onValueChange={setCurrency}>
-                      <SelectTrigger id="book-currency" className="h-11">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CURRENCIES.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-3">
-                    <Label className="text-sm font-medium">Color</Label>
-                    <div className="flex flex-wrap gap-3">
-                      {COLORS.map((c) => (
-                        <button
-                          key={c}
-                          onClick={() => setColor(c)}
-                          className={`w-10 h-10 rounded-full transition-transform border-2 ${
-                            color === c
+                      <ArrowLeft className="h-4 w-4" />
+                    </Button>
+                    {editingBook ? "Edit Book" : "Create Expense Book"}
+                  </DialogTitle>
+                </DialogHeader>
+                <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4">
+                  <div className="space-y-4">
+                    <div className="space-y-3">
+                      <Label htmlFor="book-name" className="text-sm font-medium">
+                        Name
+                      </Label>
+                      <Input
+                        id="book-name"
+                        autoFocus
+                        placeholder="e.g., Trip with Friends"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="h-11"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <Label htmlFor="book-desc" className="text-sm font-medium">
+                        Description (optional)
+                      </Label>
+                      <Textarea
+                        id="book-desc"
+                        placeholder="What's this book for?"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={3}
+                        className="resize-none"
+                      />
+                    </div>
+                    <div className="space-y-3">
+                      <Label
+                        htmlFor="book-currency"
+                        className="text-sm font-medium"
+                      >
+                        Currency
+                      </Label>
+                      <Select value={currency} onValueChange={setCurrency}>
+                        <SelectTrigger id="book-currency" className="h-11">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {CURRENCIES.map((c) => (
+                            <SelectItem key={c} value={c}>
+                              {c}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-3">
+                      <Label className="text-sm font-medium">Color</Label>
+                      <div className="flex flex-wrap gap-3">
+                        {COLORS.map((c) => (
+                          <button
+                            key={c}
+                            onClick={() => setColor(c)}
+                            className={`w-10 h-10 rounded-full transition-transform border-2 ${color === c
                               ? "ring-2 ring-primary scale-110 border-primary"
                               : "sm:hover:scale-105 border-border"
-                          }`}
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
+                              }`}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  className="w-full h-11 sm:w-auto"
-                  onClick={handleSave}
-                  disabled={createBook.isPending || updateBook.isPending}
-                >
-                  {(createBook.isPending || updateBook.isPending) && (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  )}
-                  {editingBook ? "Save Changes" : "Create Book"}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+                <DialogFooter>
+                  <Button
+                    className="w-full h-11 sm:w-auto"
+                    onClick={handleSave}
+                    disabled={createBook.isPending || updateBook.isPending}
+                  >
+                    {(createBook.isPending || updateBook.isPending) && (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    )}
+                    {editingBook ? "Save Changes" : "Create Book"}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
@@ -481,12 +482,12 @@ export default function Books() {
                           )}
                         </div>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <h3 className="font-display font-semibold truncate">
                           {book.name}
                         </h3>
                         {book.description && (
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          <p className="text-xs text-muted-foreground mt-0.5 break-words overflow-hidden max-h-[2.75rem] leading-tight">
                             {book.description}
                           </p>
                         )}

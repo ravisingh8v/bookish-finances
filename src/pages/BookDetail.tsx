@@ -116,6 +116,58 @@ function getRequiredCategoryId(
   );
 }
 
+function getExpenseDateKey(expense: { date?: string | null }) {
+  return expense.date?.split("T")[0] ?? "";
+}
+
+function getTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function sortExpensesByDateDesc<
+  T extends { date?: string | null; created_at?: string | null; id: string },
+>(expenses: T[]) {
+  return [...expenses].sort((a, b) => {
+    const dateDiff = getExpenseDateKey(b).localeCompare(getExpenseDateKey(a));
+    if (dateDiff !== 0) return dateDiff;
+
+    const createdDiff = getTimestamp(b.created_at) - getTimestamp(a.created_at);
+    if (createdDiff !== 0) return createdDiff;
+
+    return b.id.localeCompare(a.id);
+  });
+}
+
+function formatExpenseDate(date?: string | null) {
+  const [year, month, day] = getExpenseDateKey({ date }).split("-").map(Number);
+  if (!year || !month || !day) return "";
+
+  return new Date(year, month - 1, day).toLocaleDateString("en-IN", {
+    month: "short",
+    day: "numeric",
+    year: "2-digit",
+  });
+}
+
+function formatExpenseActivityTime(expense: {
+  created_at?: string | null;
+  updated_at?: string | null;
+}) {
+  const timestamp =
+    expense.updated_at && expense.updated_at !== expense.created_at
+      ? expense.updated_at
+      : expense.created_at;
+  if (!timestamp) return "";
+
+  return new Date(timestamp).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
+
 const getCurrencySymbol = (c: string) =>
   ({ INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" })[c] ?? c + " ";
 
@@ -391,7 +443,7 @@ export default function BookDetail() {
     }
   };
 
-  const filtered = expenses.filter((e) => {
+  const filtered = sortExpensesByDateDesc(expenses).filter((e) => {
     if (search && !e.title.toLowerCase().includes(search.toLowerCase()))
       return false;
     if (filterType !== "all" && e.expense_type !== filterType) return false;
@@ -1047,21 +1099,12 @@ export default function BookDetail() {
                               )}
                           </div>
 
-                          {/* Bottom Row: Single Timestamp (No Label) */}
+                          {/* Bottom Row: Expense Date + Activity Time */}
                           <div className="text-[9px] sm:text-[10px] text-muted-foreground/50 pt-1.5 border-t border-border/50 pl-0 sm:pl-10">
-                            {new Date(
-                              expense.updated_at &&
-                                expense.updated_at !== expense.created_at
-                                ? expense.updated_at
-                                : expense.created_at,
-                            ).toLocaleString("en-IN", {
-                              month: "short",
-                              day: "numeric",
-                              year: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                              hour12: true,
-                            })}
+                            {formatExpenseDate(expense.date)}
+                            {formatExpenseActivityTime(expense)
+                              ? ` • ${formatExpenseActivityTime(expense)}`
+                              : ""}
                           </div>
                         </CardContent>
                       </Card>
