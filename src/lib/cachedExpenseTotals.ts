@@ -56,6 +56,50 @@ export async function getBookTotalsFromCache(
   return totals;
 }
 
+/**
+ * Fetch accurate book totals. When online, queries ALL expenses from the
+ * server (cache only holds the latest 20-50, so cache totals are partial).
+ * Falls back to cache when offline or on error.
+ */
+export async function getBookTotals(
+  bookIds: string[],
+  userId?: string,
+  isOnline = true,
+) {
+  if (!isOnline || bookIds.length === 0) {
+    return getBookTotalsFromCache(bookIds, userId);
+  }
+
+  const realIds = bookIds.filter((id) => !id.startsWith("temp_"));
+  const totals: Record<string, number> = {};
+  for (const id of bookIds) totals[id] = 0;
+
+  try {
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("book_id, amount, expense_type")
+      .in("book_id", realIds);
+    if (error) throw error;
+
+    for (const row of data ?? []) {
+      const amount = Number(row.amount) || 0;
+      const delta = row.expense_type === "credit" ? amount : -amount;
+      totals[row.book_id] = (totals[row.book_id] ?? 0) + delta;
+    }
+
+    // Temp (offline-created) books: still use cache
+    const tempIds = bookIds.filter((id) => id.startsWith("temp_"));
+    if (tempIds.length > 0) {
+      const tempTotals = await getBookTotalsFromCache(tempIds, userId);
+      Object.assign(totals, tempTotals);
+    }
+
+    return totals;
+  } catch {
+    return getBookTotalsFromCache(bookIds, userId);
+  }
+}
+
 export async function getDashboardStatsFromCache(
   bookIds: string[],
   userId?: string,
