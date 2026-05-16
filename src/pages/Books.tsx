@@ -32,7 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { getUserId, useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
-import { getBookTotalsFromCache } from "@/lib/cachedExpenseTotals";
+import { getBookTotals } from "@/lib/cachedExpenseTotals";
 import { clearCachedOfflineData } from "@/lib/offlineJournal";
 import { formatINR } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -125,11 +125,12 @@ export default function Books() {
   const cacheUserId = user?.id || getUserId();
 
   const { data: bookTotals = {} } = useQuery({
-    queryKey: ["book-totals", bookIdsKey, cacheUserId],
+    queryKey: ["book-totals", bookIdsKey, cacheUserId, isOnline],
     queryFn: async () => {
-      return await getBookTotalsFromCache(
+      return await getBookTotals(
         books.map((book) => book.id),
         cacheUserId,
+        isOnline,
       );
     },
     enabled: books.length > 0,
