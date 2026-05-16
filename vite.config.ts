@@ -109,7 +109,7 @@ export default defineConfig(({ mode }) => {
                     method: "GET" as const,
                     options: {
                       cacheName: "api-cache",
-                      networkTimeoutSeconds: 5,
+                      networkTimeoutSeconds: 3,
                       cacheableResponse: {
                         statuses: [0, 200],
                       },
