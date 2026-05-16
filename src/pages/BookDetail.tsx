@@ -912,7 +912,10 @@ export default function BookDetail() {
                         shouldAnimate ? { delay: i * 0.03 } : { duration: 0 }
                       }
                     >
-                      <Card className="glass sm:hover:shadow-md transition-shadow group">
+                      <Card
+                        className={`glass sm:hover:shadow-md transition-shadow group ${canEdit ? "cursor-pointer" : ""}`}
+                        onClick={canEdit ? () => handleEditExpense(expense) : undefined}
+                      >
                         <CardContent className="p-3 sm:p-4 flex flex-col gap-3">
                           {/* Top Row: Icon, Title, Amount, Actions */}
                           <div className="flex items-start gap-2 sm:gap-3">
