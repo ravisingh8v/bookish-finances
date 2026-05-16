@@ -976,7 +976,10 @@ export default function BookDetail() {
                               </p>
                               {(canDelete || canEdit) && (
                                 <DropdownMenu modal>
-                                  <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none h-5 w-5 flex items-center justify-center">
+                                  <DropdownMenuTrigger
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="cursor-pointer relative focus:outline-none h-5 w-5 flex items-center justify-center"
+                                  >
                                     <EllipsisVertical className="h-4 w-4 text-muted-foreground sm:hover:text-foreground" />
                                   </DropdownMenuTrigger>
                                   <DropdownMenuPortal>
