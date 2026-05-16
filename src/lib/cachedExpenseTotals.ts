@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { getStoredExpenses } from "@/lib/offlineJournal";
+import { supabase } from "@/integrations/supabase/client";
 
 type CachedExpenseLike = {
   amount?: number | string | null;
