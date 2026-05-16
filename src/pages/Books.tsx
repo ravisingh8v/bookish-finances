@@ -228,19 +228,39 @@ export default function Books() {
               Organize your expenses into separate books
             </p>
           </div>
-          <Dialog
-            open={open}
-            onOpenChange={(v) => {
-              if (!v) resetForm();
-              setOpen(v);
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Book
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResync}
+              disabled={resyncing || !isOnline}
+              title={
+                !isOnline
+                  ? "Connect to internet to re-sync"
+                  : "Clear local cache and re-fetch fresh data"
+              }
+            >
+              {resyncing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Re-sync Data
+            </Button>
+            <Dialog
+              open={open}
+              onOpenChange={(v) => {
+                if (!v) resetForm();
+                setOpen(v);
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Book
+                </Button>
+              </DialogTrigger>
+
             <DialogContent fullscreen className="flex flex-col">
               <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-2 px-4 sm:px-6 z-40 border-b">
                 <DialogTitle className="text-xl text-left">
