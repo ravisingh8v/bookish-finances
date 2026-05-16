@@ -217,5 +217,34 @@ export async function clearUserCache(userId?: string) {
   await db.syncQueue.where("userId").equals(uid).delete();
 }
 
+/**
+ * Clear cached offline data (books, expenses, categories, dashboard) for a user
+ * but PRESERVE the sync queue so pending offline writes are not lost.
+ * Used by the "Re-sync Data" recovery action.
+ */
+export async function clearCachedOfflineData(userId?: string) {
+  const uid = userId || getCurrentUserId();
+  // Clear localStorage cache buckets (books + expenses), preserve queue
+  if (canUseStorage()) {
+    try {
+      window.localStorage.removeItem(scopedKey(BOOKS_KEY, uid));
+      window.localStorage.removeItem(scopedKey(EXPENSES_KEY, uid));
+    } catch {
+      // ignore
+    }
+  }
+  // Clear IndexedDB caches; keep syncQueue + deletedExpenses untouched
+  try {
+    await Promise.all([
+      db.books.clear(),
+      db.expenses.clear(),
+      db.categories.clear(),
+      db.dashboard.clear(),
+    ]);
+  } catch {
+    // ignore
+  }
+}
+
 // Export userId getter for external use
 export { getCurrentUserId };

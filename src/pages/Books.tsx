@@ -33,8 +33,9 @@ import { getUserId, useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { getBookTotalsFromCache } from "@/lib/cachedExpenseTotals";
+import { clearCachedOfflineData } from "@/lib/offlineJournal";
 import { formatINR } from "@/lib/utils";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -43,6 +44,7 @@ import {
   Edit,
   Loader2,
   Plus,
+  RefreshCw,
   Trash2,
   Users,
 } from "lucide-react";
@@ -65,6 +67,7 @@ export default function Books() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { isOnline } = useOfflineSync();
+  const queryClient = useQueryClient();
   const {
     books,
     isLoading,
@@ -84,6 +87,30 @@ export default function Books() {
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
+
+  const handleResync = async () => {
+    if (!isOnline) {
+      toast.error("You need to be online to re-sync data");
+      return;
+    }
+    setResyncing(true);
+    try {
+      await clearCachedOfflineData(user?.id || getUserId());
+      await queryClient.invalidateQueries({ queryKey: ["books"] });
+      await queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      await queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await queryClient.refetchQueries({ queryKey: ["books"] });
+      toast.success("Offline data refreshed");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to re-sync data");
+    } finally {
+      setResyncing(false);
+    }
+  };
+
   const resetForm = () => {
     setName("");
     setDescription("");
@@ -201,19 +228,39 @@ export default function Books() {
               Organize your expenses into separate books
             </p>
           </div>
-          <Dialog
-            open={open}
-            onOpenChange={(v) => {
-              if (!v) resetForm();
-              setOpen(v);
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                New Book
-              </Button>
-            </DialogTrigger>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleResync}
+              disabled={resyncing || !isOnline}
+              title={
+                !isOnline
+                  ? "Connect to internet to re-sync"
+                  : "Clear local cache and re-fetch fresh data"
+              }
+            >
+              {resyncing ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4 mr-2" />
+              )}
+              Re-sync Data
+            </Button>
+            <Dialog
+              open={open}
+              onOpenChange={(v) => {
+                if (!v) resetForm();
+                setOpen(v);
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Book
+                </Button>
+              </DialogTrigger>
+
             <DialogContent fullscreen className="flex flex-col">
               <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-2 px-4 sm:px-6 z-40 border-b">
                 <DialogTitle className="text-xl text-left">
@@ -312,6 +359,7 @@ export default function Books() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {isLoading ? (
