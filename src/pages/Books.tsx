@@ -67,6 +67,7 @@ export default function Books() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { isOnline } = useOfflineSync();
+  const queryClient = useQueryClient();
   const {
     books,
     isLoading,
@@ -86,6 +87,30 @@ export default function Books() {
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
+  const [resyncing, setResyncing] = useState(false);
+
+  const handleResync = async () => {
+    if (!isOnline) {
+      toast.error("You need to be online to re-sync data");
+      return;
+    }
+    setResyncing(true);
+    try {
+      await clearCachedOfflineData(user?.id || getUserId());
+      await queryClient.invalidateQueries({ queryKey: ["books"] });
+      await queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      await queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      await queryClient.invalidateQueries({ queryKey: ["categories"] });
+      await queryClient.refetchQueries({ queryKey: ["books"] });
+      toast.success("Offline data refreshed");
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to re-sync data");
+    } finally {
+      setResyncing(false);
+    }
+  };
+
   const resetForm = () => {
     setName("");
     setDescription("");
