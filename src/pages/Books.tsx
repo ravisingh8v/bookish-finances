@@ -125,11 +125,12 @@ export default function Books() {
   const cacheUserId = user?.id || getUserId();
 
   const { data: bookTotals = {} } = useQuery({
-    queryKey: ["book-totals", bookIdsKey, cacheUserId],
+    queryKey: ["book-totals", bookIdsKey, cacheUserId, isOnline],
     queryFn: async () => {
-      return await getBookTotalsFromCache(
+      return await getBookTotals(
         books.map((book) => book.id),
         cacheUserId,
+        isOnline,
       );
     },
     enabled: books.length > 0,
