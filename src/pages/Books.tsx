@@ -359,6 +359,7 @@ export default function Books() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {isLoading ? (
