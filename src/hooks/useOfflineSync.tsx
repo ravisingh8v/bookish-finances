@@ -868,7 +868,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
     ) {
       navigator.serviceWorker.ready
         .then((reg) => {
-          reg.sync.register("background-sync-queue");
+          (reg as any).sync?.register("background-sync-queue");
         })
         .catch(console.error);
     }
