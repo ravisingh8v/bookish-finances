@@ -912,7 +912,10 @@ export default function BookDetail() {
                         shouldAnimate ? { delay: i * 0.03 } : { duration: 0 }
                       }
                     >
-                      <Card className="glass sm:hover:shadow-md transition-shadow group">
+                      <Card
+                        className={`glass sm:hover:shadow-md transition-shadow group ${canEdit ? "cursor-pointer" : ""}`}
+                        onClick={canEdit ? () => handleEditExpense(expense) : undefined}
+                      >
                         <CardContent className="p-3 sm:p-4 flex flex-col gap-3">
                           {/* Top Row: Icon, Title, Amount, Actions */}
                           <div className="flex items-start gap-2 sm:gap-3">
@@ -973,7 +976,10 @@ export default function BookDetail() {
                               </p>
                               {(canDelete || canEdit) && (
                                 <DropdownMenu modal>
-                                  <DropdownMenuTrigger className="cursor-pointer relative focus:outline-none h-5 w-5 flex items-center justify-center">
+                                  <DropdownMenuTrigger
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="cursor-pointer relative focus:outline-none h-5 w-5 flex items-center justify-center"
+                                  >
                                     <EllipsisVertical className="h-4 w-4 text-muted-foreground sm:hover:text-foreground" />
                                   </DropdownMenuTrigger>
                                   <DropdownMenuPortal>
