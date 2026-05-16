@@ -27,14 +27,18 @@ export function DashboardLayout({ children }: { children: ReactNode }) {
             <header className="h-14 flex items-center border-b border-border px-4 gap-4 bg-card/50 backdrop-blur-sm sticky top-0 z-30">
               <SidebarTrigger />
               <div className="flex-1" />
-              <div className="flex items-center gap-3">
+              <Link
+                to="/settings"
+                className="flex items-center gap-3 rounded-full px-1 py-1 sm:hover:bg-accent/50 transition-colors"
+                aria-label="Open settings"
+              >
                 <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
                   {profile?.display_name?.[0]?.toUpperCase() ?? "U"}
                 </div>
                 <span className="text-sm font-medium hidden sm:block">
                   {profile?.display_name ?? "User"}
                 </span>
-              </div>
+              </Link>
             </header>
             <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-auto">
               {children}
