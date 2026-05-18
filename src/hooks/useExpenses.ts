@@ -2,6 +2,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/db";
 import { isOfflineLikeError, withNetworkTimeout } from "@/lib/network";
 import {
+  recordBookTotalDelta,
+  signedExpenseAmount,
+} from "@/lib/cachedExpenseTotals";
+import {
   getCurrentUserId,
   getStoredExpenses,
   setStoredExpenses,
