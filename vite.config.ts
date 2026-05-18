@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         includeAssets: ["favicon.ico", "robots.txt", "placeholder.svg"],
         injectRegister: "script",
-        registerType: "prompt",
+        registerType: "autoUpdate",
         workbox: {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
