@@ -384,6 +384,7 @@ export function useExpenses(bookId: string) {
         (current) => sortExpensesByDateDesc([optimistic, ...current]),
         uid,
       );
+      recordBookTotalDelta(bookId, signedExpenseAmount(optimistic), uid);
       await invalidateBookTotals();
       await queueAction({
         type: "create_expense",
