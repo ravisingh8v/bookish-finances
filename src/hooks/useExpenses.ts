@@ -590,6 +590,7 @@ export function useExpenses(bookId: string) {
         },
         uid,
       );
+      recordBookTotalDelta(bookId, signedExpenseAmount(expense), uid);
       await invalidateBookTotals();
       await db.deletedExpenses.delete(expenseId);
 
