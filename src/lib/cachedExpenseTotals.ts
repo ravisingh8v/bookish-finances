@@ -188,16 +188,15 @@ export async function getBookTotals(
       }
     }
 
-    // Persist baseline + reset deltas for these books (server is now truth).
+    // Persist baseline. Keep deltas — they represent unsynced offline
+    // mutations and will be cleared by useOfflineSync after the queue drains.
     const baseline = getBaseline(userId);
     const delta = getDelta(userId);
     for (const id of realIds) {
       baseline[id] = serverTotals[id] ?? 0;
-      delete delta[id];
-      totals[id] = serverTotals[id] ?? 0;
+      totals[id] = (serverTotals[id] ?? 0) + (delta[id] ?? 0);
     }
     setBaseline(baseline, userId);
-    setDelta(delta, userId);
 
     // Temp (offline-created) books: still use cache + delta
     const tempIds = bookIds.filter((id) => id.startsWith("temp_"));
