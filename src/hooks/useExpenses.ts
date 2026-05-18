@@ -505,6 +505,9 @@ export function useExpenses(bookId: string) {
         (current) => current.filter((expense) => expense.id !== expenseId),
         uid,
       );
+      if (deletedExpense) {
+        recordBookTotalDelta(bookId, -signedExpenseAmount(deletedExpense), uid);
+      }
       await invalidateBookTotals();
 
       if (expenseId.startsWith("temp_")) {
