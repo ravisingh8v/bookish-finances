@@ -134,7 +134,9 @@ export default function Books() {
       );
     },
     enabled: books.length > 0,
-    staleTime: 10_000,
+    staleTime: 5_000,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   });
 
   const handleDuplicate = (bookId: string, e: React.MouseEvent) => {

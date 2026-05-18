@@ -41,7 +41,7 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         includeAssets: ["favicon.ico", "robots.txt", "placeholder.svg"],
         injectRegister: "script",
-        registerType: "prompt",
+        registerType: "autoUpdate",
         workbox: {
           cleanupOutdatedCaches: true,
           clientsClaim: true,
@@ -53,12 +53,14 @@ export default defineConfig(({ mode }) => {
             {
               urlPattern: ({ sameOrigin, request }) =>
                 sameOrigin && request.mode === "navigate",
-              // CacheFirst makes the installed PWA open instantly from the
-              // cached shell. A fresh build version is fetched in the
-              // background via the SW update flow + UpdateNotification.
-              handler: "CacheFirst",
+              // NetworkFirst with short timeout: when online, the installed
+              // PWA always loads the freshest HTML (so new deploys are
+              // picked up immediately). When offline or slow, it falls
+              // back to the cached shell so startup is still fast.
+              handler: "NetworkFirst",
               options: {
                 cacheName: "app-pages",
+                networkTimeoutSeconds: 2,
                 cacheableResponse: {
                   statuses: [0, 200],
                 },
