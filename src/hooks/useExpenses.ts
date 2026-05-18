@@ -2,6 +2,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { db } from "@/lib/db";
 import { isOfflineLikeError, withNetworkTimeout } from "@/lib/network";
 import {
+  recordBookTotalDelta,
+  signedExpenseAmount,
+} from "@/lib/cachedExpenseTotals";
+import {
   getCurrentUserId,
   getStoredExpenses,
   setStoredExpenses,
@@ -380,6 +384,7 @@ export function useExpenses(bookId: string) {
         (current) => sortExpensesByDateDesc([optimistic, ...current]),
         uid,
       );
+      recordBookTotalDelta(bookId, signedExpenseAmount(optimistic), uid);
       await invalidateBookTotals();
       await queueAction({
         type: "create_expense",
@@ -400,6 +405,7 @@ export function useExpenses(bookId: string) {
   const updateExpense = useMutation({
     mutationFn: async (params: ExpenseUpdate) => {
       const uid = user?.id || getUserId();
+      const previous = expenses.find((e) => e.id === params.expenseId);
       const patch = {
         title: params.title,
         amount: params.amount,
@@ -437,6 +443,14 @@ export function useExpenses(bookId: string) {
           ),
         uid,
       );
+      if (previous) {
+        const oldSigned = signedExpenseAmount(previous);
+        const newSigned = signedExpenseAmount({
+          amount: params.amount ?? previous.amount,
+          expense_type: params.expense_type ?? previous.expense_type,
+        });
+        recordBookTotalDelta(bookId, newSigned - oldSigned, uid);
+      }
       await invalidateBookTotals();
 
       const queued = await getQueuedActions();
@@ -491,6 +505,9 @@ export function useExpenses(bookId: string) {
         (current) => current.filter((expense) => expense.id !== expenseId),
         uid,
       );
+      if (deletedExpense) {
+        recordBookTotalDelta(bookId, -signedExpenseAmount(deletedExpense), uid);
+      }
       await invalidateBookTotals();
 
       if (expenseId.startsWith("temp_")) {
@@ -573,6 +590,7 @@ export function useExpenses(bookId: string) {
         },
         uid,
       );
+      recordBookTotalDelta(bookId, signedExpenseAmount(expense), uid);
       await invalidateBookTotals();
       await db.deletedExpenses.delete(expenseId);
 

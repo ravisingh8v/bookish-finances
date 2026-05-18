@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { type TablesUpdate } from "@/integrations/supabase/types";
 import { createSyncActionId, db, type SyncAction } from "@/lib/db";
+import { clearAllBookTotalDeltas } from "@/lib/cachedExpenseTotals";
 import {
   countPersistedQueue,
   getPersistedQueue,
@@ -818,6 +819,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       if (remaining === 0) {
         setSyncStatus("success");
         setLastSyncedAt(Date.now());
+        clearAllBookTotalDeltas(user.id);
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["books"] }),
           queryClient.invalidateQueries({ queryKey: ["book-totals"] }),
