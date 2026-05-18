@@ -67,6 +67,11 @@ export function recordBookTotalDelta(
   setDelta(map, userId);
 }
 
+/** Clear all per-book offline deltas (call after the sync queue drains). */
+export function clearAllBookTotalDeltas(userId?: string) {
+  setDelta({}, userId);
+}
+
 export async function getCachedExpensesForBook(
   bookId: string,
   userId?: string,
