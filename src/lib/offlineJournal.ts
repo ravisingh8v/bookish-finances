@@ -224,11 +224,14 @@ export async function clearUserCache(userId?: string) {
  */
 export async function clearCachedOfflineData(userId?: string) {
   const uid = userId || getCurrentUserId();
-  // Clear localStorage cache buckets (books + expenses), preserve queue
+  // Clear localStorage cache buckets (books + expenses + totals baseline/delta),
+  // preserve queue
   if (canUseStorage()) {
     try {
       window.localStorage.removeItem(scopedKey(BOOKS_KEY, uid));
       window.localStorage.removeItem(scopedKey(EXPENSES_KEY, uid));
+      window.localStorage.removeItem(`expenseflow_book_totals_baseline_v1:${uid}`);
+      window.localStorage.removeItem(`expenseflow_book_totals_delta_v1:${uid}`);
     } catch {
       // ignore
     }
