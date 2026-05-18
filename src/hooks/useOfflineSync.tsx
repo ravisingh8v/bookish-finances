@@ -818,6 +818,7 @@ export function OfflineSyncProvider({ children }: { children: ReactNode }) {
       if (remaining === 0) {
         setSyncStatus("success");
         setLastSyncedAt(Date.now());
+        clearAllBookTotalDeltas(user.id);
         await Promise.all([
           queryClient.invalidateQueries({ queryKey: ["books"] }),
           queryClient.invalidateQueries({ queryKey: ["book-totals"] }),
