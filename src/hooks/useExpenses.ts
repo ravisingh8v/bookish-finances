@@ -405,6 +405,7 @@ export function useExpenses(bookId: string) {
   const updateExpense = useMutation({
     mutationFn: async (params: ExpenseUpdate) => {
       const uid = user?.id || getUserId();
+      const previous = expenses.find((e) => e.id === params.expenseId);
       const patch = {
         title: params.title,
         amount: params.amount,
@@ -442,6 +443,14 @@ export function useExpenses(bookId: string) {
           ),
         uid,
       );
+      if (previous) {
+        const oldSigned = signedExpenseAmount(previous);
+        const newSigned = signedExpenseAmount({
+          amount: params.amount ?? previous.amount,
+          expense_type: params.expense_type ?? previous.expense_type,
+        });
+        recordBookTotalDelta(bookId, newSigned - oldSigned, uid);
+      }
       await invalidateBookTotals();
 
       const queued = await getQueuedActions();
