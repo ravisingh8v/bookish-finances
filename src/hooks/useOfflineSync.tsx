@@ -1,6 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { type TablesUpdate } from "@/integrations/supabase/types";
 import { createSyncActionId, db, type SyncAction } from "@/lib/db";
+import { clearAllBookTotalDeltas } from "@/lib/cachedExpenseTotals";
 import {
   countPersistedQueue,
   getPersistedQueue,
