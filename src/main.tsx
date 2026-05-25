@@ -84,6 +84,17 @@ async function bootstrap() {
 
   createRoot(document.getElementById("root")!).render(<App />);
 
+  // Fade out the static splash screen once React has mounted.
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      const splash = document.getElementById("app-splash");
+      if (splash) {
+        splash.classList.add("hide");
+        setTimeout(() => splash.remove(), 400);
+      }
+    }, 250);
+  });
+
   // Cleanup on unload
   window.addEventListener("beforeunload", () => {
     if (updateCheckInterval !== null) {
