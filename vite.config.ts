@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
-        includeAssets: ["favicon.ico", "robots.txt", "placeholder.svg"],
+        includeAssets: ["favicon.ico", "robots.txt", "placeholder.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"],
         injectRegister: "script",
         registerType: "autoUpdate",
         workbox: {
