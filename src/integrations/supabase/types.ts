@@ -131,6 +131,7 @@ export type Database = {
           created_at: string
           created_by: string
           date: string
+          expense_time: string | null
           expense_type: string
           id: string
           notes: string | null
@@ -147,6 +148,7 @@ export type Database = {
           created_at?: string
           created_by: string
           date?: string
+          expense_time?: string | null
           expense_type?: string
           id?: string
           notes?: string | null
@@ -163,6 +165,7 @@ export type Database = {
           created_at?: string
           created_by?: string
           date?: string
+          expense_time?: string | null
           expense_type?: string
           id?: string
           notes?: string | null

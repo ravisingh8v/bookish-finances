@@ -134,13 +134,15 @@
   }
 
   /* Prevent native date input from overflowing on iOS */
-  input[type="date"] {
+  input[type="date"],
+  input[type="time"] {
     min-width: 0;
     max-width: 100%;
   }
 
   @supports (-webkit-touch-callout: none) {
-    input[type="date"].ios-date-input {
+    input[type="date"].ios-date-input,
+    input[type="time"].ios-time-input {
       -webkit-appearance: none;
       appearance: none;
       width: 100%;
@@ -149,26 +151,30 @@
       line-height: 1.25rem;
     }
 
-    input[type="date"].ios-date-input::-webkit-date-and-time-value {
+    input[type="date"].ios-date-input::-webkit-date-and-time-value,
+    input[type="time"].ios-time-input::-webkit-date-and-time-value {
       min-height: 1.5rem;
       text-align: left;
     }
 
-    input[type="date"].ios-date-input::-webkit-datetime-edit {
+    input[type="date"].ios-date-input::-webkit-datetime-edit,
+    input[type="time"].ios-time-input::-webkit-datetime-edit {
       display: flex;
       min-width: 0;
       align-items: center;
       padding: 0;
     }
 
-    input[type="date"].ios-date-input::-webkit-datetime-edit-fields-wrapper {
+    input[type="date"].ios-date-input::-webkit-datetime-edit-fields-wrapper,
+    input[type="time"].ios-time-input::-webkit-datetime-edit-fields-wrapper {
       display: flex;
       min-width: 0;
       flex: 1 1 auto;
       align-items: center;
     }
 
-    input[type="date"].ios-date-input::-webkit-calendar-picker-indicator {
+    input[type="date"].ios-date-input::-webkit-calendar-picker-indicator,
+    input[type="time"].ios-time-input::-webkit-calendar-picker-indicator {
       flex: 0 0 auto;
       margin: 0;
       padding: 0;

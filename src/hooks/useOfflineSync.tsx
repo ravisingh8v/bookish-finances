@@ -76,6 +76,7 @@ type CreateExpensePayload = {
   title: string;
   amount: number;
   date?: string;
+  expense_time?: string;
   category_id?: string;
   expense_type?: string;
   payment_method?: string;
@@ -92,6 +93,7 @@ type UpdateExpensePayload = {
   title?: string;
   amount?: number;
   date?: string;
+  expense_time?: string;
   category_id?: string;
   expense_type?: string;
   payment_method?: string;
@@ -447,6 +449,7 @@ async function processAction(
             title: (expense as Record<string, unknown>).title,
             amount: (expense as Record<string, unknown>).amount,
             date: (expense as Record<string, unknown>).date,
+            expense_time: (expense as Record<string, unknown>).expense_time,
             category_id:
               (expense as Record<string, unknown>).category_id || null,
             expense_type:
@@ -522,6 +525,7 @@ async function processAction(
             title: payload.title,
             amount: payload.amount,
             date: payload.date,
+            expense_time: payload.expense_time ?? null,
             category_id: payload.category_id || null,
             expense_type: payload.expense_type ?? "debit",
             payment_method: payload.payment_method ?? "cash",
@@ -578,6 +582,9 @@ async function processAction(
         if (payload.title !== undefined) update.title = payload.title;
         if (payload.amount !== undefined) update.amount = payload.amount;
         if (payload.date !== undefined) update.date = payload.date;
+        if (payload.expense_time !== undefined) {
+          update.expense_time = payload.expense_time || null;
+        }
         if (payload.category_id !== undefined) {
           update.category_id = payload.category_id || null;
         }

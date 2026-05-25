@@ -2,12 +2,12 @@ import { ScrollToTop } from "@/components/ScrollToTop";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { UpdateNotification } from "@/components/UpdateNotification";
 import { AuthProvider } from "@/hooks/useAuth";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Analytics from "./pages/Analytics";
+import AppUpdate from "./pages/AppUpdate";
 import Auth from "./pages/Auth";
 import BookDetail from "./pages/BookDetail";
 import Books from "./pages/Books";
@@ -23,7 +23,6 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <UpdateNotification />
       <BrowserRouter>
         <AuthProvider>
           <OfflineSyncProvider>
@@ -35,6 +34,7 @@ const App = () => (
               <Route path="/books" element={<Books />} />
               <Route path="/books/:bookId" element={<BookDetail />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/app-update" element={<AppUpdate />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="*" element={<NotFound />} />

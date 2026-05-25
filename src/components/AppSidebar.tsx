@@ -1,5 +1,5 @@
-import { NavLink } from "@/components/NavLink";
 import brandLogo from "@/assets/brand-logo.png";
+import { NavLink } from "@/components/NavLink";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
@@ -19,6 +19,7 @@ import {
   BookOpen,
   LayoutDashboard,
   LogOut,
+  RefreshCw,
   Settings,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -27,6 +28,7 @@ const mainItems = [
   { title: "Books", url: "/books", icon: BookOpen },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
+  { title: "App Update", url: "/app-update", icon: RefreshCw },
   { title: "Settings", url: "/settings", icon: Settings },
 ];
 
@@ -43,8 +45,14 @@ export function AppSidebar() {
           className={`px-4 py-5 ${collapsed ? "px-2 pl-2" : ""} flex justify-between`}
         >
           <div className="flex items-center gap-2 flex-nowrap">
-            <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center flex-nowrap flex-shrink-0 shadow">
-              <img src={brandLogo} alt="Bookish Finance logo" width={32} height={32} className="w-full h-full object-cover" />
+            <div className="w-8 h-8 rounded-md overflow-hidden flex items-center justify-center flex-nowrap flex-shrink-0 shadow">
+              <img
+                src={brandLogo}
+                alt="Bookish Finance logo"
+                width={32}
+                height={32}
+                className="w-full h-full object-contain"
+              />
             </div>
             {!collapsed && (
               <span className="font-display font-bold text-lg text-nowrap">

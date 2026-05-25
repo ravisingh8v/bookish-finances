@@ -41,11 +41,11 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         includeAssets: ["favicon.ico", "robots.txt", "placeholder.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"],
         injectRegister: "script",
-        registerType: "autoUpdate",
+        registerType: "prompt",
         workbox: {
           cleanupOutdatedCaches: true,
-          clientsClaim: true,
-          skipWaiting: true,
+          clientsClaim: false,
+          skipWaiting: false,
           globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
           navigateFallback: "index.html",
           navigateFallbackAllowlist: [/^(?!\/__).*/],
@@ -53,8 +53,8 @@ export default defineConfig(({ mode }) => {
             // Navigation requests are handled by Workbox's built-in
             // NavigationRoute via `navigateFallback: "index.html"`. The
             // precached index.html is always served instantly (works fully
-            // offline). New deploys are picked up via autoUpdate +
-            // skipWaiting + the in-app update prompt.
+            // offline). New deploys are picked up from the App Update page,
+            // where the user can manually check and apply a waiting worker.
             {
               urlPattern: ({ sameOrigin, request }) =>
                 sameOrigin &&

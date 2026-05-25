@@ -33,6 +33,7 @@ export interface Expense {
   title: string;
   amount: number;
   date: string;
+  expense_time: string | null;
   category_id: string | null;
   expense_type: string;
   payment_method: string | null;
@@ -59,6 +60,7 @@ type ExpensePayload = {
   title: string;
   amount: number;
   date?: string;
+  expense_time?: string;
   category_id?: string;
   category?: Pick<Category, "name" | "icon" | "color"> | null;
   expense_type?: string;
@@ -72,6 +74,7 @@ type ExpenseUpdate = {
   title?: string;
   amount?: number;
   date?: string;
+  expense_time?: string;
   category_id?: string;
   category?: Pick<Category, "name" | "icon" | "color"> | null;
   expense_type?: string;
@@ -97,6 +100,11 @@ function sortExpensesByDateDesc(expenses: Expense[]) {
   return [...expenses].sort((a, b) => {
     const dateDiff = getExpenseDateKey(b).localeCompare(getExpenseDateKey(a));
     if (dateDiff !== 0) return dateDiff;
+
+    const timeDiff = (b.expense_time ?? "").localeCompare(
+      a.expense_time ?? "",
+    );
+    if (timeDiff !== 0) return timeDiff;
 
     const createdDiff = getTimestamp(b.created_at) - getTimestamp(a.created_at);
     if (createdDiff !== 0) return createdDiff;
@@ -166,6 +174,7 @@ function optimisticExpense(
     title: payload.title,
     amount: payload.amount,
     date: payload.date ?? now.split("T")[0],
+    expense_time: payload.expense_time ?? now.slice(11, 16),
     category_id: payload.category_id ?? null,
     expense_type: payload.expense_type ?? "debit",
     payment_method: payload.payment_method ?? "cash",
@@ -295,6 +304,7 @@ export function useExpenses(bookId: string) {
             .select("*, categories(name, icon, color)")
             .eq("book_id", bookId)
             .order("date", { ascending: false })
+            .order("expense_time", { ascending: false })
             .order("created_at", { ascending: false })
             .limit(MAX_EXPENSES_CACHE),
         );
@@ -410,6 +420,7 @@ export function useExpenses(bookId: string) {
         title: params.title,
         amount: params.amount,
         date: params.date,
+        expense_time: params.expense_time,
         category_id: params.category_id ?? null,
         categories:
           params.category_id === undefined ? undefined : (params.category ?? null),
@@ -599,6 +610,7 @@ export function useExpenses(bookId: string) {
         title: expense.title,
         amount: expense.amount,
         date: expense.date,
+        expense_time: expense.expense_time ?? undefined,
         category_id: expense.category_id ?? undefined,
         expense_type: expense.expense_type,
         payment_method: expense.payment_method ?? undefined,
@@ -654,6 +666,7 @@ export function useExpenses(bookId: string) {
           .select("*, categories(name, icon, color)")
           .eq("book_id", bookId)
           .order("date", { ascending: false })
+          .order("expense_time", { ascending: false })
           .order("created_at", { ascending: false })
           .range(currentCount, currentCount + PAGE_SIZE - 1),
       );

@@ -54,6 +54,7 @@ import {
   Plus,
   Search,
   ShieldAlert,
+  Clock,
   Trash2,
   TrendingDown,
   TrendingUp,
@@ -127,11 +128,21 @@ function getTimestamp(value?: string | null) {
 }
 
 function sortExpensesByDateDesc<
-  T extends { date?: string | null; created_at?: string | null; id: string },
+  T extends {
+    date?: string | null;
+    expense_time?: string | null;
+    created_at?: string | null;
+    id: string;
+  },
 >(expenses: T[]) {
   return [...expenses].sort((a, b) => {
     const dateDiff = getExpenseDateKey(b).localeCompare(getExpenseDateKey(a));
     if (dateDiff !== 0) return dateDiff;
+
+    const timeDiff = (b.expense_time ?? "").localeCompare(
+      a.expense_time ?? "",
+    );
+    if (timeDiff !== 0) return timeDiff;
 
     const createdDiff = getTimestamp(b.created_at) - getTimestamp(a.created_at);
     if (createdDiff !== 0) return createdDiff;
@@ -152,9 +163,21 @@ function formatExpenseDate(date?: string | null) {
 }
 
 function formatExpenseActivityTime(expense: {
+  expense_time?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }) {
+  if (expense.expense_time) {
+    const [hour, minute] = expense.expense_time.split(":").map(Number);
+    if (!Number.isNaN(hour) && !Number.isNaN(minute)) {
+      return new Date(2000, 0, 1, hour, minute).toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    }
+  }
+
   const timestamp =
     expense.updated_at && expense.updated_at !== expense.created_at
       ? expense.updated_at
@@ -261,6 +284,9 @@ export default function BookDetail() {
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [expenseTime, setExpenseTime] = useState(
+    new Date().toTimeString().slice(0, 5),
+  );
   const [categoryId, setCategoryId] = useState("");
   const [expenseType, setExpenseType] = useState("debit");
   const [paymentMethod, setPaymentMethod] = useState("cash");
@@ -359,6 +385,7 @@ export default function BookDetail() {
     setTitle("");
     setAmount("");
     setDate(new Date().toISOString().split("T")[0]);
+    setExpenseTime(new Date().toTimeString().slice(0, 5));
     setCategoryId(getRequiredCategoryId(categories));
     setExpenseType("debit");
     setPaymentMethod("cash");
@@ -372,6 +399,7 @@ export default function BookDetail() {
     setDate(
       expense.date?.split("T")[0] ?? new Date().toISOString().split("T")[0],
     );
+    setExpenseTime(expense.expense_time?.slice(0, 5) ?? "12:00");
     setCategoryId(getRequiredCategoryId(categories, expense.category_id));
     setExpenseType(expense.expense_type ?? "debit");
     setPaymentMethod(expense.payment_method ?? "cash");
@@ -401,6 +429,7 @@ export default function BookDetail() {
       title: title.trim(),
       amount: Number(amount),
       date,
+      expense_time: expenseTime,
       category_id: selectedCategory.id,
       category: {
         name: selectedCategory.name,
@@ -625,20 +654,40 @@ export default function BookDetail() {
                           />
                         </div>
                       </div>
-                      <div className="space-y-3">
-                        <Label
-                          htmlFor="expense-date"
-                          className="text-sm font-medium"
-                        >
-                          Date
-                        </Label>
-                        <Input
-                          id="expense-date"
-                          type="date"
-                          value={date}
-                          onChange={(e) => setDate(e.target.value)}
-                          className="ios-date-input h-11 max-w-full"
-                        />
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <div className="min-w-0 space-y-3">
+                          <Label
+                            htmlFor="expense-date"
+                            className="text-sm font-medium"
+                          >
+                            Date
+                          </Label>
+                          <Input
+                            id="expense-date"
+                            type="date"
+                            value={date}
+                            onChange={(e) => setDate(e.target.value)}
+                            className="ios-date-input h-11 w-full max-w-full"
+                          />
+                        </div>
+                        <div className="min-w-0 space-y-3">
+                          <Label
+                            htmlFor="expense-time"
+                            className="text-sm font-medium"
+                          >
+                            Time
+                          </Label>
+                          <div className="relative min-w-0">
+                            <Clock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                              id="expense-time"
+                              type="time"
+                              value={expenseTime}
+                              onChange={(e) => setExpenseTime(e.target.value)}
+                              className="ios-time-input h-11 w-full max-w-full pl-9"
+                            />
+                          </div>
+                        </div>
                       </div>
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-3">

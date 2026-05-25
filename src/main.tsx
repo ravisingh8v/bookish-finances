@@ -28,20 +28,12 @@ async function bootstrap() {
   await clearLegacyCachesIfNeeded();
 
   let registration: ServiceWorkerRegistration | null = null;
-  let updateCheckInterval: number | null = null;
 
-  const updateSW = registerSW({
+  registerSW({
     immediate: true,
     onRegisteredSW(_swUrl, reg) {
       registration = reg;
       void ensureServiceWorkerControlsPage();
-
-      // More aggressive updates (every 10s)
-      if (updateCheckInterval === null) {
-        updateCheckInterval = window.setInterval(() => {
-          reg?.update().catch(() => {});
-        }, 10000);
-      }
 
       // Listen for state changes in waiting worker
       reg?.addEventListener("updatefound", () => {
@@ -93,13 +85,6 @@ async function bootstrap() {
         setTimeout(() => splash.remove(), 400);
       }
     }, 250);
-  });
-
-  // Cleanup on unload
-  window.addEventListener("beforeunload", () => {
-    if (updateCheckInterval !== null) {
-      clearInterval(updateCheckInterval);
-    }
   });
 }
 
