@@ -1,4 +1,5 @@
 import { NavLink } from "@/components/NavLink";
+import brandLogo from "@/assets/brand-logo.png";
 import { Button } from "@/components/ui/button";
 import {
   Sidebar,
