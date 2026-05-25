@@ -20,11 +20,11 @@ import {
   Lock,
   Mail,
   User,
-  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
+import brandLogo from "@/assets/brand-logo.png";
 
 export default function Auth() {
   const { session, loading: authLoading } = useAuth();
