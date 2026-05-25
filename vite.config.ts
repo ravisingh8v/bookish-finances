@@ -50,26 +50,11 @@ export default defineConfig(({ mode }) => {
           navigateFallback: "index.html",
           navigateFallbackAllowlist: [/^(?!\/__).*/],
           runtimeCaching: [
-            {
-              urlPattern: ({ sameOrigin, request }) =>
-                sameOrigin && request.mode === "navigate",
-              // NetworkFirst with short timeout: when online, the installed
-              // PWA always loads the freshest HTML (so new deploys are
-              // picked up immediately). When offline or slow, it falls
-              // back to the cached shell so startup is still fast.
-              handler: "NetworkFirst",
-              options: {
-                cacheName: "app-pages",
-                networkTimeoutSeconds: 2,
-                cacheableResponse: {
-                  statuses: [0, 200],
-                },
-                expiration: {
-                  maxEntries: 32,
-                  maxAgeSeconds: ONE_DAY_IN_SECONDS,
-                },
-              },
-            },
+            // Navigation requests are handled by Workbox's built-in
+            // NavigationRoute via `navigateFallback: "index.html"`. The
+            // precached index.html is always served instantly (works fully
+            // offline). New deploys are picked up via autoUpdate +
+            // skipWaiting + the in-app update prompt.
             {
               urlPattern: ({ sameOrigin, request }) =>
                 sameOrigin &&
