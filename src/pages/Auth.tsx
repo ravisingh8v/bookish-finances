@@ -20,11 +20,11 @@ import {
   Lock,
   Mail,
   User,
-  Wallet,
 } from "lucide-react";
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
 import { toast } from "sonner";
+import brandLogo from "@/assets/brand-logo.png";
 
 export default function Auth() {
   const { session, loading: authLoading } = useAuth();
@@ -102,8 +102,8 @@ export default function Auth() {
           transition={{ duration: 0.8 }}
           className="relative z-10 max-w-md text-center px-8"
         >
-          <div className="mx-auto w-20 h-20 rounded-3xl bg-primary/10 flex items-center justify-center mb-8">
-            <Wallet className="h-10 w-10 text-primary" />
+          <div className="mx-auto w-20 h-20 rounded-3xl overflow-hidden flex items-center justify-center mb-8 shadow-lg">
+            <img src={brandLogo} alt="Expense Tracker logo" width={80} height={80} className="w-full h-full object-cover" />
           </div>
           <h1 className="text-4xl font-display font-bold mb-4">ExpenseFlow</h1>
           <p className="text-lg text-muted-foreground leading-relaxed">
@@ -135,8 +135,8 @@ export default function Auth() {
         >
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
-            <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
-              <Wallet className="h-7 w-7 text-primary" />
+            <div className="mx-auto w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center mb-3 shadow-md">
+              <img src={brandLogo} alt="Expense Tracker logo" width={56} height={56} className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-display font-bold">ExpenseFlow</h1>
           </div>
