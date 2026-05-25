@@ -1042,9 +1042,10 @@ export default function BookDetail() {
                                       {canEdit && (
                                         <DropdownMenuItem
                                           className="DropdownMenuItem p-2 rounded sm:hover:bg-accent sm:hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
-                                          onClick={() =>
-                                            handleEditExpense(expense)
-                                          }
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleEditExpense(expense);
+                                          }}
                                         >
                                           <div className="flex gap-2 items-center">
                                             <Edit className="h-4 w-4" />
@@ -1055,7 +1056,8 @@ export default function BookDetail() {
                                       {canDelete && (
                                         <DropdownMenuItem
                                           className="DropdownMenuItem p-2 rounded sm:hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
-                                          onClick={() => {
+                                          onClick={(e) => {
+                                            e.stopPropagation();
                                             if (confirm("Delete this expense?"))
                                               deleteExpense.mutate(expense.id);
                                           }}
