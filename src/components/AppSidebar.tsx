@@ -42,10 +42,8 @@ export function AppSidebar() {
           className={`px-4 py-5 ${collapsed ? "px-2 pl-2" : ""} flex justify-between`}
         >
           <div className="flex items-center gap-2 flex-nowrap">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center flex-nowrap flex-shrink-0">
-              <span className="text-primary-foreground font-bold text-sm text-nowrap">
-                BF
-              </span>
+            <div className="w-8 h-8 rounded-lg overflow-hidden flex items-center justify-center flex-nowrap flex-shrink-0 shadow">
+              <img src={brandLogo} alt="Bookish Finance logo" width={32} height={32} className="w-full h-full object-cover" />
             </div>
             {!collapsed && (
               <span className="font-display font-bold text-lg text-nowrap">
