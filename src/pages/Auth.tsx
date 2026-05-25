@@ -135,8 +135,8 @@ export default function Auth() {
         >
           {/* Mobile logo */}
           <div className="lg:hidden text-center mb-8">
-            <div className="mx-auto w-14 h-14 rounded-2xl bg-primary/10 flex items-center justify-center mb-3">
-              <Wallet className="h-7 w-7 text-primary" />
+            <div className="mx-auto w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center mb-3 shadow-md">
+              <img src={brandLogo} alt="Expense Tracker logo" width={56} height={56} className="w-full h-full object-cover" />
             </div>
             <h1 className="text-2xl font-display font-bold">ExpenseFlow</h1>
           </div>
