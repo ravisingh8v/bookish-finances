@@ -39,7 +39,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       VitePWA({
-        includeAssets: ["favicon.ico", "robots.txt", "placeholder.svg"],
+        includeAssets: ["favicon.ico", "robots.txt", "placeholder.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"],
         injectRegister: "script",
         registerType: "autoUpdate",
         workbox: {
@@ -127,22 +127,32 @@ export default defineConfig(({ mode }) => {
         },
         manifest: {
           name: "Expense Tracker",
-          short_name: "Expenses Tracker",
-          theme_color: "#ffffff",
+          short_name: "Expenses",
+          description: "Shared expense tracker for books and groups",
+          theme_color: "#0f766e",
           background_color: "#ffffff",
           display: "standalone",
+          orientation: "portrait-primary",
           start_url: "/",
           scope: "/",
           icons: [
             {
-              src: "favicon.ico",
+              src: "/icon-192.png",
               sizes: "192x192",
               type: "image/png",
+              purpose: "any",
             },
             {
-              src: "favicon.ico",
+              src: "/icon-512.png",
               sizes: "512x512",
               type: "image/png",
+              purpose: "any",
+            },
+            {
+              src: "/icon-512.png",
+              sizes: "512x512",
+              type: "image/png",
+              purpose: "maskable",
             },
           ],
         },
