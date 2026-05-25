@@ -1,0 +1,6 @@
+ALTER TABLE public.expenses
+ALTER COLUMN date TYPE TIMESTAMP WITH TIME ZONE
+USING date::timestamp AT TIME ZONE 'UTC';
+
+ALTER TABLE public.expenses
+ALTER COLUMN date SET DEFAULT now();
