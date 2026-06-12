@@ -206,27 +206,8 @@ export default function Books() {
               Organize your expenses into separate books
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2 justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              className="whitespace-nowrap"
-              aria-label="Re-sync data"
-              onClick={handleResync}
-              disabled={resyncing || !isOnline}
-              title={
-                !isOnline
-                  ? "Connect to internet to re-sync"
-                  : "Clear local cache and re-fetch fresh data"
-              }
-            >
-              {resyncing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">Re-sync Data</span>
-            </Button>
+          <div class="flex flex-wrap items-center gap-2 justify-end">
+
             <Dialog
               open={open}
               onOpenChange={(v) => {
