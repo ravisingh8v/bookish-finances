@@ -368,14 +368,8 @@ export default function Books() {
                           <BookOpen className="h-5 w-5" />
                         </div>
                         <div className="flex items-center gap-1">
-                          {book._offline && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] text-amber-600 border-amber-500/30"
-                            >
-                              Offline
-                            </Badge>
-                          )}
+                          {false && null}
+
                           {userRole && (
                             <Badge
                               variant="outline"
