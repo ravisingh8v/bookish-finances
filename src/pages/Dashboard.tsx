@@ -118,11 +118,7 @@ export default function Dashboard() {
         currency: editCurrency,
         color: editColor,
       });
-      toast.success(
-        isOnline
-          ? "Book updated!"
-          : "Book updated offline. Will sync when online.",
-      );
+      toast.success("Book updated!");
       setOpenEdit(false);
       resetEditForm();
     } catch (e: any) {
