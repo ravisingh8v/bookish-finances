@@ -477,12 +477,7 @@ export default function BookDetail() {
     return true;
   });
 
-  const totalIncome = expenses
-    .filter((e) => e.expense_type === "credit")
-    .reduce((s, e) => s + Number(e.amount), 0);
-  const totalExpense = expenses
-    .filter((e) => e.expense_type === "debit")
-    .reduce((s, e) => s + Number(e.amount), 0);
+  // totalIncome and totalExpense come from useExpenses (full server aggregate).
   const cur = getCurrencySymbol(book?.currency ?? "INR");
 
   const handleCreateCategory = async (name: string) => {
