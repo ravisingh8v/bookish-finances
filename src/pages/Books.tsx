@@ -86,31 +86,8 @@ export default function Books() {
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
-  const [resyncing, setResyncing] = useState(false);
 
   const cacheUserId = user?.id || getUserId();
-
-  const handleResync = async () => {
-    if (!isOnline) {
-      toast.error("You need to be online to re-sync data");
-      return;
-    }
-    setResyncing(true);
-    try {
-      await clearCachedOfflineData(user?.id || getUserId());
-      await queryClient.invalidateQueries({ queryKey: ["books"] });
-      await queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      await queryClient.invalidateQueries({ queryKey: ["book-totals"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
-      await queryClient.refetchQueries({ queryKey: ["books"] });
-      toast.success("Offline data refreshed");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to re-sync data");
-    } finally {
-      setResyncing(false);
-    }
-  };
 
   const resetForm = () => {
     setName("");
@@ -124,7 +101,7 @@ export default function Books() {
     .sort((a, b) => a.localeCompare(b))
     .join("|");
   const { data: bookTotals = {} } = useQuery({
-    queryKey: ["book-totals", bookIdsKey, cacheUserId, isOnline],
+    queryKey: ["book-totals", bookIdsKey, cacheUserId],
     queryFn: async () => {
       return await getBookTotals(
         books.map((book) => book.id),
@@ -132,11 +109,10 @@ export default function Books() {
         isOnline,
       );
     },
-    enabled: books.length > 0,
-    staleTime: 5_000,
-    refetchOnMount: "always",
+    enabled: books.length > 0 && isOnline,
     refetchOnWindowFocus: true,
   });
+
 
   const handleDuplicate = (bookId: string, e: React.MouseEvent) => {
     e.stopPropagation();
