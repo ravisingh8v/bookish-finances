@@ -1,17 +1,7 @@
 import { supabase } from "@/integrations/supabase/client";
-import { db } from "@/lib/db";
-import { isOfflineLikeError, withNetworkTimeout } from "@/lib/network";
-import {
-  recordBookTotalDelta,
-  signedExpenseAmount,
-} from "@/lib/cachedExpenseTotals";
-import {
-  getCurrentUserId,
-  getStoredExpenses,
-  setStoredExpenses,
-} from "@/lib/offlineJournal";
+import { type TablesUpdate } from "@/integrations/supabase/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { getUserId, useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
@@ -80,12 +70,8 @@ type ExpenseUpdate = {
   tags?: string[];
 };
 
-const MAX_EXPENSES_CACHE = 50;
 const PAGE_SIZE = 20;
-
-function getExpenseDateKey(expense: Pick<Expense, "date">) {
-  return expense.date?.split("T")[0] ?? "";
-}
+const MAX_EXPENSES = 500;
 
 function getTimestamp(value?: string | null) {
   if (!value) return 0;
@@ -97,16 +83,20 @@ function sortExpensesByDateDesc(expenses: Expense[]) {
   return [...expenses].sort((a, b) => {
     const dateDiff = getTimestamp(b.date) - getTimestamp(a.date);
     if (dateDiff !== 0) return dateDiff;
-
     const createdDiff = getTimestamp(b.created_at) - getTimestamp(a.created_at);
     if (createdDiff !== 0) return createdDiff;
-
     return b.id.localeCompare(a.id);
   });
 }
 
+function assertOnline(isOnline: boolean) {
+  if (!isOnline) {
+    throw new Error("You're offline. Connect to the internet to continue.");
+  }
+}
+
 function getCategoryCacheId(userId?: string) {
-  return `categories:${userId || getCurrentUserId() || "_anonymous"}`;
+  return `categories:${userId || getUserId() || "_anonymous"}`;
 }
 
 function sortCategories(categories: Category[]) {
@@ -122,13 +112,11 @@ function sortCategories(categories: Category[]) {
       if (a.is_default !== b.is_default) {
         return a.is_default ? -1 : 1;
       }
-
       const aIsOther = a.name.trim().toLowerCase() === "other";
       const bIsOther = b.name.trim().toLowerCase() === "other";
       if (aIsOther !== bIsOther) {
         return aIsOther ? 1 : -1;
       }
-
       return a.name.localeCompare(b.name);
     });
 }
@@ -152,530 +140,221 @@ function getCustomCategoryColor(name: string) {
   return palette[Math.abs(hash) % palette.length];
 }
 
-function optimisticExpense(
-  payload: ExpensePayload,
-  userId: string,
-  profile: { display_name: string | null; email: string | null } | null,
-  tempId: string,
-  offline = true,
-): Expense {
-  const now = new Date().toISOString();
-  return {
-    id: tempId,
-    book_id: payload.book_id,
-    title: payload.title,
-    amount: payload.amount,
-    date: payload.date ?? now,
-    category_id: payload.category_id ?? null,
-    expense_type: payload.expense_type ?? "debit",
-    payment_method: payload.payment_method ?? "cash",
-    notes: payload.notes ?? null,
-    tags: payload.tags ?? [],
-    paid_by: userId,
-    created_by: userId,
-    created_at: now,
-    updated_at: now,
-    categories: payload.category ?? null,
-    creator_profile: {
-      display_name: profile?.display_name ?? null,
-      email: profile?.email ?? null,
-    },
-    payer_profile: {
-      display_name: profile?.display_name ?? null,
-      email: profile?.email ?? null,
-    },
-    _offline: offline,
-  };
-}
+async function fetchExpensesPage(bookId: string, from: number, to: number) {
+  const { data, error } = await supabase
+    .from("expenses")
+    .select("*, categories(name, icon, color)")
+    .eq("book_id", bookId)
+    .order("date", { ascending: false })
+    .order("created_at", { ascending: false })
+    .range(from, to);
+  if (error) throw error;
 
-async function putExpenses(
-  bookId: string,
-  expenses: Expense[],
-  userId?: string,
-) {
-  const sortedExpenses = sortExpensesByDateDesc(expenses);
-  setStoredExpenses(
-    bookId,
-    sortedExpenses.slice(0, MAX_EXPENSES_CACHE),
-    userId,
-  );
-  await db.expenses.put({
-    id: bookId,
-    expenses: sortedExpenses.slice(0, MAX_EXPENSES_CACHE),
-    userId: userId || getCurrentUserId(),
-    cachedAt: Date.now(),
-  });
-}
+  const userIds = [
+    ...new Set(
+      (data ?? []).flatMap((expense) => [expense.created_by, expense.paid_by]),
+    ),
+  ].filter(Boolean);
 
-async function updateCachedExpenses(
-  bookId: string,
-  updater: (expenses: Expense[]) => Expense[],
-  userId?: string,
-) {
-  const current = getStoredExpenses<Expense>(bookId, userId);
-  const next = sortExpensesByDateDesc(updater(current));
-  setStoredExpenses(bookId, next.slice(0, MAX_EXPENSES_CACHE), userId);
-  await db.expenses.put({
-    id: bookId,
-    expenses: next.slice(0, MAX_EXPENSES_CACHE),
-    userId: userId || getCurrentUserId(),
-    cachedAt: Date.now(),
-  });
-}
-
-async function getCachedExpenses(
-  bookId: string,
-  userId?: string,
-): Promise<Expense[]> {
-  try {
-    const uid = userId || getCurrentUserId();
-    const cached = await db.expenses.get(bookId);
-    // Only return if userId matches (for isolation)
-    if (
-      cached &&
-      cached.userId === uid &&
-      Array.isArray(cached.expenses) &&
-      cached.expenses.length > 0
-    ) {
-      return cached.expenses as Expense[];
-    }
-  } catch {
-    // IndexedDB may fail
+  let profileMap = new Map<
+    string,
+    { display_name: string | null; email: string | null }
+  >();
+  if (userIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id, display_name, email")
+      .in("user_id", userIds);
+    profileMap = new Map(profiles?.map((entry) => [entry.user_id, entry]) ?? []);
   }
-  return getStoredExpenses<Expense>(bookId, userId);
+
+  return (data ?? []).map((expense) => ({
+    ...expense,
+    creator_profile: profileMap.get(expense.created_by) ?? null,
+    payer_profile: profileMap.get(expense.paid_by) ?? null,
+    _offline: false,
+  })) as Expense[];
 }
 
 export function useExpenses(bookId: string) {
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
-  const {
-    isOnline,
-    queueAction,
-    cancelQueuedCreate,
-    getQueuedActions,
-    removeQueuedActions,
-    refreshPendingCount,
-    syncNow,
-    upsertQueuedAction,
-  } = useOfflineSync();
-  const [localExpenses, setLocalExpenses] = useState<Expense[]>([]);
+  const { isOnline } = useOfflineSync();
   const userId = user?.id || getUserId();
-
-  // Immediate offline -> cache fallback
-  useEffect(() => {
-    if (!bookId || !userId) return;
-    let active = true;
-
-    getCachedExpenses(bookId, userId).then((expenses) => {
-      if (active) setLocalExpenses(sortExpensesByDateDesc(expenses));
-    });
-
-    return () => {
-      active = false;
-    };
-  }, [bookId, userId]);
 
   const expensesQuery = useQuery({
     queryKey: ["expenses", bookId],
     queryFn: async () => {
-      const cachedExpenses = await getCachedExpenses(bookId, userId);
-
       if (!user || !bookId || !userId) return [];
-
-      // CRITICAL FIX: Immediately return cached data when offline
-      // This prevents the first-time offline switching failure
-      if (!isOnline) {
-        return sortExpensesByDateDesc(cachedExpenses);
-      }
-
-      try {
-        const { data, error } = await withNetworkTimeout(
-          supabase
-            .from("expenses")
-            .select("*, categories(name, icon, color)")
-            .eq("book_id", bookId)
-            .order("date", { ascending: false })
-            .order("created_at", { ascending: false })
-            .limit(MAX_EXPENSES_CACHE),
-        );
-        if (error) throw error;
-
-        const userIds = [
-          ...new Set(
-            (data ?? []).flatMap((expense) => [
-              expense.created_by,
-              expense.paid_by,
-            ]),
-          ),
-        ].filter(Boolean);
-
-        let profileMap = new Map<
-          string,
-          { display_name: string | null; email: string | null }
-        >();
-        if (userIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("user_id, display_name, email")
-            .in("user_id", userIds);
-          profileMap = new Map(
-            profiles?.map((entry) => [entry.user_id, entry]) ?? [],
-          );
-        }
-
-        // Store complete expense data with all relationships
-        const remoteExpenses = (data ?? []).map((expense) => ({
-          ...expense,
-          creator_profile: profileMap.get(expense.created_by) ?? null,
-          payer_profile: profileMap.get(expense.paid_by) ?? null,
-          _offline: false,
-        })) as Expense[];
-
-        // Merge offline-created expenses that haven't synced yet
-        const offlineOnly = cachedExpenses.filter((expense) =>
-          expense.id.startsWith("temp_"),
-        );
-        const mergedExpenses = [
-          ...offlineOnly,
-          ...remoteExpenses.filter(
-            (expense) =>
-              !offlineOnly.some((offline) => offline.id === expense.id),
-          ),
-        ];
-        const merged = sortExpensesByDateDesc(mergedExpenses);
-
-        await putExpenses(bookId, merged, userId);
-        return merged;
-      } catch (err) {
-        if (isOfflineLikeError(err)) {
-          return sortExpensesByDateDesc(cachedExpenses);
-        }
-        return sortExpensesByDateDesc(cachedExpenses);
-      }
+      const page = await fetchExpensesPage(bookId, 0, PAGE_SIZE - 1);
+      return sortExpensesByDateDesc(page);
     },
-    enabled: !!user && !!bookId && !!userId,
-    staleTime: 30_000,
-    placeholderData: localExpenses,
+    enabled: !!user && !!bookId && !!userId && isOnline,
   });
 
+  // Accurate book totals across ALL expenses (not just the loaded page).
+  const totalsQuery = useQuery({
+    queryKey: ["book-detail-totals", bookId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("expenses")
+        .select("amount, expense_type")
+        .eq("book_id", bookId);
+      if (error) throw error;
+      let income = 0;
+      let expense = 0;
+      for (const row of data ?? []) {
+        const amount = Number(row.amount) || 0;
+        if (row.expense_type === "credit") income += amount;
+        else expense += amount;
+      }
+      return { totalIncome: income, totalExpense: expense };
+    },
+    enabled: !!user && !!bookId && isOnline,
+  });
+
+  // Realtime: any change to this book's expenses refreshes list + totals.
+  useEffect(() => {
+    if (!bookId || !user) return;
+    const channel = supabase
+      .channel(`expenses-${bookId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "expenses",
+          filter: `book_id=eq.${bookId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["expenses", bookId] });
+          queryClient.invalidateQueries({
+            queryKey: ["book-detail-totals", bookId],
+          });
+          queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [bookId, user, queryClient]);
+
   const expenses = (expensesQuery.data ?? []) as Expense[];
-  const invalidateBookTotals = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+
+  const invalidateAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["expenses", bookId] });
+    queryClient.invalidateQueries({ queryKey: ["book-detail-totals", bookId] });
+    queryClient.invalidateQueries({ queryKey: ["book-totals"] });
   };
 
   const createExpense = useMutation({
     mutationFn: async (payload: ExpensePayload) => {
-      const tempId = `temp_${crypto.randomUUID()}`;
+      assertOnline(isOnline);
       const uid = user?.id || getUserId();
+      if (!uid) throw new Error("User ID not available. Please log in again.");
 
-      if (!uid) {
-        throw new Error("User ID not available. Please log in again.");
-      }
-
-      const optimistic = optimisticExpense(payload, uid, profile, tempId, true);
-
-      queryClient.setQueryData(
-        ["expenses", bookId],
-        (old: Expense[] | undefined) =>
-          sortExpensesByDateDesc([optimistic, ...(old ?? [])]),
-      );
-      await updateCachedExpenses(
-        bookId,
-        (current) => sortExpensesByDateDesc([optimistic, ...current]),
-        uid,
-      );
-      recordBookTotalDelta(bookId, signedExpenseAmount(optimistic), uid);
-      await invalidateBookTotals();
-      await queueAction({
-        type: "create_expense",
-        payload: { ...payload, tempId, paid_by: uid, created_by: uid },
-        tempId,
-        userId: uid,
-      });
-      if (isOnline) {
-        void syncNow();
-      }
-      return optimistic;
+      const { data, error } = await supabase
+        .from("expenses")
+        .insert({
+          book_id: payload.book_id,
+          title: payload.title,
+          amount: payload.amount,
+          date: payload.date ?? new Date().toISOString(),
+          category_id: payload.category_id || null,
+          expense_type: payload.expense_type ?? "debit",
+          payment_method: payload.payment_method ?? "cash",
+          notes: payload.notes ?? null,
+          tags: payload.tags ?? [],
+          paid_by: uid,
+          created_by: uid,
+        })
+        .select("*")
+        .single();
+      if (error) throw error;
+      return data;
     },
-    onError: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses", bookId] });
-    },
+    onSuccess: invalidateAll,
   });
 
   const updateExpense = useMutation({
     mutationFn: async (params: ExpenseUpdate) => {
-      const uid = user?.id || getUserId();
-      const previous = expenses.find((e) => e.id === params.expenseId);
-      const patch = {
-        title: params.title,
-        amount: params.amount,
-        date: params.date,
-        category_id: params.category_id ?? null,
-        categories:
-          params.category_id === undefined ? undefined : (params.category ?? null),
-        expense_type: params.expense_type,
-        payment_method: params.payment_method,
-        notes: params.notes,
-        tags: params.tags,
-        updated_at: new Date().toISOString(),
-      };
+      assertOnline(isOnline);
+      const update: TablesUpdate<"expenses"> = {};
+      if (params.title !== undefined) update.title = params.title;
+      if (params.amount !== undefined) update.amount = params.amount;
+      if (params.date !== undefined) update.date = params.date;
+      if (params.category_id !== undefined)
+        update.category_id = params.category_id || null;
+      if (params.expense_type !== undefined)
+        update.expense_type = params.expense_type;
+      if (params.payment_method !== undefined)
+        update.payment_method = params.payment_method;
+      if (params.notes !== undefined) update.notes = params.notes;
+      if (params.tags !== undefined) update.tags = params.tags;
 
-      queryClient.setQueryData(
-        ["expenses", bookId],
-        (old: Expense[] | undefined) =>
-          sortExpensesByDateDesc(
-            (old ?? []).map((expense) =>
-              expense.id === params.expenseId
-                ? { ...expense, ...patch }
-                : expense,
-            ),
-          ),
-      );
-      await updateCachedExpenses(
-        bookId,
-        (current) =>
-          sortExpensesByDateDesc(
-            current.map((expense) =>
-              expense.id === params.expenseId
-                ? { ...expense, ...patch }
-                : expense,
-            ),
-          ),
-        uid,
-      );
-      if (previous) {
-        const oldSigned = signedExpenseAmount(previous);
-        const newSigned = signedExpenseAmount({
-          amount: params.amount ?? previous.amount,
-          expense_type: params.expense_type ?? previous.expense_type,
-        });
-        recordBookTotalDelta(bookId, newSigned - oldSigned, uid);
-      }
-      await invalidateBookTotals();
-
-      const queued = await getQueuedActions();
-      const pendingCreate = queued.find(
-        (action) =>
-          action.type === "create_expense" &&
-          (action.tempId === params.expenseId ||
-            action.payload.tempId === params.expenseId),
-      );
-
-      if (pendingCreate) {
-        const nextAction = {
-          ...pendingCreate,
-          payload: {
-            ...pendingCreate.payload,
-            ...params,
-            tempId: params.expenseId,
-          },
-        };
-        await upsertQueuedAction(nextAction);
-      } else {
-        await queueAction({
-          type: "update_expense",
-          payload: { ...params, bookId },
-          userId: uid,
-        });
-      }
-
-      if (isOnline) {
-        void syncNow();
-      }
+      const { error } = await supabase
+        .from("expenses")
+        .update(update)
+        .eq("id", params.expenseId);
+      if (error) throw error;
     },
-    onError: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses", bookId] });
-    },
+    onSuccess: invalidateAll,
   });
 
   const deleteExpense = useMutation({
     mutationFn: async (expenseId: string) => {
-      const uid = user?.id || getUserId();
-      const deletedExpense = expenses.find(
-        (expense) => expense.id === expenseId,
-      );
-
+      assertOnline(isOnline);
+      const { error } = await supabase
+        .from("expenses")
+        .delete()
+        .eq("id", expenseId);
+      if (error) throw error;
+      return expenseId;
+    },
+    onMutate: (expenseId: string) => {
       queryClient.setQueryData(
         ["expenses", bookId],
         (old: Expense[] | undefined) =>
           (old ?? []).filter((expense) => expense.id !== expenseId),
       );
-      await updateCachedExpenses(
-        bookId,
-        (current) => current.filter((expense) => expense.id !== expenseId),
-        uid,
-      );
-      if (deletedExpense) {
-        recordBookTotalDelta(bookId, -signedExpenseAmount(deletedExpense), uid);
-      }
-      await invalidateBookTotals();
-
-      if (expenseId.startsWith("temp_")) {
-        await cancelQueuedCreate(expenseId);
-        const queued = await getQueuedActions();
-        const relatedIds = queued
-          .filter(
-            (action) =>
-              action.payload.expenseId === expenseId ||
-              action.tempId === expenseId,
-          )
-          .map((action) => action.id);
-        if (relatedIds.length > 0) {
-          await removeQueuedActions(relatedIds);
-          await refreshPendingCount();
-        }
-        return;
-      }
-
-      if (deletedExpense) {
-        await db.deletedExpenses.put({
-          id: expenseId,
-          bookId,
-          userId: uid,
-          data: deletedExpense as unknown as Record<string, unknown>,
-          deletedAt: Date.now(),
-        });
-      }
-
-      await queueAction({
-        type: "delete_expense",
-        payload: { expenseId },
-        userId: uid,
-      });
-      if (isOnline) {
-        void syncNow();
-      }
-    },
-    onSuccess: (_result, expenseId) => {
-      if (expenseId.startsWith("temp_")) return;
-      toast("Expense deleted", {
-        action: {
-          label: "Undo",
-          onClick: () => restoreExpense.mutate(expenseId),
-        },
-        duration: 4000,
-      });
-    },
-    onError: () => {
-      queryClient.invalidateQueries({ queryKey: ["expenses", bookId] });
-    },
-  });
-
-  const restoreExpense = useMutation({
-    mutationFn: async (expenseId: string) => {
-      const uid = user?.id || getUserId();
-      const deleted = await db.deletedExpenses.get(expenseId);
-      if (!deleted) return;
-
-      const expense = deleted.data as Expense;
-      queryClient.setQueryData(
-        ["expenses", bookId],
-        (old: Expense[] | undefined) => {
-          const current = old ?? [];
-          if (current.some((entry) => entry.id === expense.id)) return current;
-          return sortExpensesByDateDesc([
-            { ...expense, _offline: !isOnline },
-            ...current,
-          ]);
-        },
-      );
-      await updateCachedExpenses(
-        bookId,
-        (current) => {
-          if (current.some((entry) => entry.id === expense.id)) return current;
-          return sortExpensesByDateDesc([
-            { ...expense, _offline: !isOnline },
-            ...current,
-          ]);
-        },
-        uid,
-      );
-      recordBookTotalDelta(bookId, signedExpenseAmount(expense), uid);
-      await invalidateBookTotals();
-      await db.deletedExpenses.delete(expenseId);
-
-      const restorePayload = {
-        book_id: expense.book_id,
-        title: expense.title,
-        amount: expense.amount,
-        date: expense.date,
-        category_id: expense.category_id ?? undefined,
-        expense_type: expense.expense_type,
-        payment_method: expense.payment_method ?? undefined,
-        notes: expense.notes ?? undefined,
-        tags: expense.tags ?? undefined,
-        paid_by: expense.paid_by,
-        created_by: expense.created_by,
-        tempId: expense.id,
-      };
-
-      if (!isOnline) {
-        const queued = await getQueuedActions();
-        const pendingDelete = queued.find(
-          (action) =>
-            action.type === "delete_expense" &&
-            action.payload.expenseId === expenseId,
-        );
-        if (pendingDelete) {
-          await removeQueuedActions([pendingDelete.id]);
-          await refreshPendingCount();
-          return;
-        }
-
-        await queueAction({
-          type: "create_expense",
-          payload: restorePayload,
-          tempId: expense.id,
-          userId: uid,
-        });
-        return;
-      }
-
-      await queueAction({
-        type: "create_expense",
-        payload: restorePayload,
-        tempId: expense.id,
-        userId: uid,
-      });
-      void syncNow();
     },
     onSuccess: () => {
-      toast.success("Expense restored");
+      toast("Expense deleted");
     },
+    onSettled: invalidateAll,
   });
 
   const fetchNextPage = async () => {
     if (!isOnline || !bookId) return;
     const currentCount = expenses.length;
+    if (currentCount >= MAX_EXPENSES) return;
     try {
-      const { data, error } = await withNetworkTimeout(
-        supabase
-          .from("expenses")
-          .select("*, categories(name, icon, color)")
-          .eq("book_id", bookId)
-          .order("date", { ascending: false })
-          .order("created_at", { ascending: false })
-          .range(currentCount, currentCount + PAGE_SIZE - 1),
+      const page = await fetchExpensesPage(
+        bookId,
+        currentCount,
+        currentCount + PAGE_SIZE - 1,
       );
-      if (error || !data?.length) return;
-
+      if (page.length === 0) return;
       queryClient.setQueryData(
         ["expenses", bookId],
         (old: Expense[] | undefined) =>
-          sortExpensesByDateDesc([...(old ?? []), ...(data as Expense[])]),
+          sortExpensesByDateDesc([...(old ?? []), ...page]),
       );
     } catch {
-      // Ignore pagination errors
+      // ignore pagination errors
     }
   };
 
   return {
     expenses,
-    isLoading: expensesQuery.isLoading && expenses.length === 0,
+    isLoading: expensesQuery.isLoading,
+    isError: expensesQuery.isError,
+    totalIncome: totalsQuery.data?.totalIncome ?? 0,
+    totalExpense: totalsQuery.data?.totalExpense ?? 0,
     createExpense,
     updateExpense,
     deleteExpense,
-    restoreExpense,
     fetchNextPage,
     hasNextPage: isOnline && expenses.length >= PAGE_SIZE,
     isFetchingNextPage: false,
@@ -683,48 +362,12 @@ export function useExpenses(bookId: string) {
 }
 
 const DEFAULT_CATEGORIES: Category[] = [
-  {
-    id: "groceries",
-    name: "Groceries",
-    icon: "shopping-bag",
-    color: "#10B981",
-    is_default: true,
-  },
-  {
-    id: "transport",
-    name: "Transport",
-    icon: "truck",
-    color: "#3B82F6",
-    is_default: true,
-  },
-  {
-    id: "bills",
-    name: "Bills",
-    icon: "credit-card",
-    color: "#F97316",
-    is_default: true,
-  },
-  {
-    id: "entertainment",
-    name: "Entertainment",
-    icon: "film",
-    color: "#8B5CF6",
-    is_default: true,
-  },
-  {
-    id: "health",
-    name: "Health",
-    icon: "heart",
-    color: "#EF4444",
-    is_default: true,
-  },
-  {
-    id: "other",
-    name: "Other",
-    icon: "tag",
-    color: "#6B7280",
-    is_default: true,
-  },
+  { id: "groceries", name: "Groceries", icon: "shopping-bag", color: "#10B981", is_default: true },
+  { id: "transport", name: "Transport", icon: "truck", color: "#3B82F6", is_default: true },
+  { id: "bills", name: "Bills", icon: "credit-card", color: "#F97316", is_default: true },
+  { id: "entertainment", name: "Entertainment", icon: "film", color: "#8B5CF6", is_default: true },
+  { id: "health", name: "Health", icon: "heart", color: "#EF4444", is_default: true },
+  { id: "other", name: "Other", icon: "tag", color: "#6B7280", is_default: true },
 ];
 
 export function useCategories() {
@@ -733,160 +376,85 @@ export function useCategories() {
   const queryClient = useQueryClient();
   const userId = user?.id || getUserId();
   const cacheId = getCategoryCacheId(userId);
-  const [localCategories, setLocalCategories] = useState<Category[]>([]);
-
-  const updateCategoryCache = async (nextCategories: Category[]) => {
-    const sorted = sortCategories(nextCategories);
-    setLocalCategories(sorted);
-    queryClient.setQueryData(["categories", cacheId], sorted);
-    await db.categories.put({
-      id: cacheId,
-      data: sorted,
-      cachedAt: Date.now(),
-      userId,
-    });
-    return sorted;
-  };
-
-  useEffect(() => {
-    let active = true;
-    db.categories
-      .get(cacheId)
-      .then((cached) => {
-        if (!active) return;
-        setLocalCategories(
-          sortCategories((cached?.data ?? DEFAULT_CATEGORIES) as Category[]),
-        );
-      })
-      .catch(() => {
-        if (!active) return;
-        setLocalCategories(DEFAULT_CATEGORIES);
-      });
-    return () => {
-      active = false;
-    };
-  }, [cacheId]);
 
   const categoriesQuery = useQuery({
     queryKey: ["categories", cacheId],
     queryFn: async () => {
-      const cached = await db.categories.get(cacheId);
-      if (!userId) {
-        return DEFAULT_CATEGORIES;
-      }
-      if (!isOnline) {
-        return sortCategories((cached?.data ?? DEFAULT_CATEGORIES) as Category[]);
-      }
-
-      try {
-        const { data, error } = await withNetworkTimeout(
-          supabase
-            .from("categories")
-            .select("*")
-            .or(`is_default.eq.true,created_by.eq.${userId}`)
-            .order("is_default", { ascending: false })
-            .order("name"),
-        );
-        if (error) throw error;
-
-        if (data) {
-          await updateCategoryCache(data as Category[]);
-        }
-        return sortCategories((data ?? DEFAULT_CATEGORIES) as Category[]);
-      } catch {
-        return sortCategories((cached?.data ?? DEFAULT_CATEGORIES) as Category[]);
-      }
+      if (!userId) return DEFAULT_CATEGORIES;
+      const { data, error } = await supabase
+        .from("categories")
+        .select("*")
+        .or(`is_default.eq.true,created_by.eq.${userId}`)
+        .order("is_default", { ascending: false })
+        .order("name");
+      if (error) throw error;
+      return sortCategories((data ?? DEFAULT_CATEGORIES) as Category[]);
     },
+    enabled: !!userId && isOnline,
+    placeholderData: DEFAULT_CATEGORIES,
     staleTime: 300_000,
-    placeholderData: localCategories,
   });
 
   const createCategory = useMutation({
     mutationFn: async (rawName: string) => {
       const name = rawName.trim();
-      if (!name) {
-        throw new Error("Category name is required");
-      }
+      if (!name) throw new Error("Category name is required");
+      assertOnline(isOnline);
 
-      const existing = (queryClient.getQueryData(["categories", cacheId]) as
-        | Category[]
-        | undefined)?.find(
+      const existing = (
+        queryClient.getQueryData(["categories", cacheId]) as Category[] | undefined
+      )?.find(
         (category) => category.name.trim().toLowerCase() === name.toLowerCase(),
       );
-      if (existing) {
-        return existing;
-      }
+      if (existing) return existing;
 
-      if (!userId) {
-        throw new Error("User not available. Please sign in again.");
-      }
-      if (!isOnline) {
-        throw new Error("Creating custom categories requires internet.");
-      }
+      if (!userId) throw new Error("User not available. Please sign in again.");
 
-      const { data, error } = await withNetworkTimeout(
-        supabase
-          .from("categories")
-          .insert({
-            name,
-            color: getCustomCategoryColor(name),
-            icon: "tag",
-            is_default: false,
-            book_id: null,
-            created_by: userId,
-          })
-          .select("*")
-          .single(),
-      );
+      const { data, error } = await supabase
+        .from("categories")
+        .insert({
+          name,
+          color: getCustomCategoryColor(name),
+          icon: "tag",
+          is_default: false,
+          book_id: null,
+          created_by: userId,
+        })
+        .select("*")
+        .single();
       if (error) throw error;
       return data as Category;
     },
-    onSuccess: async (category) => {
-      const current =
-        (queryClient.getQueryData(["categories", cacheId]) as Category[]) ??
-        localCategories;
-      await updateCategoryCache([
-        ...current.filter((entry) => entry.id !== category.id),
-        category,
-      ]);
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories", cacheId] });
     },
   });
 
   const deleteCategory = useMutation({
     mutationFn: async (categoryId: string) => {
       const current =
-        (queryClient.getQueryData(["categories", cacheId]) as Category[]) ??
-        localCategories;
+        (queryClient.getQueryData(["categories", cacheId]) as Category[]) ?? [];
       const category = current.find((entry) => entry.id === categoryId);
-
-      if (!category) {
-        return categoryId;
-      }
-      if (category.is_default) {
+      if (!category) return categoryId;
+      if (category.is_default)
         throw new Error("Default categories cannot be deleted.");
-      }
-      if (!isOnline) {
-        throw new Error("Deleting custom categories requires internet.");
-      }
+      assertOnline(isOnline);
 
-      const { error } = await withNetworkTimeout(
-        supabase.from("categories").delete().eq("id", categoryId),
-      );
+      const { error } = await supabase
+        .from("categories")
+        .delete()
+        .eq("id", categoryId);
       if (error) throw error;
       return categoryId;
     },
-    onSuccess: async (categoryId) => {
-      const current =
-        (queryClient.getQueryData(["categories", cacheId]) as Category[]) ??
-        localCategories;
-      await updateCategoryCache(
-        current.filter((category) => category.id !== categoryId),
-      );
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["categories", cacheId] });
     },
   });
 
   return {
     ...categoriesQuery,
+    data: (categoriesQuery.data ?? DEFAULT_CATEGORIES) as Category[],
     createCategory,
     deleteCategory,
   };

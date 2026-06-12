@@ -33,7 +33,6 @@ import { getUserId, useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { getBookTotals } from "@/lib/cachedExpenseTotals";
-import { clearCachedOfflineData } from "@/lib/offlineJournal";
 import { formatINR } from "@/lib/utils";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -87,31 +86,8 @@ export default function Books() {
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
-  const [resyncing, setResyncing] = useState(false);
 
   const cacheUserId = user?.id || getUserId();
-
-  const handleResync = async () => {
-    if (!isOnline) {
-      toast.error("You need to be online to re-sync data");
-      return;
-    }
-    setResyncing(true);
-    try {
-      await clearCachedOfflineData(user?.id || getUserId());
-      await queryClient.invalidateQueries({ queryKey: ["books"] });
-      await queryClient.invalidateQueries({ queryKey: ["expenses"] });
-      await queryClient.invalidateQueries({ queryKey: ["book-totals"] });
-      await queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
-      await queryClient.invalidateQueries({ queryKey: ["categories"] });
-      await queryClient.refetchQueries({ queryKey: ["books"] });
-      toast.success("Offline data refreshed");
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to re-sync data");
-    } finally {
-      setResyncing(false);
-    }
-  };
 
   const resetForm = () => {
     setName("");
@@ -125,7 +101,7 @@ export default function Books() {
     .sort((a, b) => a.localeCompare(b))
     .join("|");
   const { data: bookTotals = {} } = useQuery({
-    queryKey: ["book-totals", bookIdsKey, cacheUserId, isOnline],
+    queryKey: ["book-totals", bookIdsKey, cacheUserId],
     queryFn: async () => {
       return await getBookTotals(
         books.map((book) => book.id),
@@ -133,11 +109,10 @@ export default function Books() {
         isOnline,
       );
     },
-    enabled: books.length > 0,
-    staleTime: 5_000,
-    refetchOnMount: "always",
+    enabled: books.length > 0 && isOnline,
     refetchOnWindowFocus: true,
   });
+
 
   const handleDuplicate = (bookId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -163,7 +138,7 @@ export default function Books() {
         includemembers,
         customName: duplicateName,
       });
-      toast.success("Book duplicated! It will sync when online.");
+      toast.success("Book duplicated!");
       setDuplicateDialogOpen(false);
       setDuplicateBookId(null);
     } catch (e: any) {
@@ -196,11 +171,7 @@ export default function Books() {
           currency,
           color,
         });
-        toast.success(
-          isOnline
-            ? "Book updated!"
-            : "Book updated offline. Will sync when online.",
-        );
+        toast.success("Book updated!");
       } else {
         await createBook.mutateAsync({
           name: name.trim(),
@@ -208,11 +179,7 @@ export default function Books() {
           currency,
           color,
         });
-        toast.success(
-          isOnline
-            ? "Book created!"
-            : "Book saved offline. Will sync when online.",
-        );
+        toast.success("Book created!");
       }
       setOpen(false);
       resetForm();
@@ -232,26 +199,7 @@ export default function Books() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 justify-end">
-            <Button
-              variant="outline"
-              size="sm"
-              className="whitespace-nowrap"
-              aria-label="Re-sync data"
-              onClick={handleResync}
-              disabled={resyncing || !isOnline}
-              title={
-                !isOnline
-                  ? "Connect to internet to re-sync"
-                  : "Clear local cache and re-fetch fresh data"
-              }
-            >
-              {resyncing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              <span className="hidden sm:inline">Re-sync Data</span>
-            </Button>
+
             <Dialog
               open={open}
               onOpenChange={(v) => {
@@ -420,14 +368,8 @@ export default function Books() {
                           <BookOpen className="h-5 w-5" />
                         </div>
                         <div className="flex items-center gap-1">
-                          {book._offline && (
-                            <Badge
-                              variant="outline"
-                              className="text-[10px] text-amber-600 border-amber-500/30"
-                            >
-                              Offline
-                            </Badge>
-                          )}
+                          {false && null}
+
                           {userRole && (
                             <Badge
                               variant="outline"

@@ -22,9 +22,6 @@ import { getUserId, useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabase } from "@/integrations/supabase/client";
-import { getDashboardStatsFromCache } from "@/lib/cachedExpenseTotals";
-import { db } from "@/lib/db";
-import { withNetworkTimeout } from "@/lib/network";
 import { formatCompactINR, formatINR } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
@@ -66,7 +63,7 @@ export default function Dashboard() {
   } = useBooks();
   const { isOnline } = useOfflineSync();
   const cacheUserId = user?.id || getUserId();
-  const dashboardStatsCacheId = `stats:${cacheUserId || "_anonymous"}`;
+  void cacheUserId;
   const dashboardBookIdsKey = books
     .map((book) => book.id)
     .sort((a, b) => a.localeCompare(b))
@@ -121,11 +118,7 @@ export default function Dashboard() {
         currency: editCurrency,
         color: editColor,
       });
-      toast.success(
-        isOnline
-          ? "Book updated!"
-          : "Book updated offline. Will sync when online.",
-      );
+      toast.success("Book updated!");
       setOpenEdit(false);
       resetEditForm();
     } catch (e: any) {
@@ -158,7 +151,7 @@ export default function Dashboard() {
         includemembers,
         customName: duplicateName,
       });
-      toast.success("Book duplicated! It will sync when online.");
+      toast.success("Book duplicated!");
       setDuplicateDialogOpen(false);
       setDuplicateBookId(null);
     } catch (e: any) {
@@ -169,37 +162,14 @@ export default function Dashboard() {
   const statsQuery = useQuery({
     queryKey: ["dashboard-stats", cacheUserId, dashboardBookIdsKey],
     queryFn: async () => {
-      if (!isOnline) {
-        const cached = await db.dashboard.get(dashboardStatsCacheId);
-        if (cached?.data)
-          return cached.data as {
-            totalExpense: number;
-            totalIncome: number;
-            balance: number;
-            count: number;
-          };
-
-        const data = await getDashboardStatsFromCache(
-          books.map((book) => book.id),
-          cacheUserId,
-        );
-        await db.dashboard.put({
-          id: dashboardStatsCacheId,
-          data,
-          cachedAt: Date.now(),
-        });
-        return data;
-      }
-
-      const { data: expenses } = await withNetworkTimeout(
-        supabase
-          .from("expenses")
-          .select(
-            "amount , expense_type,  expense_books!inner(id,name,book_members!inner(user_id,role))",
-          )
-          .eq("expense_books.book_members.user_id", user.id)
-          .eq("paid_by", user.id),
-      );
+      const { data: expenses, error } = await supabase
+        .from("expenses")
+        .select(
+          "amount , expense_type,  expense_books!inner(id,name,book_members!inner(user_id,role))",
+        )
+        .eq("expense_books.book_members.user_id", user.id)
+        .eq("paid_by", user.id);
+      if (error) throw error;
       const totalExpense =
         expenses
           ?.filter((e) => e.expense_type === "debit")
@@ -208,21 +178,16 @@ export default function Dashboard() {
         expenses
           ?.filter((e) => e.expense_type === "credit")
           .reduce((s, e) => s + Number(e.amount), 0) ?? 0;
-      const data = {
+      return {
         totalExpense,
         totalIncome,
         balance: totalIncome - totalExpense,
         count: expenses?.length ?? 0,
       };
-      await db.dashboard.put({
-        id: dashboardStatsCacheId,
-        data,
-        cachedAt: Date.now(),
-      });
-      return data;
     },
-    enabled: !!user,
+    enabled: !!user && isOnline,
   });
+
 
   const stats = statsQuery.data ?? {
     totalExpense: 0,

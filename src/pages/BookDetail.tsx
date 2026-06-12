@@ -206,6 +206,8 @@ export default function BookDetail() {
   const {
     expenses,
     isLoading,
+    totalIncome,
+    totalExpense,
     createExpense,
     updateExpense,
     deleteExpense,
@@ -366,13 +368,14 @@ export default function BookDetail() {
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <ShieldAlert className="h-12 w-12 text-muted-foreground" />
           <h2 className="text-xl font-display font-bold">
-            {isOnline ? "Access Denied" : "Unavailable Offline"}
+            {isOnline ? "Access Denied" : "You're offline"}
           </h2>
           <p className="text-muted-foreground">
             {isOnline
               ? "You don't have access to this book or it doesn't exist."
-              : "This book isn't cached yet. Open it once while online to use it offline."}
+              : "Connect to the internet to view this book."}
           </p>
+
           <Link to="/books">
             <Button variant="outline">Back to Books</Button>
           </Link>
@@ -449,18 +452,10 @@ export default function BookDetail() {
           expenseId: currentEditingExpenseId!,
           ...payload,
         });
-        toast.success(
-          isOnline
-            ? "Expense updated!"
-            : "Expense updated offline. Will sync when online.",
-        );
+        toast.success("Expense updated!");
       } else {
         await createExpense.mutateAsync({ book_id: bookId!, ...payload });
-        toast.success(
-          isOnline
-            ? "Expense added!"
-            : "Saved offline. Will sync when internet is available.",
-        );
+        toast.success("Expense added!");
       }
     } catch (e: any) {
       toast.error(e.message);
@@ -475,12 +470,7 @@ export default function BookDetail() {
     return true;
   });
 
-  const totalIncome = expenses
-    .filter((e) => e.expense_type === "credit")
-    .reduce((s, e) => s + Number(e.amount), 0);
-  const totalExpense = expenses
-    .filter((e) => e.expense_type === "debit")
-    .reduce((s, e) => s + Number(e.amount), 0);
+  // totalIncome and totalExpense come from useExpenses (full server aggregate).
   const cur = getCurrencySymbol(book?.currency ?? "INR");
 
   const handleCreateCategory = async (name: string) => {
@@ -942,13 +932,14 @@ export default function BookDetail() {
                   transition={{ duration: 0.2 }}
                   className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-900"
                 >
-                  <p className="font-medium">Viewing cached data</p>
+                  <p className="font-medium">You're offline</p>
                   <p className="text-amber-800 text-xs mt-1">
-                    You're offline. New actions will sync when back online.
+                    Connect to the internet to view and edit expenses.
                   </p>
                 </motion.div>
               )}
             </AnimatePresence>
+
 
             {/* Expense List */}
             {isLoading ? (
