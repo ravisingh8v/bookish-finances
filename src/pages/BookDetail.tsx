@@ -931,13 +931,14 @@ export default function BookDetail() {
                   transition={{ duration: 0.2 }}
                   className="rounded-lg bg-amber-500/10 border border-amber-500/20 p-3 text-sm text-amber-900"
                 >
-                  <p className="font-medium">Viewing cached data</p>
+                  <p className="font-medium">You're offline</p>
                   <p className="text-amber-800 text-xs mt-1">
-                    You're offline. New actions will sync when back online.
+                    Connect to the internet to view and edit expenses.
                   </p>
                 </motion.div>
               )}
             </AnimatePresence>
+
 
             {/* Expense List */}
             {isLoading ? (
