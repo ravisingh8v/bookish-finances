@@ -63,7 +63,7 @@ export default function Dashboard() {
   } = useBooks();
   const { isOnline } = useOfflineSync();
   const cacheUserId = user?.id || getUserId();
-  const dashboardStatsCacheId = `stats:${cacheUserId || "_anonymous"}`;
+  void cacheUserId;
   const dashboardBookIdsKey = books
     .map((book) => book.id)
     .sort((a, b) => a.localeCompare(b))
