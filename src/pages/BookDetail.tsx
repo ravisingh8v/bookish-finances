@@ -206,6 +206,8 @@ export default function BookDetail() {
   const {
     expenses,
     isLoading,
+    totalIncome,
+    totalExpense,
     createExpense,
     updateExpense,
     deleteExpense,
