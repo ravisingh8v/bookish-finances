@@ -1,8 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { db } from "@/lib/db";
-import { isOfflineLikeError, withNetworkTimeout } from "@/lib/network";
 import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
 
@@ -20,117 +19,85 @@ export interface BookMember {
   _offline?: boolean;
 }
 
-async function updateCachedBookMembers(
-  bookId: string,
-  updater: (members: BookMember[]) => BookMember[],
-) {
-  const cachedBook = await db.books.get(bookId);
-  if (!cachedBook) return;
-
-  const bookData = cachedBook.data as Record<string, unknown>;
-  const currentMembers = (bookData.members ?? []) as BookMember[];
-  const members = updater(currentMembers);
-
-  await db.books.put({
-    ...cachedBook,
-    data: {
-      ...bookData,
-      members,
-    },
-    cachedAt: Date.now(),
-  });
+function assertOnline(isOnline: boolean) {
+  if (!isOnline) {
+    throw new Error("You're offline. Connect to the internet to continue.");
+  }
 }
 
 export function useBookMembers(bookId: string) {
   const { user } = useAuth();
-  const {
-    isOnline,
-    getQueuedActions,
-    queueAction,
-    refreshPendingCount,
-    removeQueuedActions,
-    syncNow,
-    upsertQueuedAction,
-  } = useOfflineSync();
+  const { isOnline } = useOfflineSync();
   const queryClient = useQueryClient();
 
   const membersQuery = useQuery({
     queryKey: ["book-members", bookId],
     queryFn: async () => {
-      const cachedBook = await db.books.get(bookId);
-      const fallback = (((cachedBook?.data as Record<string, unknown>)?.members ??
-        []) as BookMember[]).map((member, index) => ({
-        ...member,
-        id:
-          member.id ??
-          `${bookId}_${member.user_id}_${index}_${member.role}`,
-        book_id: member.book_id ?? bookId,
-        joined_at: member.joined_at ?? new Date().toISOString(),
-      }));
+      const { data: members, error } = await supabase
+        .from("book_members")
+        .select("*")
+        .eq("book_id", bookId);
+      if (error) throw error;
 
-      if (!isOnline) return fallback;
-
-      try {
-        const { data: members, error } = await withNetworkTimeout(
-          supabase.from("book_members").select("*").eq("book_id", bookId),
-        );
-        if (error) throw error;
-
-        const userIds = members.map((member) => member.user_id);
-        let profileMap = new Map<
-          string,
-          {
-            display_name: string | null;
-            email: string | null;
-            avatar_url: string | null;
-          }
-        >();
-
-        if (userIds.length > 0) {
-          const { data: profiles } = await withNetworkTimeout(
-            supabase
-              .from("profiles")
-              .select("user_id, display_name, email, avatar_url")
-              .in("user_id", userIds),
-          );
-          profileMap = new Map(
-            profiles?.map((profile) => [profile.user_id, profile]) ?? [],
-          );
+      const userIds = members.map((member) => member.user_id);
+      let profileMap = new Map<
+        string,
+        {
+          display_name: string | null;
+          email: string | null;
+          avatar_url: string | null;
         }
+      >();
 
-        const hydrated = members.map((member) => ({
-          ...member,
-          profile: profileMap.get(member.user_id) ?? null,
-          _offline: false,
-        })) as BookMember[];
-
-        await updateCachedBookMembers(bookId, () => hydrated);
-        return hydrated;
-      } catch {
-        return fallback;
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("user_id, display_name, email, avatar_url")
+          .in("user_id", userIds);
+        profileMap = new Map(
+          profiles?.map((profile) => [profile.user_id, profile]) ?? [],
+        );
       }
+
+      return members.map((member) => ({
+        ...member,
+        profile: profileMap.get(member.user_id) ?? null,
+        _offline: false,
+      })) as BookMember[];
     },
-    enabled: !!bookId && !!user,
+    enabled: !!bookId && !!user && isOnline,
   });
+
+  useEffect(() => {
+    if (!bookId || !user) return;
+    const channel = supabase
+      .channel(`book-members-${bookId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "book_members",
+          filter: `book_id=eq.${bookId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["book-members", bookId] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [bookId, user, queryClient]);
 
   const currentUserRole = membersQuery.data?.find(
     (member) => member.user_id === user?.id,
   )?.role;
   const isOwner = currentUserRole === "owner";
 
-  const addOptimisticMember = async (optimisticMember: BookMember) => {
-    queryClient.setQueryData(
-      ["book-members", bookId],
-      (old: BookMember[] | undefined) => [...(old ?? []), optimisticMember],
-    );
-    await updateCachedBookMembers(bookId, (members) => [
-      ...members,
-      optimisticMember,
-    ]);
-  };
-
   const addMember = useMutation({
     mutationFn: async ({ email, role }: { email: string; role: string }) => {
+      assertOnline(isOnline);
       const normalizedEmail = email.toLowerCase().trim();
       const existing = membersQuery.data?.find(
         (member) => member.profile?.email?.toLowerCase() === normalizedEmail,
@@ -139,69 +106,26 @@ export function useBookMembers(bookId: string) {
         throw new Error("User is already a member of this book");
       }
 
-      const tempId = `temp_member_${crypto.randomUUID()}`;
-      const optimisticMember: BookMember = {
-        id: tempId,
+      const { data: profile, error: profileError } = await supabase
+        .from("profiles")
+        .select("user_id, display_name, email, avatar_url")
+        .eq("email", normalizedEmail)
+        .single();
+      if (profileError || !profile) {
+        throw new Error("No user found with that email");
+      }
+
+      const { error } = await supabase.from("book_members").insert({
         book_id: bookId,
-        user_id: tempId,
+        user_id: profile.user_id,
         role,
-        joined_at: new Date().toISOString(),
-        profile: {
-          display_name: null,
-          email: normalizedEmail,
-          avatar_url: null,
-        },
-        _offline: true,
-      };
-
-      if (!isOnline) {
-        await addOptimisticMember(optimisticMember);
-        await queueAction({
-          type: "add_member",
-          payload: { bookId, email: normalizedEmail, role },
-          tempId: tempId,
-          userId: user?.id,
-        });
-        return { queued: true as const };
-      }
-
-      try {
-        const { data: profile, error: profileError } = await supabase
-          .from("profiles")
-          .select("user_id, display_name, email, avatar_url")
-          .eq("email", normalizedEmail)
-          .single();
-        if (profileError || !profile) {
-          throw new Error("No user found with that email");
-        }
-
-        const { error } = await supabase.from("book_members").insert({
-          book_id: bookId,
-          user_id: profile.user_id,
-          role,
-        });
-        if (error) throw error;
-        return { queued: false as const };
-      } catch (error) {
-        if (!isOfflineLikeError(error)) {
-          throw error;
-        }
-
-        await addOptimisticMember(optimisticMember);
-        await queueAction({
-          type: "add_member",
-          payload: { bookId, email: normalizedEmail, role },
-          tempId: tempId,
-          userId: user?.id,
-        });
-        void syncNow();
-        return { queued: true as const };
-      }
+      });
+      if (error) throw error;
     },
-    onSuccess: (result) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["book-members", bookId] });
       queryClient.invalidateQueries({ queryKey: ["books"] });
-      toast.success(result?.queued ? "Invite queued for sync" : "Member added");
+      toast.success("Member added");
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -210,63 +134,42 @@ export function useBookMembers(bookId: string) {
 
   const removeMember = useMutation({
     mutationFn: async (memberId: string) => {
+      assertOnline(isOnline);
+      const { error } = await supabase
+        .from("book_members")
+        .delete()
+        .eq("id", memberId);
+      if (error) throw error;
+    },
+    onMutate: (memberId: string) => {
       queryClient.setQueryData(
         ["book-members", bookId],
         (old: BookMember[] | undefined) =>
           (old ?? []).filter((member) => member.id !== memberId),
       );
-      await updateCachedBookMembers(bookId, (members) =>
-        members.filter((member) => member.id !== memberId),
-      );
-
-      if (!isOnline) {
-        if (memberId.startsWith("temp_member_")) {
-          const queued = await getQueuedActions();
-          const ids = queued
-            .filter((action) => action.tempId === memberId)
-            .map((action) => action.id);
-          if (ids.length > 0) {
-            await removeQueuedActions(ids);
-            await refreshPendingCount();
-          }
-          return;
-        }
-
-        await queueAction({
-          type: "remove_member",
-          payload: { memberId },
-          userId: user?.id,
-        });
-        return;
-      }
-
-      try {
-        const { error } = await supabase
-          .from("book_members")
-          .delete()
-          .eq("id", memberId);
-        if (error) throw error;
-      } catch (error) {
-        if (!isOfflineLikeError(error)) {
-          throw error;
-        }
-
-        await queueAction({
-          type: "remove_member",
-          payload: { memberId },
-          userId: user?.id,
-        });
-        void syncNow();
-      }
     },
-    onSuccess: () => {
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["book-members", bookId] });
       queryClient.invalidateQueries({ queryKey: ["books"] });
     },
   });
 
   const updateRole = useMutation({
-    mutationFn: async ({ memberId, role }: { memberId: string; role: string }) => {
+    mutationFn: async ({
+      memberId,
+      role,
+    }: {
+      memberId: string;
+      role: string;
+    }) => {
+      assertOnline(isOnline);
+      const { error } = await supabase
+        .from("book_members")
+        .update({ role })
+        .eq("id", memberId);
+      if (error) throw error;
+    },
+    onMutate: ({ memberId, role }: { memberId: string; role: string }) => {
       queryClient.setQueryData(
         ["book-members", bookId],
         (old: BookMember[] | undefined) =>
@@ -274,71 +177,8 @@ export function useBookMembers(bookId: string) {
             member.id === memberId ? { ...member, role } : member,
           ),
       );
-      await updateCachedBookMembers(bookId, (members) =>
-        members.map((member) =>
-          member.id === memberId ? { ...member, role } : member,
-        ),
-      );
-
-      if (!isOnline) {
-        if (memberId.startsWith("temp_member_")) {
-          const queued = await getQueuedActions();
-          const pendingCreate = queued.find(
-            (action) =>
-              action.type === "add_member" && action.tempId === memberId,
-          );
-          if (pendingCreate) {
-            await upsertQueuedAction({
-              ...pendingCreate,
-              payload: { ...pendingCreate.payload, role },
-            });
-            return;
-          }
-        }
-
-        await queueAction({
-          type: "update_member_role",
-          payload: { memberId, role },
-          userId: user?.id,
-        });
-        return;
-      }
-
-      try {
-        const { error } = await supabase
-          .from("book_members")
-          .update({ role })
-          .eq("id", memberId);
-        if (error) throw error;
-      } catch (error) {
-        if (!isOfflineLikeError(error)) {
-          throw error;
-        }
-
-        if (memberId.startsWith("temp_member_")) {
-          const queued = await getQueuedActions();
-          const pendingCreate = queued.find(
-            (action) =>
-              action.type === "add_member" && action.tempId === memberId,
-          );
-          if (pendingCreate) {
-            await upsertQueuedAction({
-              ...pendingCreate,
-              payload: { ...pendingCreate.payload, role },
-            });
-            return;
-          }
-        }
-
-        await queueAction({
-          type: "update_member_role",
-          payload: { memberId, role },
-          userId: user?.id,
-        });
-        void syncNow();
-      }
     },
-    onSuccess: () => {
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["book-members", bookId] });
       queryClient.invalidateQueries({ queryKey: ["books"] });
     },
