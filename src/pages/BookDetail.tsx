@@ -451,18 +451,10 @@ export default function BookDetail() {
           expenseId: currentEditingExpenseId!,
           ...payload,
         });
-        toast.success(
-          isOnline
-            ? "Expense updated!"
-            : "Expense updated offline. Will sync when online.",
-        );
+        toast.success("Expense updated!");
       } else {
         await createExpense.mutateAsync({ book_id: bookId!, ...payload });
-        toast.success(
-          isOnline
-            ? "Expense added!"
-            : "Saved offline. Will sync when internet is available.",
-        );
+        toast.success("Expense added!");
       }
     } catch (e: any) {
       toast.error(e.message);
