@@ -368,13 +368,14 @@ export default function BookDetail() {
         <div className="flex flex-col items-center justify-center py-20 space-y-4">
           <ShieldAlert className="h-12 w-12 text-muted-foreground" />
           <h2 className="text-xl font-display font-bold">
-            {isOnline ? "Access Denied" : "Unavailable Offline"}
+            {isOnline ? "Access Denied" : "You're offline"}
           </h2>
           <p className="text-muted-foreground">
             {isOnline
               ? "You don't have access to this book or it doesn't exist."
-              : "This book isn't cached yet. Open it once while online to use it offline."}
+              : "Connect to the internet to view this book."}
           </p>
+
           <Link to="/books">
             <Button variant="outline">Back to Books</Button>
           </Link>
