@@ -206,7 +206,7 @@ export default function Books() {
               Organize your expenses into separate books
             </p>
           </div>
-          <div class="flex flex-wrap items-center gap-2 justify-end">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
 
             <Dialog
               open={open}
