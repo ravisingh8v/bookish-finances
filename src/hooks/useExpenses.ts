@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import { type TablesUpdate } from "@/integrations/supabase/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { toast } from "sonner";
@@ -279,7 +280,7 @@ export function useExpenses(bookId: string) {
   const updateExpense = useMutation({
     mutationFn: async (params: ExpenseUpdate) => {
       assertOnline(isOnline);
-      const update: Record<string, unknown> = {};
+      const update: TablesUpdate<"expenses"> = {};
       if (params.title !== undefined) update.title = params.title;
       if (params.amount !== undefined) update.amount = params.amount;
       if (params.date !== undefined) update.date = params.date;
