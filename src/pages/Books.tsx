@@ -171,11 +171,7 @@ export default function Books() {
           currency,
           color,
         });
-        toast.success(
-          isOnline
-            ? "Book updated!"
-            : "Book updated offline. Will sync when online.",
-        );
+        toast.success("Book updated!");
       } else {
         await createBook.mutateAsync({
           name: name.trim(),
@@ -183,11 +179,7 @@ export default function Books() {
           currency,
           color,
         });
-        toast.success(
-          isOnline
-            ? "Book created!"
-            : "Book saved offline. Will sync when online.",
-        );
+        toast.success("Book created!");
       }
       setOpen(false);
       resetForm();
