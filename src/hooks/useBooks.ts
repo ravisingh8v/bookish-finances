@@ -1,21 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
-import { db } from "@/lib/db";
-import { isOfflineLikeError, withNetworkTimeout } from "@/lib/network";
-import {
-  getStoredBooks,
-  removeStoredBook,
-  removeStoredExpenseBucket,
-  setStoredBooks,
-  setStoredExpenses,
-  updateStoredBook,
-  upsertStoredBook,
-} from "@/lib/offlineJournal";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { getUserId, useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
-
-const MAX_BOOKS_CACHE = 10;
 
 export interface Book {
   id: string;
@@ -51,266 +38,131 @@ function sortBooksByCreatedDesc(books: Book[]) {
   );
 }
 
-async function cacheBooks(books: Book[]) {
-  const sortedBooks = sortBooksByCreatedDesc(books);
-  setStoredBooks(sortedBooks);
-  await db.books.clear();
-  await Promise.all(
-    sortedBooks.slice(0, MAX_BOOKS_CACHE).map((book) =>
-      db.books.put({
-        id: book.id,
-        data: book,
-        cachedAt: Date.now(),
-      }),
-    ),
-  );
-}
-
-async function updateCachedBook(bookId: string, updater: (book: Book) => Book) {
-  updateStoredBook<Book>(bookId, updater);
-  const cached = await db.books.get(bookId);
-  if (!cached) return;
-
-  await db.books.put({
-    ...cached,
-    data: updater(cached.data as Book),
-    cachedAt: Date.now(),
-  });
-}
-
-function getCachedBooksSync(): Book[] {
-  return getStoredBooks<Book>();
-}
-
-async function getCachedBooksAsync(): Promise<Book[]> {
-  try {
-    const cached = await db.books
-      .orderBy("cachedAt")
-      .reverse()
-      .limit(MAX_BOOKS_CACHE)
-      .toArray();
-    if (cached.length > 0) {
-      return sortBooksByCreatedDesc(cached.map((entry) => entry.data as Book));
-    }
-  } catch {
-    // IndexedDB may fail
+function assertOnline(isOnline: boolean) {
+  if (!isOnline) {
+    throw new Error("You're offline. Connect to the internet to continue.");
   }
-  return sortBooksByCreatedDesc(getCachedBooksSync());
 }
 
 export function useBooks() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const {
-    isOnline,
-    queueAction,
-    cancelQueuedCreate,
-    getQueuedActions,
-    removeQueuedActions,
-    refreshPendingCount,
-    syncNow,
-    upsertQueuedAction,
-  } = useOfflineSync();
-  const [localBooks, setLocalBooks] = useState<Book[]>([]);
-
-  useEffect(() => {
-    let active = true;
-    getCachedBooksAsync().then((books) => {
-      if (active) setLocalBooks(sortBooksByCreatedDesc(books));
-    });
-    return () => {
-      active = false;
-    };
-  }, []);
+  const { isOnline } = useOfflineSync();
 
   const booksQuery = useQuery({
     queryKey: ["books"],
     queryFn: async () => {
-      const cachedBooks = await getCachedBooksAsync();
-
       if (!user) return [];
-
-      if (!isOnline) {
-        return sortBooksByCreatedDesc(cachedBooks);
-      }
-
-      try {
-        const { data, error } = await withNetworkTimeout(
-          supabase
-            .from("expense_books")
-            .select(
-              "*, members:book_members(id, user_id, role), my_access:book_members!inner(user_id, role)",
-            )
-            .order("created_at", { ascending: false })
-            .eq("my_access.user_id", user.id),
-        );
-        if (error) throw error;
-
-        const books = sortBooksByCreatedDesc((data ?? []) as Book[]);
-        await cacheBooks(books);
-        void preloadExpenses(books.map((book) => book.id), user.id).then(
-          (cachedAnyExpenses) => {
-            if (!cachedAnyExpenses) return;
-            void Promise.all([
-              queryClient.invalidateQueries({ queryKey: ["book-totals"] }),
-              queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] }),
-            ]);
-          },
-        );
-        return books;
-      } catch (err) {
-        if (isOfflineLikeError(err)) {
-          return sortBooksByCreatedDesc(cachedBooks);
-        }
-        return sortBooksByCreatedDesc(cachedBooks);
-      }
+      const { data, error } = await supabase
+        .from("expense_books")
+        .select(
+          "*, members:book_members(id, user_id, role), my_access:book_members!inner(user_id, role)",
+        )
+        .order("created_at", { ascending: false })
+        .eq("my_access.user_id", user.id);
+      if (error) throw error;
+      return sortBooksByCreatedDesc((data ?? []) as Book[]);
     },
-    enabled: !!user,
-    staleTime: 30_000,
-    placeholderData: localBooks,
+    enabled: !!user && isOnline,
   });
+
+  // Realtime: refresh book list whenever books or memberships change.
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("books-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "expense_books" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["books"] });
+          queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "book_members" },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["books"] });
+        },
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, queryClient]);
 
   const createBook = useMutation({
     mutationFn: async (book: BookInput) => {
-      const tempId = `temp_${crypto.randomUUID()}`;
-      const now = new Date().toISOString();
+      assertOnline(isOnline);
       const userId = user?.id || getUserId();
-
       if (!userId) {
         throw new Error("User ID not available. Please log in again.");
       }
 
-      const optimisticBook: Book = {
-        id: tempId,
-        name: book.name,
-        description: book.description ?? null,
-        currency: book.currency ?? "INR",
-        color: book.color ?? "#10B981",
-        icon: book.icon ?? "wallet",
-        created_at: now,
-        updated_at: now,
-        created_by: userId,
-        members: [{ user_id: userId, role: "owner" }],
-        my_access: [{ user_id: userId, role: "owner" }],
-        _offline: true,
-      };
+      const { data, error } = await supabase
+        .from("expense_books")
+        .insert({
+          name: book.name,
+          description: book.description ?? null,
+          currency: book.currency ?? "INR",
+          color: book.color ?? "#10B981",
+          icon: book.icon ?? "wallet",
+          created_by: userId,
+        })
+        .select()
+        .single();
+      if (error) throw error;
 
-      queryClient.setQueryData(["books"], (old: Book[] | undefined) => [
-        optimisticBook,
-        ...(old ?? []),
-      ]);
-      upsertStoredBook(optimisticBook);
-      await db.books.put({
-        id: tempId,
-        data: optimisticBook,
-        cachedAt: Date.now(),
-      });
-      await queueAction({
-        type: "create_book",
-        payload: { ...book, tempId },
-        tempId,
-        userId: userId,
-      });
-      if (isOnline) {
-        void syncNow();
-      }
-      return optimisticBook;
+      const { error: memberError } = await supabase
+        .from("book_members")
+        .insert({ book_id: data.id, user_id: userId, role: "owner" });
+      if (memberError) throw memberError;
+
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
     },
   });
 
   const updateBook = useMutation({
     mutationFn: async (params: BookUpdate) => {
-      const patch = {
-        name: params.name,
-        description: params.description,
-        currency: params.currency,
-        color: params.color,
-        icon: params.icon,
-      };
-
-      queryClient.setQueryData(["books"], (old: Book[] | undefined) =>
-        (old ?? []).map((book) =>
-          book.id === params.bookId
-            ? { ...book, ...patch, updated_at: new Date().toISOString() }
-            : book,
-        ),
-      );
-      await updateCachedBook(params.bookId, (book) => ({
-        ...book,
-        ...patch,
-        updated_at: new Date().toISOString(),
-      }));
-
-      const actions = await getQueuedActions();
-      const pendingCreate = actions.find(
-        (action) =>
-          action.type === "create_book" &&
-          (action.tempId === params.bookId ||
-            action.payload.tempId === params.bookId),
-      );
-
-      if (pendingCreate) {
-        const nextAction = {
-          ...pendingCreate,
-          payload: {
-            ...pendingCreate.payload,
-            ...patch,
-            tempId: params.bookId,
-          },
-        };
-        await upsertQueuedAction(nextAction);
-      } else {
-        await queueAction({
-          type: "update_book",
-          payload: params,
-          userId: user?.id,
-        });
-      }
-
-      if (isOnline) {
-        void syncNow();
-      }
+      assertOnline(isOnline);
+      const { error } = await supabase
+        .from("expense_books")
+        .update({
+          name: params.name,
+          description: params.description,
+          currency: params.currency,
+          color: params.color,
+          icon: params.icon,
+        })
+        .eq("id", params.bookId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
     },
   });
 
   const deleteBook = useMutation({
     mutationFn: async (bookId: string) => {
+      assertOnline(isOnline);
+      const { error } = await supabase
+        .from("expense_books")
+        .delete()
+        .eq("id", bookId);
+      if (error) throw error;
+    },
+    onMutate: (bookId: string) => {
       queryClient.setQueryData(["books"], (old: Book[] | undefined) =>
         (old ?? []).filter((book) => book.id !== bookId),
       );
-      removeStoredBook(bookId);
-      removeStoredExpenseBucket(bookId);
-      await Promise.all([db.books.delete(bookId), db.expenses.delete(bookId)]);
-
-      if (bookId.startsWith("temp_")) {
-        const actions = await getQueuedActions();
-        const linkedActionIds = actions
-          .filter((action) => {
-            const payload = action.payload as Record<string, unknown>;
-            return (
-              action.tempId === bookId ||
-              payload.tempId === bookId ||
-              payload.bookId === bookId ||
-              payload.book_id === bookId
-            );
-          })
-          .map((action) => action.id);
-        if (linkedActionIds.length > 0) {
-          await removeQueuedActions(linkedActionIds);
-          await refreshPendingCount();
-        }
-        return;
-      }
-
-      await cancelQueuedCreate(bookId);
-      await queueAction({
-        type: "delete_book",
-        payload: { bookId },
-        userId: user?.id,
-      });
-      if (isOnline) {
-        void syncNow();
-      }
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      queryClient.invalidateQueries({ queryKey: ["book-totals"] });
     },
   });
 
@@ -324,76 +176,80 @@ export function useBooks() {
       includemembers?: boolean;
       customName?: string;
     }) => {
-      if (!isOnline) {
-        throw new Error("Book duplication requires internet connection");
-      }
-
-      const bookToDuplicate = (booksQuery.data ?? []).find(
-        (b) => b.id === bookId,
-      );
-      if (!bookToDuplicate) {
-        throw new Error("Book not found");
-      }
-
-      const tempId = `temp_${crypto.randomUUID()}`;
-      const now = new Date().toISOString();
+      assertOnline(isOnline);
       const userId = user?.id || getUserId();
-
       if (!userId) {
         throw new Error("User ID not available. Please log in again.");
       }
 
-      const finalName = customName || `${bookToDuplicate.name} (Copy)`;
+      const source = (booksQuery.data ?? []).find((b) => b.id === bookId);
+      if (!source) throw new Error("Book not found");
 
-      // Queue the duplication action
-      await queueAction({
-        type: "duplicate_book",
-        payload: {
-          sourceBookId: bookId,
-          bookName: finalName,
-          bookDescription: bookToDuplicate.description,
-          currency: bookToDuplicate.currency,
-          color: bookToDuplicate.color,
-          icon: bookToDuplicate.icon,
-          includemembers,
-          tempId,
-        },
-        tempId,
-        userId,
-      });
+      const { data: newBook, error: createError } = await supabase
+        .from("expense_books")
+        .insert({
+          name: customName || `${source.name} (Copy)`,
+          description: source.description ?? null,
+          currency: source.currency,
+          color: source.color,
+          icon: source.icon,
+          created_by: userId,
+        })
+        .select()
+        .single();
+      if (createError) throw createError;
 
-      // Create optimistic book
-      const optimisticBook: Book = {
-        id: tempId,
-        name: finalName,
-        description: bookToDuplicate.description,
-        currency: bookToDuplicate.currency,
-        color: bookToDuplicate.color,
-        icon: bookToDuplicate.icon,
-        created_at: now,
-        updated_at: now,
-        created_by: userId,
-        members: [{ user_id: userId, role: "owner" }],
-        my_access: [{ user_id: userId, role: "owner" }],
-        _offline: true,
-      };
+      const { error: memberError } = await supabase
+        .from("book_members")
+        .insert({ book_id: newBook.id, user_id: userId, role: "owner" });
+      if (memberError) throw memberError;
 
-      queryClient.setQueryData(["books"], (old: Book[] | undefined) => [
-        optimisticBook,
-        ...(old ?? []),
-      ]);
-      upsertStoredBook(optimisticBook);
-      await db.books.put({
-        id: tempId,
-        data: optimisticBook,
-        cachedAt: Date.now(),
-      });
-
-      if (isOnline) {
-        void syncNow();
+      if (includemembers) {
+        const { data: sourceMembers } = await supabase
+          .from("book_members")
+          .select("*")
+          .eq("book_id", bookId);
+        const membersToAdd = (sourceMembers || [])
+          .filter((m) => m.user_id !== userId)
+          .map((m) => ({
+            book_id: newBook.id,
+            user_id: m.user_id,
+            role: m.role,
+          }));
+        if (membersToAdd.length > 0) {
+          await supabase.from("book_members").insert(membersToAdd);
+        }
       }
 
-      return optimisticBook;
+      const { data: sourceExpenses } = await supabase
+        .from("expenses")
+        .select("*")
+        .eq("book_id", bookId);
+      if (sourceExpenses && sourceExpenses.length > 0) {
+        const expensesToInsert = sourceExpenses.map((expense) => ({
+          book_id: newBook.id,
+          title: expense.title,
+          amount: expense.amount,
+          date: expense.date,
+          category_id: expense.category_id || null,
+          expense_type: expense.expense_type ?? "debit",
+          payment_method: expense.payment_method ?? "cash",
+          notes: expense.notes ?? null,
+          tags: expense.tags ?? [],
+          paid_by: expense.paid_by ?? userId,
+          created_by: expense.created_by ?? userId,
+        }));
+        const { error: insertError } = await supabase
+          .from("expenses")
+          .insert(expensesToInsert as never);
+        if (insertError) throw insertError;
+      }
+
+      return newBook;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      queryClient.invalidateQueries({ queryKey: ["book-totals"] });
     },
   });
 
@@ -405,76 +261,11 @@ export function useBooks() {
   return {
     books: (booksQuery.data ?? []) as Book[],
     isLoading: booksQuery.isLoading && !booksQuery.data,
+    isError: booksQuery.isError,
     createBook,
     updateBook,
     deleteBook,
     duplicateBook,
     isBookOwner,
   };
-}
-
-async function preloadExpenses(bookIds: string[], userId?: string) {
-  let cachedAnyExpenses = false;
-
-  await Promise.all(
-    bookIds.slice(0, MAX_BOOKS_CACHE).map(async (bookId) => {
-      try {
-        const { data: expenses, error } = await supabase
-          .from("expenses")
-          .select("*, categories(name, icon, color)")
-          .eq("book_id", bookId)
-          .order("date", { ascending: false })
-          .order("created_at", { ascending: false })
-          .limit(20);
-        if (error) return;
-
-        const userIds = [
-          ...new Set(
-            (expenses ?? []).flatMap((expense) => [
-              expense.created_by,
-              expense.paid_by,
-            ]),
-          ),
-        ].filter(Boolean);
-
-        let profileMap = new Map<
-          string,
-          { display_name: string | null; email: string | null }
-        >();
-        if (userIds.length > 0) {
-          const { data: profiles } = await supabase
-            .from("profiles")
-            .select("user_id, display_name, email")
-            .in("user_id", userIds);
-          profileMap = new Map(
-            profiles?.map((profile) => [profile.user_id, profile]) ?? [],
-          );
-        }
-
-        const enriched = (expenses ?? []).map((expense) => ({
-          ...expense,
-          creator_profile: profileMap.get(expense.created_by) ?? null,
-          payer_profile: profileMap.get(expense.paid_by) ?? null,
-          _offline: false,
-        }));
-
-        if (enriched.length > 0) {
-          cachedAnyExpenses = true;
-        }
-
-        const currentUserId = userId || getUserId();
-        setStoredExpenses(bookId, enriched, currentUserId);
-        await db.expenses.put({
-          id: bookId,
-          expenses: enriched,
-          userId: currentUserId,
-          cachedAt: Date.now(),
-        });
-      } catch {
-        // Ignore background cache warmup errors.
-      }
-    }),
-  );
-
-  return cachedAnyExpenses;
 }
