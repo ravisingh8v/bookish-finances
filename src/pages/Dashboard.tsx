@@ -151,7 +151,7 @@ export default function Dashboard() {
         includemembers,
         customName: duplicateName,
       });
-      toast.success("Book duplicated! It will sync when online.");
+      toast.success("Book duplicated!");
       setDuplicateDialogOpen(false);
       setDuplicateBookId(null);
     } catch (e: any) {
