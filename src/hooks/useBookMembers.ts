@@ -108,8 +108,9 @@ export function useBookMembers(bookId: string) {
         .from("profiles")
         .select("user_id, display_name, email, avatar_url")
         .eq("email", normalizedEmail)
-        .single();
-      if (profileError || !profile) {
+        .maybeSingle();
+      if (profileError) throw profileError;
+      if (!profile) {
         throw new Error("No user found with that email");
       }
 
