@@ -8,7 +8,6 @@ import {
   useEffect,
   useState,
 } from "react";
-import { clearUserCache } from "@/lib/offlineJournal";
 
 type Profile = Tables<"profiles">;
 
@@ -106,10 +105,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    const userId = getCachedUserId();
-    if (userId) {
-      await clearUserCache(userId);
-    }
     localStorage.removeItem("_cached_user_id");
     await supabase.auth.signOut();
   };
