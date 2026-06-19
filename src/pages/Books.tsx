@@ -165,17 +165,8 @@ export default function Books() {
     const sourceBookId = draggedBookIdRef.current || event.dataTransfer.getData("text/plain");
     draggedBookIdRef.current = null;
     if (!sourceBookId || sourceBookId === targetBookId) return;
-
-    const currentIds = books.map((book) => book.id);
-    const sourceIndex = currentIds.indexOf(sourceBookId);
-    const targetIndex = currentIds.indexOf(targetBookId);
-    if (sourceIndex === -1 || targetIndex === -1) return;
-
-    const nextIds = [...currentIds];
-    const [moved] = nextIds.splice(sourceIndex, 1);
-    nextIds.splice(targetIndex, 0, moved);
     dragMovedRef.current = true;
-    reorderBooks.mutate(nextIds);
+    reorderBookIds(sourceBookId, targetBookId);
   };
 
   const reorderBookIds = (sourceBookId: string, targetBookId: string) => {
@@ -418,10 +409,20 @@ export default function Books() {
                 >
                   <Card
                     className="glass sm:hover:shadow-lg transition-all cursor-pointer group"
+                    data-book-id={book.id}
                     draggable={isOnline}
                     onDragStart={(event) => handleBookDragStart(event, book.id)}
                     onDragOver={(event) => event.preventDefault()}
                     onDrop={(event) => handleBookDrop(event, book.id)}
+                    onPointerDown={(event) => handleBookPointerDown(event, book.id)}
+                    onPointerMove={handleBookPointerMove}
+                    onPointerUp={handleBookPointerEnd}
+                    onPointerCancel={() => {
+                      pointerStartRef.current = null;
+                      window.setTimeout(() => {
+                        dragMovedRef.current = false;
+                      }, 0);
+                    }}
                     onDragEnd={() => {
                       window.setTimeout(() => {
                         draggedBookIdRef.current = null;
