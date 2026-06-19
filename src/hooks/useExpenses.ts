@@ -3,7 +3,7 @@ import { type TablesUpdate } from "@/integrations/supabase/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { getUserId, useAuth } from "./useAuth";
+import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
 
 export interface Category {
@@ -95,7 +95,7 @@ function assertOnline(isOnline: boolean) {
 }
 
 function getCategoryCacheId(userId?: string) {
-  return `categories:${userId || getUserId() || "_anonymous"}`;
+  return `categories:${userId || "_anonymous"}`;
 }
 
 function sortCategories(categories: Category[]) {
@@ -178,7 +178,7 @@ export function useExpenses(bookId: string) {
   const { user, profile } = useAuth();
   const queryClient = useQueryClient();
   const { isOnline } = useOfflineSync();
-  const userId = user?.id || getUserId();
+  const userId = user?.id;
 
   const expensesQuery = useQuery({
     queryKey: ["expenses", bookId],
@@ -249,7 +249,7 @@ export function useExpenses(bookId: string) {
   const createExpense = useMutation({
     mutationFn: async (payload: ExpensePayload) => {
       assertOnline(isOnline);
-      const uid = user?.id || getUserId();
+      const uid = user?.id;
       if (!uid) throw new Error("User ID not available. Please log in again.");
 
       const { data, error } = await supabase
@@ -372,7 +372,7 @@ export function useCategories() {
   const { user } = useAuth();
   const { isOnline } = useOfflineSync();
   const queryClient = useQueryClient();
-  const userId = user?.id || getUserId();
+  const userId = user?.id;
   const cacheId = getCategoryCacheId(userId);
 
   const categoriesQuery = useQuery({
