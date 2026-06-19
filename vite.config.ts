@@ -1,29 +1,14 @@
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 const buildId = new Date().toISOString();
-const ONE_DAY_IN_SECONDS = 24 * 60 * 60;
 const ONE_WEEK_IN_SECONDS = 7 * 24 * 60 * 60;
 const ONE_MONTH_IN_SECONDS = 30 * 24 * 60 * 60;
 
-function escapeRegex(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), "");
-  const supabaseOrigin = env.VITE_SUPABASE_URL
-    ? new URL(env.VITE_SUPABASE_URL).origin
-    : null;
-  const supabaseApiPattern = supabaseOrigin
-    ? new RegExp(
-        `^${escapeRegex(supabaseOrigin)}/(rest|auth|storage|functions|realtime)/`,
-      )
-    : undefined;
-
+export default defineConfig(() => {
   return {
     define: {
       __APP_BUILD_ID__: JSON.stringify(buildId),
@@ -88,26 +73,6 @@ export default defineConfig(({ mode }) => {
                 },
               },
             },
-            ...(supabaseApiPattern
-              ? [
-                  {
-                    urlPattern: supabaseApiPattern,
-                    handler: "NetworkFirst" as const,
-                    method: "GET" as const,
-                    options: {
-                      cacheName: "api-cache",
-                      networkTimeoutSeconds: 3,
-                      cacheableResponse: {
-                        statuses: [0, 200],
-                      },
-                      expiration: {
-                        maxEntries: 64,
-                        maxAgeSeconds: ONE_WEEK_IN_SECONDS,
-                      },
-                    },
-                  },
-                ]
-              : []),
           ],
         },
         manifest: {
