@@ -2,7 +2,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 import { toast } from "sonner";
-import { getUserId, useAuth } from "./useAuth";
+import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
 
 export interface Book {
@@ -129,7 +129,7 @@ export function useBooks() {
   const createBook = useMutation({
     mutationFn: async (book: BookInput) => {
       assertOnline(isOnline);
-      const userId = user?.id || getUserId();
+      const userId = user?.id;
       if (!userId) {
         throw new Error("User ID not available. Please log in again.");
       }
@@ -220,7 +220,7 @@ export function useBooks() {
       customName?: string;
     }) => {
       assertOnline(isOnline);
-      const userId = user?.id || getUserId();
+      const userId = user?.id;
       if (!userId) {
         throw new Error("User ID not available. Please log in again.");
       }
@@ -299,7 +299,7 @@ export function useBooks() {
   const reorderBooks = useMutation({
     mutationFn: async (orderedBookIds: string[]) => {
       assertOnline(isOnline);
-      const userId = user?.id || getUserId();
+      const userId = user?.id;
       if (!userId) throw new Error("User ID not available. Please log in again.");
 
       const rows = orderedBookIds.map((bookId, index) => ({
