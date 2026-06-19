@@ -97,6 +97,7 @@ export type Database = {
           icon: string
           id: string
           name: string
+          sort_order: number
           updated_at: string
         }
         Insert: {
@@ -108,6 +109,7 @@ export type Database = {
           icon?: string
           id?: string
           name: string
+          sort_order?: number
           updated_at?: string
         }
         Update: {
@@ -119,6 +121,7 @@ export type Database = {
           icon?: string
           id?: string
           name?: string
+          sort_order?: number
           updated_at?: string
         }
         Relationships: []
@@ -219,19 +222,47 @@ export type Database = {
         }
         Relationships: []
       }
+      user_book_orders: {
+        Row: {
+          book_id: string
+          created_at: string
+          id: string
+          sort_order: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          created_at?: string
+          id?: string
+          sort_order?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_book_orders_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "expense_books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      is_book_member: {
-        Args: { _book_id: string; _user_id: string }
-        Returns: boolean
-      }
-      is_book_owner: {
-        Args: { _book_id: string; _user_id: string }
-        Returns: boolean
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never

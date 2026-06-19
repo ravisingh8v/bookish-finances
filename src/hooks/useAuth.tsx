@@ -8,7 +8,6 @@ import {
   useEffect,
   useState,
 } from "react";
-import { clearUserCache } from "@/lib/offlineJournal";
 
 type Profile = Tables<"profiles">;
 
@@ -28,18 +27,6 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const storeUserIdLocally = (userId: string) => {
-  localStorage.setItem("_cached_user_id", userId);
-};
-
-const getCachedUserId = (): string | null => {
-  return localStorage.getItem("_cached_user_id");
-};
-
-export const getUserId = (): string | null => {
-  return getCachedUserId();
-};
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
@@ -54,7 +41,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user?.id) {
-        storeUserIdLocally(session.user.id);
         setTimeout(() => fetchProfile(session.user.id), 0);
       } else {
         setProfile(null);
@@ -66,7 +52,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
 
       if (session?.user?.id) {
-        storeUserIdLocally(session.user.id);
         fetchProfile(session.user.id);
       }
       setLoading(false);
@@ -106,11 +91,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    const userId = getCachedUserId();
-    if (userId) {
-      await clearUserCache(userId);
-    }
-    localStorage.removeItem("_cached_user_id");
     await supabase.auth.signOut();
   };
 

@@ -1,7 +1,8 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
-import { getUserId, useAuth } from "./useAuth";
+import { toast } from "sonner";
+import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
 
 export interface Book {
@@ -11,12 +12,12 @@ export interface Book {
   currency: string;
   color: string;
   icon: string;
+  sort_order: number;
   created_at: string;
   updated_at: string;
   created_by: string;
   members: { id?: string; user_id: string; role: string; profile?: unknown }[];
   my_access?: { user_id: string; role: string }[];
-  _offline?: boolean;
 }
 
 type BookInput = {
@@ -31,10 +32,12 @@ type BookUpdate = BookInput & {
   bookId: string;
 };
 
-function sortBooksByCreatedDesc(books: Book[]) {
+function sortBooks(books: Book[]) {
   return [...books].sort(
-    (a, b) =>
-      new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    (a, b) => {
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    },
   );
 }
 
@@ -58,10 +61,29 @@ export function useBooks() {
         .select(
           "*, members:book_members(id, user_id, role), my_access:book_members!inner(user_id, role)",
         )
-        .order("created_at", { ascending: false })
         .eq("my_access.user_id", user.id);
       if (error) throw error;
-      return sortBooksByCreatedDesc((data ?? []) as Book[]);
+
+      const rawBooks = (data ?? []) as Book[];
+      const bookIds = rawBooks.map((book) => book.id);
+      const { data: orders, error: orderError } = bookIds.length
+        ? await supabase
+            .from("user_book_orders")
+            .select("book_id, sort_order")
+            .eq("user_id", user.id)
+            .in("book_id", bookIds)
+        : { data: [], error: null };
+      if (orderError) throw orderError;
+
+      const orderMap = new Map(
+        (orders ?? []).map((entry) => [entry.book_id, entry.sort_order]),
+      );
+      return sortBooks(
+        rawBooks.map((book, index) => ({
+          ...book,
+          sort_order: orderMap.get(book.id) ?? book.sort_order ?? index,
+        })),
+      );
     },
     enabled: !!user && isOnline,
   });
@@ -86,6 +108,18 @@ export function useBooks() {
           queryClient.invalidateQueries({ queryKey: ["books"] });
         },
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "user_book_orders",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["books"] });
+        },
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(channel);
@@ -95,7 +129,7 @@ export function useBooks() {
   const createBook = useMutation({
     mutationFn: async (book: BookInput) => {
       assertOnline(isOnline);
-      const userId = user?.id || getUserId();
+      const userId = user?.id;
       if (!userId) {
         throw new Error("User ID not available. Please log in again.");
       }
@@ -118,6 +152,15 @@ export function useBooks() {
         .from("book_members")
         .insert({ book_id: data.id, user_id: userId, role: "owner" });
       if (memberError) throw memberError;
+
+      await supabase.from("user_book_orders").upsert(
+        {
+          user_id: userId,
+          book_id: data.id,
+          sort_order: 0,
+        },
+        { onConflict: "user_id,book_id" },
+      );
 
       return data;
     },
@@ -177,7 +220,7 @@ export function useBooks() {
       customName?: string;
     }) => {
       assertOnline(isOnline);
-      const userId = user?.id || getUserId();
+      const userId = user?.id;
       if (!userId) {
         throw new Error("User ID not available. Please log in again.");
       }
@@ -253,6 +296,43 @@ export function useBooks() {
     },
   });
 
+  const reorderBooks = useMutation({
+    mutationFn: async (orderedBookIds: string[]) => {
+      assertOnline(isOnline);
+      const userId = user?.id;
+      if (!userId) throw new Error("User ID not available. Please log in again.");
+
+      const rows = orderedBookIds.map((bookId, index) => ({
+        user_id: userId,
+        book_id: bookId,
+        sort_order: index,
+      }));
+      const { error } = await supabase
+        .from("user_book_orders")
+        .upsert(rows, { onConflict: "user_id,book_id" });
+      if (error) throw error;
+    },
+    onMutate: (orderedBookIds: string[]) => {
+      queryClient.setQueryData(["books"], (old: Book[] | undefined) => {
+        const orderMap = new Map(
+          orderedBookIds.map((bookId, index) => [bookId, index]),
+        );
+        return sortBooks(
+          (old ?? []).map((book) => ({
+            ...book,
+            sort_order: orderMap.get(book.id) ?? book.sort_order,
+          })),
+        );
+      });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+    },
+  });
+
   const isBookOwner = (book: Pick<Book, "members">) =>
     book.members?.some(
       (member) => member.user_id === user?.id && member.role === "owner",
@@ -266,6 +346,7 @@ export function useBooks() {
     updateBook,
     deleteBook,
     duplicateBook,
+    reorderBooks,
     isBookOwner,
   };
 }

@@ -16,7 +16,6 @@ export interface BookMember {
     email: string | null;
     avatar_url: string | null;
   } | null;
-  _offline?: boolean;
 }
 
 function assertOnline(isOnline: boolean) {
@@ -62,7 +61,6 @@ export function useBookMembers(bookId: string) {
       return members.map((member) => ({
         ...member,
         profile: profileMap.get(member.user_id) ?? null,
-        _offline: false,
       })) as BookMember[];
     },
     enabled: !!bookId && !!user && isOnline,
@@ -110,8 +108,9 @@ export function useBookMembers(bookId: string) {
         .from("profiles")
         .select("user_id, display_name, email, avatar_url")
         .eq("email", normalizedEmail)
-        .single();
-      if (profileError || !profile) {
+        .maybeSingle();
+      if (profileError) throw profileError;
+      if (!profile) {
         throw new Error("No user found with that email");
       }
 

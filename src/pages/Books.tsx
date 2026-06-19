@@ -29,12 +29,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getUserId, useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
-import { getBookTotals } from "@/lib/cachedExpenseTotals";
+import { getBookTotals } from "@/lib/bookTotals";
 import { formatINR } from "@/lib/utils";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -43,11 +43,10 @@ import {
   Edit,
   Loader2,
   Plus,
-  RefreshCw,
   Trash2,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { DragEvent, PointerEvent, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -64,9 +63,8 @@ const COLORS = [
 
 export default function Books() {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { isOnline } = useOfflineSync();
-  const queryClient = useQueryClient();
   const {
     books,
     isLoading,
@@ -74,6 +72,7 @@ export default function Books() {
     updateBook,
     deleteBook,
     duplicateBook,
+    reorderBooks,
     isBookOwner,
   } = useBooks();
   const [open, setOpen] = useState(false);
@@ -86,8 +85,9 @@ export default function Books() {
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
-
-  const cacheUserId = user?.id || getUserId();
+  const draggedBookIdRef = useRef<string | null>(null);
+  const pointerStartRef = useRef<{ bookId: string; x: number; y: number } | null>(null);
+  const dragMovedRef = useRef(false);
 
   const resetForm = () => {
     setName("");
@@ -101,13 +101,9 @@ export default function Books() {
     .sort((a, b) => a.localeCompare(b))
     .join("|");
   const { data: bookTotals = {} } = useQuery({
-    queryKey: ["book-totals", bookIdsKey, cacheUserId],
+    queryKey: ["book-totals", bookIdsKey],
     queryFn: async () => {
-      return await getBookTotals(
-        books.map((book) => book.id),
-        cacheUserId,
-        isOnline,
-      );
+      return await getBookTotals(books.map((book) => book.id));
     },
     enabled: books.length > 0 && isOnline,
     refetchOnWindowFocus: true,
@@ -154,6 +150,68 @@ export default function Books() {
     setColor(book.color);
     setEditingBook(book);
     setOpen(true);
+  };
+
+  const handleBookDragStart = (event: DragEvent<HTMLDivElement>, bookId: string) => {
+    draggedBookIdRef.current = bookId;
+    dragMovedRef.current = false;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", bookId);
+  };
+
+  const handleBookDrop = (event: DragEvent<HTMLDivElement>, targetBookId: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const sourceBookId = draggedBookIdRef.current || event.dataTransfer.getData("text/plain");
+    draggedBookIdRef.current = null;
+    if (!sourceBookId || sourceBookId === targetBookId) return;
+    dragMovedRef.current = true;
+    reorderBookIds(sourceBookId, targetBookId);
+  };
+
+  const reorderBookIds = (sourceBookId: string, targetBookId: string) => {
+    if (sourceBookId === targetBookId) return;
+    const currentIds = books.map((book) => book.id);
+    const sourceIndex = currentIds.indexOf(sourceBookId);
+    const targetIndex = currentIds.indexOf(targetBookId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const nextIds = [...currentIds];
+    const [moved] = nextIds.splice(sourceIndex, 1);
+    nextIds.splice(targetIndex, 0, moved);
+    reorderBooks.mutate(nextIds);
+  };
+
+  const handleBookPointerDown = (event: PointerEvent<HTMLDivElement>, bookId: string) => {
+    if (!isOnline || event.pointerType === "mouse") return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,a,input,textarea,[role='button']")) return;
+    pointerStartRef.current = { bookId, x: event.clientX, y: event.clientY };
+    dragMovedRef.current = false;
+  };
+
+  const handleBookPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const start = pointerStartRef.current;
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.hypot(dx, dy) > 18) {
+      dragMovedRef.current = true;
+    }
+  };
+
+  const handleBookPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!start || !dragMovedRef.current) return;
+    const targetBookId = document
+      .elementsFromPoint(event.clientX, event.clientY)
+      .map((element) => element.closest<HTMLElement>("[data-book-id]"))
+      .find(Boolean)?.dataset.bookId;
+    if (targetBookId) reorderBookIds(start.bookId, targetBookId);
+    window.setTimeout(() => {
+      dragMovedRef.current = false;
+    }, 150);
   };
 
   const handleSave = async () => {
@@ -354,7 +412,30 @@ export default function Books() {
                 >
                   <Card
                     className="glass sm:hover:shadow-lg transition-all cursor-pointer group"
-                    onClick={() => navigate(`/books/${book.id}`)}
+                    data-book-id={book.id}
+                    draggable={isOnline}
+                    onDragStart={(event) => handleBookDragStart(event, book.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => handleBookDrop(event, book.id)}
+                    onPointerDown={(event) => handleBookPointerDown(event, book.id)}
+                    onPointerMove={handleBookPointerMove}
+                    onPointerUp={handleBookPointerEnd}
+                    onPointerCancel={() => {
+                      pointerStartRef.current = null;
+                      window.setTimeout(() => {
+                        dragMovedRef.current = false;
+                      }, 0);
+                    }}
+                    onDragEnd={() => {
+                      window.setTimeout(() => {
+                        draggedBookIdRef.current = null;
+                        dragMovedRef.current = false;
+                      }, 0);
+                    }}
+                    onClick={() => {
+                      if (dragMovedRef.current) return;
+                      navigate(`/books/${book.id}`);
+                    }}
                   >
                     <CardContent className="p-4 space-y-2">
                       <div className="flex items-start justify-between">

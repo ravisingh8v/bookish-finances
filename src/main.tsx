@@ -5,12 +5,6 @@ import "./index.css";
 import { emitPWAInstallReady, emitPWAUpdateReady } from "./lib/pwa";
 
 const BUILD_ID_STORAGE_KEY = "expenseflow-build-id";
-const CACHE_RESET_STORAGE_KEY = "expenseflow-cache-reset-build-id";
-const SW_CONTROL_RELOAD_KEY = "expenseflow-sw-control-reload";
-
-// Cache names that should be cleared on update
-const CLEARABLE_CACHES = ["app-pages", "app-shell", "app-images", "api-cache"];
-
 async function clearLegacyCachesIfNeeded() {
   // Disabled: Causes double loads on first app open
   console.log("App version:", __APP_BUILD_ID__);
