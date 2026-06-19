@@ -119,14 +119,6 @@ export function useBookMembers(bookId: string) {
         role,
       });
       if (error) throw error;
-      await supabase.from("user_book_orders").upsert(
-        {
-          user_id: profile.user_id,
-          book_id: bookId,
-          sort_order: 0,
-        },
-        { onConflict: "user_id,book_id" },
-      );
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["book-members", bookId] });
