@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getUserId, useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { supabase } from "@/integrations/supabase/client";
@@ -52,7 +52,7 @@ const COLORS = [
 ];
 
 export default function Dashboard() {
-  const { profile, user } = useAuth();
+  const { user } = useAuth();
   const {
     books,
     isLoading,
@@ -62,8 +62,6 @@ export default function Dashboard() {
     isBookOwner,
   } = useBooks();
   const { isOnline } = useOfflineSync();
-  const cacheUserId = user?.id || getUserId();
-  void cacheUserId;
   const dashboardBookIdsKey = books
     .map((book) => book.id)
     .sort((a, b) => a.localeCompare(b))
@@ -160,7 +158,7 @@ export default function Dashboard() {
   };
 
   const statsQuery = useQuery({
-    queryKey: ["dashboard-stats", cacheUserId, dashboardBookIdsKey],
+    queryKey: ["dashboard-stats", user?.id, dashboardBookIdsKey],
     queryFn: async () => {
       const { data: expenses, error } = await supabase
         .from("expenses")
