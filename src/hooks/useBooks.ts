@@ -153,6 +153,15 @@ export function useBooks() {
         .insert({ book_id: data.id, user_id: userId, role: "owner" });
       if (memberError) throw memberError;
 
+      await supabase.from("user_book_orders").upsert(
+        {
+          user_id: userId,
+          book_id: data.id,
+          sort_order: 0,
+        },
+        { onConflict: "user_id,book_id" },
+      );
+
       return data;
     },
     onSuccess: () => {
