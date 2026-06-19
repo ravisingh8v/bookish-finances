@@ -372,19 +372,19 @@ export default function Books() {
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
-                  draggable={isOnline}
-                  onDragStart={(event) => handleBookDragStart(event, book.id)}
-                  onDragOver={(event) => event.preventDefault()}
-                  onDrop={(event) => handleBookDrop(event, book.id)}
-                  onDragEnd={() => {
-                    window.setTimeout(() => {
-                      draggedBookIdRef.current = null;
-                      dragMovedRef.current = false;
-                    }, 0);
-                  }}
                 >
                   <Card
                     className="glass sm:hover:shadow-lg transition-all cursor-pointer group"
+                    draggable={isOnline}
+                    onDragStart={(event) => handleBookDragStart(event, book.id)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => handleBookDrop(event, book.id)}
+                    onDragEnd={() => {
+                      window.setTimeout(() => {
+                        draggedBookIdRef.current = null;
+                        dragMovedRef.current = false;
+                      }, 0);
+                    }}
                     onClick={() => {
                       if (dragMovedRef.current) return;
                       navigate(`/books/${book.id}`);
