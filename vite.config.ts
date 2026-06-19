@@ -16,7 +16,7 @@ export default defineConfig(() => {
     server: {
       host: "0.0.0.0",
       port: 5000,
-      allowedHosts: true,
+      allowedHosts: true as const,
       hmr: {
         overlay: false,
       },
@@ -37,8 +37,8 @@ export default defineConfig(() => {
           runtimeCaching: [
             // Navigation requests are handled by Workbox's built-in
             // NavigationRoute via `navigateFallback: "index.html"`. The
-            // precached index.html is always served instantly (works fully
-            // offline). New deploys are picked up from the App Update page,
+            // precached index.html keeps the installed PWA shell launchable.
+            // New deploys are picked up from the App Update page,
             // where the user can manually check and apply a waiting worker.
             {
               urlPattern: ({ sameOrigin, request }) =>
