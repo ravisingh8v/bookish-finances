@@ -209,6 +209,9 @@ export default function Books() {
       .map((element) => element.closest<HTMLElement>("[data-book-id]"))
       .find(Boolean)?.dataset.bookId;
     if (targetBookId) reorderBookIds(start.bookId, targetBookId);
+    window.setTimeout(() => {
+      dragMovedRef.current = false;
+    }, 150);
   };
 
   const handleSave = async () => {
