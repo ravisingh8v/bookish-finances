@@ -41,7 +41,6 @@ export interface Expense {
     display_name: string | null;
     email: string | null;
   } | null;
-  _offline?: boolean;
 }
 
 type ExpensePayload = {
@@ -172,7 +171,6 @@ async function fetchExpensesPage(bookId: string, from: number, to: number) {
     ...expense,
     creator_profile: profileMap.get(expense.created_by) ?? null,
     payer_profile: profileMap.get(expense.paid_by) ?? null,
-    _offline: false,
   })) as Expense[];
 }
 
