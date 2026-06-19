@@ -1026,11 +1026,6 @@ export default function BookDetail() {
                                     {expense.payment_method}
                                   </span>
                                 )}
-                                {expense._offline && (
-                                  <span className="text-amber-600 text-[10px] px-1.5 py-0.5 bg-amber-50 rounded">
-                                    Pending sync
-                                  </span>
-                                )}
                               </div>
                             </div>
                             <div className="flex flex-col items-end gap-1 shrink-0">
