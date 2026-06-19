@@ -29,12 +29,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { getUserId, useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
 import { getBookTotals } from "@/lib/cachedExpenseTotals";
 import { formatINR } from "@/lib/utils";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
   ArrowLeft,
@@ -43,11 +43,10 @@ import {
   Edit,
   Loader2,
   Plus,
-  RefreshCw,
   Trash2,
   Users,
 } from "lucide-react";
-import { useState } from "react";
+import { DragEvent, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -66,7 +65,6 @@ export default function Books() {
   const navigate = useNavigate();
   const { user, profile } = useAuth();
   const { isOnline } = useOfflineSync();
-  const queryClient = useQueryClient();
   const {
     books,
     isLoading,
@@ -74,6 +72,7 @@ export default function Books() {
     updateBook,
     deleteBook,
     duplicateBook,
+    reorderBooks,
     isBookOwner,
   } = useBooks();
   const [open, setOpen] = useState(false);
@@ -86,8 +85,8 @@ export default function Books() {
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
-
-  const cacheUserId = user?.id || getUserId();
+  const draggedBookIdRef = useRef<string | null>(null);
+  const dragMovedRef = useRef(false);
 
   const resetForm = () => {
     setName("");
@@ -101,13 +100,9 @@ export default function Books() {
     .sort((a, b) => a.localeCompare(b))
     .join("|");
   const { data: bookTotals = {} } = useQuery({
-    queryKey: ["book-totals", bookIdsKey, cacheUserId],
+    queryKey: ["book-totals", bookIdsKey],
     queryFn: async () => {
-      return await getBookTotals(
-        books.map((book) => book.id),
-        cacheUserId,
-        isOnline,
-      );
+      return await getBookTotals(books.map((book) => book.id));
     },
     enabled: books.length > 0 && isOnline,
     refetchOnWindowFocus: true,
@@ -154,6 +149,32 @@ export default function Books() {
     setColor(book.color);
     setEditingBook(book);
     setOpen(true);
+  };
+
+  const handleBookDragStart = (event: DragEvent<HTMLDivElement>, bookId: string) => {
+    draggedBookIdRef.current = bookId;
+    dragMovedRef.current = false;
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", bookId);
+  };
+
+  const handleBookDrop = (event: DragEvent<HTMLDivElement>, targetBookId: string) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const sourceBookId = draggedBookIdRef.current || event.dataTransfer.getData("text/plain");
+    draggedBookIdRef.current = null;
+    if (!sourceBookId || sourceBookId === targetBookId) return;
+
+    const currentIds = books.map((book) => book.id);
+    const sourceIndex = currentIds.indexOf(sourceBookId);
+    const targetIndex = currentIds.indexOf(targetBookId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const nextIds = [...currentIds];
+    const [moved] = nextIds.splice(sourceIndex, 1);
+    nextIds.splice(targetIndex, 0, moved);
+    dragMovedRef.current = true;
+    reorderBooks.mutate(nextIds);
   };
 
   const handleSave = async () => {
