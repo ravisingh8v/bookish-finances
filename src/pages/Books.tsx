@@ -46,7 +46,7 @@ import {
   Trash2,
   Users,
 } from "lucide-react";
-import { DragEvent, useRef, useState } from "react";
+import { DragEvent, PointerEvent, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -86,6 +86,7 @@ export default function Books() {
   const [duplicateName, setDuplicateName] = useState("");
   const [includemembers, setIncludemembers] = useState(false);
   const draggedBookIdRef = useRef<string | null>(null);
+  const pointerStartRef = useRef<{ bookId: string; x: number; y: number } | null>(null);
   const dragMovedRef = useRef(false);
 
   const resetForm = () => {
@@ -175,6 +176,48 @@ export default function Books() {
     nextIds.splice(targetIndex, 0, moved);
     dragMovedRef.current = true;
     reorderBooks.mutate(nextIds);
+  };
+
+  const reorderBookIds = (sourceBookId: string, targetBookId: string) => {
+    if (sourceBookId === targetBookId) return;
+    const currentIds = books.map((book) => book.id);
+    const sourceIndex = currentIds.indexOf(sourceBookId);
+    const targetIndex = currentIds.indexOf(targetBookId);
+    if (sourceIndex === -1 || targetIndex === -1) return;
+
+    const nextIds = [...currentIds];
+    const [moved] = nextIds.splice(sourceIndex, 1);
+    nextIds.splice(targetIndex, 0, moved);
+    reorderBooks.mutate(nextIds);
+  };
+
+  const handleBookPointerDown = (event: PointerEvent<HTMLDivElement>, bookId: string) => {
+    if (!isOnline || event.pointerType === "mouse") return;
+    const target = event.target as HTMLElement;
+    if (target.closest("button,a,input,textarea,[role='button']")) return;
+    pointerStartRef.current = { bookId, x: event.clientX, y: event.clientY };
+    dragMovedRef.current = false;
+  };
+
+  const handleBookPointerMove = (event: PointerEvent<HTMLDivElement>) => {
+    const start = pointerStartRef.current;
+    if (!start) return;
+    const dx = event.clientX - start.x;
+    const dy = event.clientY - start.y;
+    if (Math.hypot(dx, dy) > 18) {
+      dragMovedRef.current = true;
+    }
+  };
+
+  const handleBookPointerEnd = (event: PointerEvent<HTMLDivElement>) => {
+    const start = pointerStartRef.current;
+    pointerStartRef.current = null;
+    if (!start || !dragMovedRef.current) return;
+    const targetBookId = document
+      .elementsFromPoint(event.clientX, event.clientY)
+      .map((element) => element.closest<HTMLElement>("[data-book-id]"))
+      .find(Boolean)?.dataset.bookId;
+    if (targetBookId) reorderBookIds(start.bookId, targetBookId);
   };
 
   const handleSave = async () => {
