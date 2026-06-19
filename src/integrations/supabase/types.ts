@@ -262,14 +262,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      is_book_member: {
-        Args: { _book_id: string; _user_id: string }
-        Returns: boolean
-      }
-      is_book_owner: {
-        Args: { _book_id: string; _user_id: string }
-        Returns: boolean
-      }
+      [_ in never]: never
     }
     Enums: {
       [_ in never]: never
