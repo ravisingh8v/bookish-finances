@@ -69,7 +69,7 @@ export function useBookMembers(bookId: string) {
   useEffect(() => {
     if (!bookId || !user) return;
     const channel = supabase
-      .channel(`book-members-${bookId}`)
+      .channel(`book-members-${bookId}-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         {

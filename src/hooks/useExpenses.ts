@@ -215,7 +215,7 @@ export function useExpenses(bookId: string) {
   useEffect(() => {
     if (!bookId || !user) return;
     const channel = supabase
-      .channel(`expenses-${bookId}`)
+      .channel(`expenses-${bookId}-${Math.random().toString(36).slice(2)}`)
       .on(
         "postgres_changes",
         {
@@ -230,6 +230,19 @@ export function useExpenses(bookId: string) {
             queryKey: ["book-detail-totals", bookId],
           });
           queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "expense_books",
+          filter: `id=eq.${bookId}`,
+        },
+        () => {
+          queryClient.invalidateQueries({ queryKey: ["book", bookId] });
+          queryClient.invalidateQueries({ queryKey: ["books"] });
         },
       )
       .subscribe();

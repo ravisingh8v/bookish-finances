@@ -113,7 +113,7 @@ export function BookMembers({ bookId }: { bookId: string }) {
               Invite
             </Button>
             <Dialog open={open} onOpenChange={setOpen}>
-              <DialogContent className="w-full max-w-sm">
+              <DialogContent className="w-full max-w-sm z-[70]">
                 <DialogHeader>
                   <DialogTitle>Invite Member</DialogTitle>
                 </DialogHeader>
