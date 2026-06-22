@@ -1137,7 +1137,7 @@ export default function BookDetail() {
           </div>
 
           {/* Members sidebar - desktop only */}
-          {showMembers && (
+          {showMembers && isDesktop && (
             <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
