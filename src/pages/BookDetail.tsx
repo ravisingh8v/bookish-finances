@@ -180,11 +180,12 @@ function formatExpenseActivityTime(expense: {
   created_at?: string | null;
   updated_at?: string | null;
 }) {
+  // The `date` column is date-only (no time component), so it always renders
+  // as midnight. Use the real created/updated timestamps for the activity time.
   const timestamp =
-    expense.date ||
-    (expense.updated_at && expense.updated_at !== expense.created_at
+    expense.updated_at && expense.updated_at !== expense.created_at
       ? expense.updated_at
-      : expense.created_at);
+      : expense.created_at;
   if (!timestamp) return "";
 
   return new Date(timestamp).toLocaleTimeString("en-IN", {
