@@ -78,6 +78,11 @@ function getTimestamp(value?: string | null) {
   return Number.isNaN(time) ? 0 : time;
 }
 
+function toUtcDateTime(value: string) {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
+}
+
 function sortExpensesByDateDesc(expenses: Expense[]) {
   return [...expenses].sort((a, b) => {
     const dateDiff = getTimestamp(b.date) - getTimestamp(a.date);
@@ -265,13 +270,15 @@ export function useExpenses(bookId: string) {
       const uid = user?.id;
       if (!uid) throw new Error("User ID not available. Please log in again.");
 
+      const dateValue = payload.date ? toUtcDateTime(payload.date) : new Date().toISOString();
+
       const { data, error } = await supabase
         .from("expenses")
         .insert({
           book_id: payload.book_id,
           title: payload.title,
           amount: payload.amount,
-          date: payload.date ?? new Date().toISOString(),
+          date: dateValue,
           category_id: payload.category_id || null,
           expense_type: payload.expense_type ?? "debit",
           payment_method: payload.payment_method ?? "cash",
@@ -294,7 +301,7 @@ export function useExpenses(bookId: string) {
       const update: TablesUpdate<"expenses"> = {};
       if (params.title !== undefined) update.title = params.title;
       if (params.amount !== undefined) update.amount = params.amount;
-      if (params.date !== undefined) update.date = params.date;
+      if (params.date !== undefined) update.date = toUtcDateTime(params.date);
       if (params.category_id !== undefined)
         update.category_id = params.category_id || null;
       if (params.expense_type !== undefined)

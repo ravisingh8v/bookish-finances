@@ -116,25 +116,53 @@ function getRequiredCategoryId(
   );
 }
 
+function normalizeDateTimeValue(value?: string | null) {
+  if (!value) return value;
+  return value.trim().replace(" ", "T");
+}
+
 function getExpenseDateKey(expense: { date?: string | null }) {
-  return expense.date?.split("T")[0] ?? "";
+  return normalizeDateTimeValue(expense.date)?.split("T")[0] ?? "";
+}
+
+function pad2(value: number) {
+  return value.toString().padStart(2, "0");
+}
+
+function parseLocalDateTime(value: string) {
+  const normalized = normalizeDateTimeValue(value);
+  const [datePart, timePart] = normalized.split("T");
+  if (!datePart || !timePart) return null;
+
+  const [year, month, day] = datePart.split("-").map(Number);
+  const [hour, minute] = timePart.split(":").map(Number);
+  if (
+    [year, month, day, hour, minute].some(
+      (component) => !Number.isFinite(component),
+    )
+  ) {
+    return null;
+  }
+
+  return new Date(year, month - 1, day, hour, minute);
 }
 
 function toDateTimeLocalValue(value?: string | null) {
-  const source = value ? new Date(value) : new Date();
+  const source = value ? new Date(normalizeDateTimeValue(value)) : new Date();
   const date = Number.isNaN(source.getTime()) ? new Date() : source;
-  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return offsetDate.toISOString().slice(0, 16);
+  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(
+    date.getDate(),
+  )}T${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 function toUtcDateTime(value: string) {
-  const date = new Date(value);
+  const date = parseLocalDateTime(value) ?? new Date(value);
   return Number.isNaN(date.getTime()) ? new Date().toISOString() : date.toISOString();
 }
 
 function getTimestamp(value?: string | null) {
   if (!value) return 0;
-  const time = new Date(value).getTime();
+  const time = new Date(normalizeDateTimeValue(value)).getTime();
   return Number.isNaN(time) ? 0 : time;
 }
 
