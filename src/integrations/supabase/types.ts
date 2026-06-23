@@ -222,6 +222,83 @@ export type Database = {
         }
         Relationships: []
       }
+      split_bills: {
+        Row: {
+          created_at: string
+          created_by: string
+          currency: string
+          id: string
+          notes: string | null
+          split_type: string
+          title: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          currency?: string
+          id?: string
+          notes?: string | null
+          split_type?: string
+          title: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          currency?: string
+          id?: string
+          notes?: string | null
+          split_type?: string
+          title?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      split_participants: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_settled: boolean
+          share_amount: number
+          split_bill_id: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          is_settled?: boolean
+          share_amount?: number
+          split_bill_id: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_settled?: boolean
+          share_amount?: number
+          split_bill_id?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "split_participants_split_bill_id_fkey"
+            columns: ["split_bill_id"]
+            isOneToOne: false
+            referencedRelation: "split_bills"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_book_orders: {
         Row: {
           book_id: string
