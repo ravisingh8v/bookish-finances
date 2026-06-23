@@ -21,11 +21,13 @@ import {
   LogOut,
   RefreshCw,
   Settings,
+  SplitSquareHorizontal,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 const mainItems = [
   { title: "Books", url: "/books", icon: BookOpen },
+  { title: "Split Bills", url: "/split-bills", icon: SplitSquareHorizontal },
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "App Update", url: "/app-update", icon: RefreshCw },
