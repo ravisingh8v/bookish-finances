@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useAuth } from "./useAuth";
 import { useOfflineSync } from "./useOfflineSync";
@@ -8,6 +8,16 @@ import { useOfflineSync } from "./useOfflineSync";
 // The generated Supabase types may not yet include the split tables in all
 // environments, so we use a loosely-typed client for these queries.
 const db = supabase as any;
+
+export interface SplitPayment {
+  id: string;
+  split_bill_id: string;
+  split_participant_id: string;
+  user_id: string;
+  amount: number;
+  note: string | null;
+  created_at: string;
+}
 
 export interface SplitParticipant {
   id: string;
@@ -17,6 +27,10 @@ export interface SplitParticipant {
   share_amount: number;
   is_settled: boolean;
   created_at: string;
+  updated_at: string;
+  payments: SplitPayment[];
+  amount_paid: number;
+  remaining_amount: number;
 }
 
 export interface SplitBill {
@@ -38,6 +52,14 @@ function assertOnline(isOnline: boolean) {
   }
 }
 
+function isMissingTableError(error: any, tableName: string) {
+  return (
+    error &&
+    typeof error.message === "string" &&
+    error.message.includes(tableName)
+  );
+}
+
 export interface NewSplitInput {
   title: string;
   total_amount: number;
@@ -51,6 +73,7 @@ export function useSplitBills() {
   const { isOnline } = useOfflineSync();
   const queryClient = useQueryClient();
   const userId = user?.id;
+  const [paymentsEnabled, setPaymentsEnabled] = useState(true);
 
   const splitsQuery = useQuery({
     queryKey: ["split-bills", userId],
@@ -77,11 +100,56 @@ export function useSplitBills() {
         }
       }
 
+      let paymentsByParticipant = new Map<string, SplitPayment[]>();
+      if (billIds.length > 0) {
+        const { data: payments, error: payErr } = await db
+          .from("split_payments")
+          .select("*")
+          .in("split_bill_id", billIds);
+        if (payErr) {
+          if (isMissingTableError(payErr, "split_payments")) {
+            setPaymentsEnabled(false);
+          } else {
+            throw payErr;
+          }
+        } else {
+          setPaymentsEnabled(true);
+          for (const rawPayment of payments ?? []) {
+            const payment = {
+              ...rawPayment,
+              amount: Number(rawPayment.amount),
+            } as SplitPayment;
+            const list = paymentsByParticipant.get(payment.split_participant_id) ?? [];
+            list.push(payment);
+            paymentsByParticipant.set(payment.split_participant_id, list);
+          }
+        }
+      }
+
       return (bills ?? []).map((b: any) => ({
         ...b,
-        participants: (participantsByBill.get(b.id) ?? []).sort(
-          (a, c) => a.email.localeCompare(c.email),
-        ),
+        participants: (participantsByBill.get(b.id) ?? [])
+          .map((p) => {
+            const payments = (paymentsByParticipant.get(p.id) ?? []).sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime(),
+            );
+            const amount_paid = payments.reduce(
+              (sum, payment) => sum + payment.amount,
+              0,
+            );
+            const shareAmount = Number(p.share_amount);
+            const remaining_amount = Math.max(0, shareAmount - amount_paid);
+            return {
+              ...p,
+              payments,
+              amount_paid,
+              remaining_amount,
+              is_settled: p.is_settled || amount_paid >= shareAmount,
+            };
+          })
+          .sort((a, c) => a.email.localeCompare(c.email)),
       })) as SplitBill[];
     },
   });
@@ -98,6 +166,11 @@ export function useSplitBills() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "split_participants" },
+        () => queryClient.invalidateQueries({ queryKey: ["split-bills", userId] }),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "split_payments" },
         () => queryClient.invalidateQueries({ queryKey: ["split-bills", userId] }),
       )
       .subscribe();
@@ -207,11 +280,104 @@ export function useSplitBills() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const createPayment = useMutation({
+    mutationFn: async ({
+      participantId,
+      amount,
+      note,
+    }: {
+      participantId: string;
+      amount: number;
+      note?: string;
+    }) => {
+      assertOnline(isOnline);
+      if (!userId) throw new Error("Please sign in again.");
+      if (!paymentsEnabled)
+        throw new Error(
+          "Split payments are unavailable because the database migration has not been applied.",
+        );
+
+      const { data: participant, error: participantError } = await db
+        .from("split_participants")
+        .select("id, split_bill_id, user_id, share_amount")
+        .eq("id", participantId)
+        .single();
+      if (participantError) throw participantError;
+      if (!participant) throw new Error("Participant not found.");
+      if (participant.user_id !== userId)
+        throw new Error("You can only add payments for your own participant record.");
+
+      const { data: existingPayments, error: paymentsError } = await db
+        .from("split_payments")
+        .select("amount")
+        .eq("split_participant_id", participantId);
+      if (paymentsError) {
+        if (isMissingTableError(paymentsError, "split_payments")) {
+          setPaymentsEnabled(false);
+          throw new Error(
+            "Split payments are unavailable because the database migration has not been applied.",
+          );
+        }
+        throw paymentsError;
+      }
+
+      const paidSoFar = (existingPayments ?? []).reduce(
+        (sum: number, entry: any) => sum + Number(entry.amount),
+        0,
+      );
+      const remaining = Number(participant.share_amount) - paidSoFar;
+      if (amount <= 0) throw new Error("Enter a payment amount greater than zero.");
+      if (amount > remaining)
+        throw new Error(
+          `Payment cannot exceed remaining amount of ${remaining}.`,
+        );
+
+      const { data: payment, error: paymentError } = await db
+        .from("split_payments")
+        .insert({
+          split_bill_id: participant.split_bill_id,
+          split_participant_id: participantId,
+          user_id: userId,
+          amount,
+          note: note?.trim() || null,
+        })
+        .select("*")
+        .single();
+      if (paymentError) {
+        if (isMissingTableError(paymentError, "split_payments")) {
+          setPaymentsEnabled(false);
+          throw new Error(
+            "Split payments are unavailable because the database migration has not been applied.",
+          );
+        }
+        throw paymentError;
+      }
+
+      if (paidSoFar + amount >= Number(participant.share_amount)) {
+        const { error: settleError } = await db
+          .from("split_participants")
+          .update({ is_settled: true })
+          .eq("id", participantId);
+        if (settleError) throw settleError;
+      }
+
+      return {
+        ...payment,
+        amount: Number(payment.amount),
+      } as SplitPayment;
+    },
+    onSuccess: invalidate,
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return {
     splits: (splitsQuery.data ?? []) as SplitBill[],
     isLoading: splitsQuery.isLoading,
     createSplit,
     deleteSplit,
     toggleSettled,
+    createPayment,
+    paymentsEnabled,
   };
 }
+

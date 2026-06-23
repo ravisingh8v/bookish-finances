@@ -20,7 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
-import { useSplitBills } from "@/hooks/useSplitBills";
+import { useSplitBills, type SplitParticipant } from "@/hooks/useSplitBills";
 import { formatINR } from "@/lib/utils";
 import {
   Check,
@@ -40,7 +40,7 @@ const getCurrencySymbol = (c: string) =>
 
 export default function SplitBills() {
   const { user } = useAuth();
-  const { splits, isLoading, createSplit, deleteSplit, toggleSettled } =
+  const { splits, isLoading, createSplit, deleteSplit, toggleSettled, createPayment, paymentsEnabled } =
     useSplitBills();
 
   const [open, setOpen] = useState(false);
@@ -50,6 +50,10 @@ export default function SplitBills() {
   const [notes, setNotes] = useState("");
   const [emailInput, setEmailInput] = useState("");
   const [emails, setEmails] = useState<string[]>([]);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [activeParticipant, setActiveParticipant] = useState<SplitParticipant | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentNote, setPaymentNote] = useState("");
 
   const resetForm = () => {
     setTitle("");
@@ -58,6 +62,9 @@ export default function SplitBills() {
     setNotes("");
     setEmailInput("");
     setEmails([]);
+    setActiveParticipant(null);
+    setPaymentAmount("");
+    setPaymentNote("");
   };
 
   const addEmail = () => {
@@ -106,6 +113,48 @@ export default function SplitBills() {
       resetForm();
     } catch {}
   };
+
+  const openPaymentModal = (participant: SplitParticipant) => {
+    setActiveParticipant(participant);
+    setPaymentAmount("");
+    setPaymentNote("");
+    setPaymentDialogOpen(true);
+  };
+
+  const handleCreatePayment = async () => {
+    if (!activeParticipant) return;
+    const parsedAmount = Number(paymentAmount);
+    if (!paymentAmount || isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast.error("Enter a valid payment amount");
+      return;
+    }
+    if (parsedAmount > activeParticipant.remaining_amount) {
+      toast.error("Payment cannot exceed remaining share amount.");
+      return;
+    }
+    try {
+      await createPayment.mutateAsync({
+        participantId: activeParticipant.id,
+        amount: parsedAmount,
+        note: paymentNote.trim() || undefined,
+      });
+      setPaymentDialogOpen(false);
+      setActiveParticipant(null);
+      setPaymentAmount("");
+      setPaymentNote("");
+      toast.success("Payment recorded");
+    } catch (error) {
+      // error toast is handled by hook
+    }
+  };
+
+  const activeSplitCurrency = activeParticipant
+    ? getCurrencySymbol(
+        splits.find((split) =>
+          split.participants.some((participant) => participant.id === activeParticipant.id),
+        )?.currency ?? "INR",
+      )
+    : "";
 
   return (
     <DashboardLayout>
@@ -253,6 +302,17 @@ export default function SplitBills() {
           </Dialog>
         </div>
 
+        {!paymentsEnabled && (
+          <Card className="glass border-yellow-400/50 bg-yellow-50/80 text-yellow-900">
+            <CardContent className="p-4">
+              <p className="text-sm font-semibold">Split payment activity unavailable</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Partial payment tracking is disabled because the required database schema is not available yet. Apply the latest migration and refresh the page to enable payments.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2].map((i) => (
@@ -310,43 +370,87 @@ export default function SplitBills() {
                       </p>
                     )}
 
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {split.participants.map((p) => {
                         const canToggle = isOwner || p.user_id === user?.id;
+                        const canPay =
+                          paymentsEnabled && p.user_id === user?.id && p.remaining_amount > 0;
                         return (
-                          <div
-                            key={p.id}
-                            className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-2"
-                          >
-                            <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="text-sm truncate flex-1">
-                              {p.email}
-                            </span>
-                            <span className="text-sm font-medium shrink-0">
-                              {cur}
-                              {formatINR(p.share_amount)}
-                            </span>
-                            <Button
-                              variant={p.is_settled ? "default" : "outline"}
-                              size="sm"
-                              className="h-7 px-2 shrink-0"
-                              disabled={!canToggle}
-                              onClick={() =>
-                                toggleSettled.mutate({
-                                  participantId: p.id,
-                                  isSettled: !p.is_settled,
-                                })
-                              }
-                            >
-                              {p.is_settled ? (
-                                <>
-                                  <Check className="h-3 w-3 mr-1" />
-                                  Paid
-                                </>
-                              ) : (
-                                "Mark Paid"
-                              )}
-                            </Button>
+                          <div key={p.id} className="space-y-2">
+                            <div className="flex flex-col gap-2 rounded-lg bg-muted/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <div className="min-w-0">
+                                  <p className="text-sm truncate">{p.email}</p>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    Paid {cur}{formatINR(p.amount_paid)} • Remaining {cur}{formatINR(p.remaining_amount)}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex flex-wrap gap-2 items-center">
+                                <span className="text-sm font-medium shrink-0">
+                                  {cur}
+                                  {formatINR(p.share_amount)}
+                                </span>
+                                <Button
+                                  variant={p.is_settled ? "default" : "outline"}
+                                  size="sm"
+                                  className="h-7 px-2 shrink-0"
+                                  disabled={!canToggle}
+                                  onClick={() =>
+                                    toggleSettled.mutate({
+                                      participantId: p.id,
+                                      isSettled: !p.is_settled,
+                                    })
+                                  }
+                                >
+                                  {p.is_settled ? (
+                                    <>
+                                      <Check className="h-3 w-3 mr-1" />
+                                      Paid
+                                    </>
+                                  ) : (
+                                    "Mark Paid"
+                                  )}
+                                </Button>
+                                {canPay && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2 shrink-0"
+                                    onClick={() => openPaymentModal(p)}
+                                  >
+                                    Add Payment
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                            {p.payments.length > 0 && (
+                              <div className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+                                <p className="font-medium text-[11px] text-foreground mb-1">
+                                  Payment Activity
+                                </p>
+                                <div className="space-y-1">
+                                  {p.payments.map((payment) => (
+                                    <div key={payment.id} className="flex items-center justify-between gap-2">
+                                      <div className="min-w-0 truncate">
+                                        {payment.note ? `${payment.note} — ` : ""}
+                                        {new Date(payment.created_at).toLocaleString("en-IN", {
+                                          day: "2-digit",
+                                          month: "short",
+                                          hour: "2-digit",
+                                          minute: "2-digit",
+                                          hour12: true,
+                                        })}
+                                      </div>
+                                      <span className="font-medium">
+                                        {cur}{formatINR(payment.amount)}
+                                      </span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -358,6 +462,64 @@ export default function SplitBills() {
           </div>
         )}
       </div>
+
+      <Dialog
+        open={paymentDialogOpen}
+        onOpenChange={(value) => {
+          if (!value) setActiveParticipant(null);
+          setPaymentDialogOpen(value);
+        }}
+      >
+        <DialogContent className="w-full max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Payment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Participant</Label>
+              <Input readOnly value={activeParticipant?.email ?? ""} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="payment-amount">Amount</Label>
+              <Input
+                id="payment-amount"
+                type="number"
+                inputMode="decimal"
+                placeholder="0.00"
+                value={paymentAmount}
+                onChange={(e) => setPaymentAmount(e.target.value)}
+              />
+              {activeParticipant && (
+                <p className="text-xs text-muted-foreground">
+                  Remaining {activeSplitCurrency}{formatINR(activeParticipant.remaining_amount)}
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="payment-note">Note (optional)</Label>
+              <Textarea
+                id="payment-note"
+                rows={3}
+                className="resize-none"
+                value={paymentNote}
+                onChange={(e) => setPaymentNote(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              className="w-full"
+              onClick={handleCreatePayment}
+              disabled={createPayment.isPending}
+            >
+              {createPayment.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              )}
+              Record Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
