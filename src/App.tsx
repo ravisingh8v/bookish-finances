@@ -15,6 +15,7 @@ import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import SettingsPage from "./pages/SettingsPage";
+import SplitBills from "./pages/SplitBills";
 
 import queryClient from "@/lib/queryClient";
 
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="/books" element={<Books />} />
               <Route path="/books/:bookId" element={<BookDetail />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/split-bills" element={<SplitBills />} />
               <Route path="/app-update" element={<AppUpdate />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/reset-password" element={<ResetPassword />} />
