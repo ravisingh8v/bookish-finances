@@ -299,13 +299,36 @@ export function useSplitBills() {
 
       const { data: participant, error: participantError } = await db
         .from("split_participants")
-        .select("id, split_bill_id, user_id, share_amount")
+        .select("id, split_bill_id, user_id, email, share_amount")
         .eq("id", participantId)
         .single();
       if (participantError) throw participantError;
       if (!participant) throw new Error("Participant not found.");
-      if (participant.user_id !== userId)
-        throw new Error("You can only add payments for your own participant record.");
+
+      // Determine if the bill belongs to the current user (owner can log on behalf).
+      const { data: bill } = await db
+        .from("split_bills")
+        .select("created_by")
+        .eq("id", participant.split_bill_id)
+        .single();
+      const isOwner = bill?.created_by === userId;
+
+      const userEmail = user?.email?.toLowerCase().trim();
+      const emailMatches =
+        !!userEmail && participant.email?.toLowerCase().trim() === userEmail;
+      const isSelf = participant.user_id === userId;
+
+      if (!isSelf && !emailMatches && !isOwner) {
+        throw new Error("You can only add payments for your own share.");
+      }
+
+      // Auto-claim the participant record when the email matches but no user is linked yet.
+      if (!participant.user_id && emailMatches) {
+        await db
+          .from("split_participants")
+          .update({ user_id: userId })
+          .eq("id", participantId);
+      }
 
       const { data: existingPayments, error: paymentsError } = await db
         .from("split_payments")
@@ -327,7 +350,7 @@ export function useSplitBills() {
       );
       const remaining = Number(participant.share_amount) - paidSoFar;
       if (amount <= 0) throw new Error("Enter a payment amount greater than zero.");
-      if (amount > remaining)
+      if (amount > remaining + 0.001)
         throw new Error(
           `Payment cannot exceed remaining amount of ${remaining}.`,
         );
@@ -353,7 +376,7 @@ export function useSplitBills() {
         throw paymentError;
       }
 
-      if (paidSoFar + amount >= Number(participant.share_amount)) {
+      if (paidSoFar + amount >= Number(participant.share_amount) - 0.001) {
         const { error: settleError } = await db
           .from("split_participants")
           .update({ is_settled: true })
@@ -369,6 +392,7 @@ export function useSplitBills() {
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   return {
     splits: (splitsQuery.data ?? []) as SplitBill[],
