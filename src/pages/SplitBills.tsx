@@ -39,7 +39,7 @@ const getCurrencySymbol = (c: string) =>
   ({ INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" })[c] ?? c + " ";
 
 export default function SplitBills() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { splits, isLoading, createSplit, deleteSplit, toggleSettled, createPayment, paymentsEnabled } =
     useSplitBills();
 
