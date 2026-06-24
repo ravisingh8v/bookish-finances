@@ -382,9 +382,11 @@ export default function SplitBills() {
                                 <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                 <div className="min-w-0">
                                   <p className="text-sm truncate">{p.email}</p>
-                                  <p className="text-[11px] text-muted-foreground">
-                                    Paid {cur}{formatINR(p.amount_paid)} • Remaining {cur}{formatINR(p.remaining_amount)}
-                                  </p>
+                                  {!p.is_settled && (
+                                    <p className="text-[11px] text-muted-foreground">
+                                      Paid {cur}{formatINR(p.amount_paid)} • Remaining {cur}{formatINR(p.remaining_amount)}
+                                    </p>
+                                  )}
                                 </div>
                               </div>
                               <div className="flex flex-wrap gap-2 items-center">

@@ -307,17 +307,15 @@ export type Database = {
           note: string | null
           split_bill_id: string
           split_participant_id: string
-          updated_at: string
           user_id: string
         }
         Insert: {
-          amount?: number
+          amount: number
           created_at?: string
           id?: string
           note?: string | null
           split_bill_id: string
           split_participant_id: string
-          updated_at?: string
           user_id: string
         }
         Update: {
@@ -327,7 +325,6 @@ export type Database = {
           note?: string | null
           split_bill_id?: string
           split_participant_id?: string
-          updated_at?: string
           user_id?: string
         }
         Relationships: [
