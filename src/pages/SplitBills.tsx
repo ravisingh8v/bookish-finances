@@ -444,30 +444,39 @@ export default function SplitBills() {
                               </div>
                             </div>
                             {p.payments.length > 0 && (
-                              <div className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
-                                <p className="font-medium text-[11px] text-foreground mb-1">
-                                  Payment Activity
-                                </p>
-                                <div className="space-y-1">
-                                  {p.payments.map((payment) => (
-                                    <div key={payment.id} className="flex items-center justify-between gap-2">
-                                      <div className="min-w-0 truncate">
-                                        {payment.note ? `${payment.note} — ` : ""}
-                                        {new Date(payment.created_at).toLocaleString("en-IN", {
-                                          day: "2-digit",
-                                          month: "short",
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                          hour12: true,
-                                        })}
-                                      </div>
-                                      <span className="font-medium">
-                                        {cur}{formatINR(payment.amount)}
+                              <Collapsible open={expandedLogs.has(p.id)} onOpenChange={() => toggleLogs(p.id)}>
+                                <div className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+                                  <CollapsibleTrigger asChild>
+                                    <button className="w-full flex items-center justify-between gap-2">
+                                      <span className="font-medium text-[11px] text-foreground">
+                                        Payment Activity ({p.payments.length})
                                       </span>
+                                      <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${expandedLogs.has(p.id) ? "rotate-180" : ""}`} />
+                                    </button>
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent>
+                                    <div className="space-y-1 mt-1">
+                                      {p.payments.map((payment) => (
+                                        <div key={payment.id} className="flex items-center justify-between gap-2">
+                                          <div className="min-w-0 truncate">
+                                            {payment.note ? `${payment.note} — ` : ""}
+                                            {new Date(payment.created_at).toLocaleString("en-IN", {
+                                              day: "2-digit",
+                                              month: "short",
+                                              hour: "2-digit",
+                                              minute: "2-digit",
+                                              hour12: true,
+                                            })}
+                                          </div>
+                                          <span className="font-medium">
+                                            {cur}{formatINR(payment.amount)}
+                                          </span>
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
+                                  </CollapsibleContent>
                                 </div>
-                              </div>
+                              </Collapsible>
                             )}
                           </div>
                         );
