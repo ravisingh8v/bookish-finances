@@ -39,7 +39,7 @@ const getCurrencySymbol = (c: string) =>
   ({ INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" })[c] ?? c + " ";
 
 export default function SplitBills() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { splits, isLoading, createSplit, deleteSplit, toggleSettled, createPayment, paymentsEnabled } =
     useSplitBills();
 
@@ -372,9 +372,13 @@ export default function SplitBills() {
 
                     <div className="space-y-2">
                       {split.participants.map((p) => {
-                        const canToggle = isOwner || p.user_id === user?.id;
+                        const userEmail = profile?.email?.toLowerCase().trim();
+                        const isSelf =
+                          p.user_id === user?.id ||
+                          (!!userEmail && p.email?.toLowerCase().trim() === userEmail);
+                        const canToggle = isOwner || isSelf;
                         const canPay =
-                          paymentsEnabled && p.user_id === user?.id && p.remaining_amount > 0;
+                          paymentsEnabled && (isSelf || isOwner) && p.remaining_amount > 0;
                         return (
                           <div key={p.id} className="space-y-2">
                             <div className="flex flex-col gap-2 rounded-lg bg-muted/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
