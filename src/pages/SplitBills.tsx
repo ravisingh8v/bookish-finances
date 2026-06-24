@@ -19,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/useAuth";
 import { useSplitBills, type SplitParticipant } from "@/hooks/useSplitBills";
 import { formatINR } from "@/lib/utils";
@@ -67,6 +68,15 @@ export default function SplitBills() {
     setActiveParticipant(null);
     setPaymentAmount("");
     setPaymentNote("");
+  };
+
+  const toggleLogs = (participantId: string) => {
+    setExpandedLogs((prev) => {
+      const next = new Set(prev);
+      if (next.has(participantId)) next.delete(participantId);
+      else next.add(participantId);
+      return next;
+    });
   };
 
   const addEmail = () => {
