@@ -299,6 +299,51 @@ export type Database = {
           },
         ]
       }
+      split_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          note: string | null
+          split_bill_id: string
+          split_participant_id: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          split_bill_id: string
+          split_participant_id: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          split_bill_id?: string
+          split_participant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "split_payments_split_bill_id_fkey"
+            columns: ["split_bill_id"]
+            isOneToOne: false
+            referencedRelation: "split_bills"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "split_payments_split_participant_id_fkey"
+            columns: ["split_participant_id"]
+            isOneToOne: false
+            referencedRelation: "split_participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_book_orders: {
         Row: {
           book_id: string
