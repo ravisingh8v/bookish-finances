@@ -19,11 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/useAuth";
 import { useSplitBills, type SplitParticipant } from "@/hooks/useSplitBills";
 import { formatINR } from "@/lib/utils";
 import {
   Check,
+  ChevronDown,
   Loader2,
   Mail,
   Plus,
@@ -54,6 +56,7 @@ export default function SplitBills() {
   const [activeParticipant, setActiveParticipant] = useState<SplitParticipant | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
   const resetForm = () => {
     setTitle("");
@@ -65,6 +68,15 @@ export default function SplitBills() {
     setActiveParticipant(null);
     setPaymentAmount("");
     setPaymentNote("");
+  };
+
+  const toggleLogs = (participantId: string) => {
+    setExpandedLogs((prev) => {
+      const next = new Set(prev);
+      if (next.has(participantId)) next.delete(participantId);
+      else next.add(participantId);
+      return next;
+    });
   };
 
   const addEmail = () => {
@@ -432,30 +444,39 @@ export default function SplitBills() {
                               </div>
                             </div>
                             {p.payments.length > 0 && (
-                              <div className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
-                                <p className="font-medium text-[11px] text-foreground mb-1">
-                                  Payment Activity
-                                </p>
-                                <div className="space-y-1">
-                                  {p.payments.map((payment) => (
-                                    <div key={payment.id} className="flex items-center justify-between gap-2">
-                                      <div className="min-w-0 truncate">
-                                        {payment.note ? `${payment.note} — ` : ""}
-                                        {new Date(payment.created_at).toLocaleString("en-IN", {
-                                          day: "2-digit",
-                                          month: "short",
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                          hour12: true,
-                                        })}
-                                      </div>
-                                      <span className="font-medium">
-                                        {cur}{formatINR(payment.amount)}
+                              <Collapsible open={expandedLogs.has(p.id)} onOpenChange={() => toggleLogs(p.id)}>
+                                <div className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+                                  <CollapsibleTrigger asChild>
+                                    <button className="w-full flex items-center justify-between gap-2">
+                                      <span className="font-medium text-[11px] text-foreground">
+                                        Payment Activity ({p.payments.length})
                                       </span>
+                                      <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${expandedLogs.has(p.id) ? "rotate-180" : ""}`} />
+                                    </button>
+                                  </CollapsibleTrigger>
+                                  <CollapsibleContent>
+                                    <div className="space-y-1 mt-1">
+                                      {p.payments.map((payment) => (
+                                        <div key={payment.id} className="flex items-center justify-between gap-2">
+                                          <div className="min-w-0 truncate">
+                                            {payment.note ? `${payment.note} — ` : ""}
+                                            {new Date(payment.created_at).toLocaleString("en-IN", {
+                                              day: "2-digit",
+                                              month: "short",
+                                              hour: "2-digit",
+                                              minute: "2-digit",
+                                              hour12: true,
+                                            })}
+                                          </div>
+                                          <span className="font-medium">
+                                            {cur}{formatINR(payment.amount)}
+                                          </span>
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
+                                  </CollapsibleContent>
                                 </div>
-                              </div>
+                              </Collapsible>
                             )}
                           </div>
                         );
