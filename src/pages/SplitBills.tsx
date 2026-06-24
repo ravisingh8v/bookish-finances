@@ -24,6 +24,7 @@ import { useSplitBills, type SplitParticipant } from "@/hooks/useSplitBills";
 import { formatINR } from "@/lib/utils";
 import {
   Check,
+  ChevronDown,
   Loader2,
   Mail,
   Plus,
@@ -54,6 +55,7 @@ export default function SplitBills() {
   const [activeParticipant, setActiveParticipant] = useState<SplitParticipant | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
   const resetForm = () => {
     setTitle("");
