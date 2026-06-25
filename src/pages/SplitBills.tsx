@@ -70,6 +70,7 @@ export default function SplitBills() {
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
   const resetForm = () => {
+    setEditingId(null);
     setTitle("");
     setAmount("");
     setCurrency("INR");
@@ -79,6 +80,17 @@ export default function SplitBills() {
     setActiveParticipant(null);
     setPaymentAmount("");
     setPaymentNote("");
+  };
+
+  const openEdit = (split: (typeof splits)[number]) => {
+    setEditingId(split.id);
+    setTitle(split.title);
+    setAmount(String(split.total_amount));
+    setCurrency(split.currency);
+    setNotes(split.notes ?? "");
+    setEmailInput("");
+    setEmails(split.participants.map((p) => p.email));
+    setOpen(true);
   };
 
   const toggleLogs = (participantId: string) => {
