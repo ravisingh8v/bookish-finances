@@ -26,20 +26,27 @@ export default defineConfig(() => {
       VitePWA({
         includeAssets: ["favicon.ico", "robots.txt", "placeholder.svg", "icon-192.png", "icon-512.png", "apple-touch-icon.png"],
         injectRegister: "script",
-        registerType: "prompt",
+        registerType: "autoUpdate",
         workbox: {
           cleanupOutdatedCaches: true,
-          clientsClaim: false,
-          skipWaiting: false,
+          clientsClaim: true,
+          skipWaiting: true,
           globPatterns: ["**/*.{js,css,html,ico,png,svg,webmanifest}"],
           navigateFallback: "index.html",
           navigateFallbackAllowlist: [/^(?!\/__).*/],
           runtimeCaching: [
-            // Navigation requests are handled by Workbox's built-in
-            // NavigationRoute via `navigateFallback: "index.html"`. The
-            // precached index.html keeps the installed PWA shell launchable.
-            // New deploys are picked up from the App Update page,
-            // where the user can manually check and apply a waiting worker.
+            // HTML navigations use NetworkFirst so freshly deployed builds are
+            // always picked up immediately, falling back to the cached shell
+            // only when offline.
+            {
+              urlPattern: ({ request }) => request.mode === "navigate",
+              handler: "NetworkFirst",
+              options: {
+                cacheName: "app-html",
+                networkTimeoutSeconds: 4,
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
             {
               urlPattern: ({ sameOrigin, request }) =>
                 sameOrigin &&
