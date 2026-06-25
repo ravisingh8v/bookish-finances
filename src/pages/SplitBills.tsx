@@ -512,9 +512,26 @@ export default function SplitBills() {
                                               hour12: true,
                                             })}
                                           </div>
-                                          <span className="font-medium">
-                                            {cur}{formatINR(payment.amount)}
-                                          </span>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            <span className="font-medium">
+                                              {cur}{formatINR(payment.amount)}
+                                            </span>
+                                            {(isSelf || isOwner) && (
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-destructive"
+                                                onClick={() =>
+                                                  deletePayment.mutate({
+                                                    paymentId: payment.id,
+                                                    participantId: p.id,
+                                                  })
+                                                }
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </Button>
+                                            )}
+                                          </div>
                                         </div>
                                       ))}
                                     </div>
