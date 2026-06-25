@@ -7,7 +7,6 @@ import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import Analytics from "./pages/Analytics";
-import AppUpdate from "./pages/AppUpdate";
 import Auth from "./pages/Auth";
 import BookDetail from "./pages/BookDetail";
 import Books from "./pages/Books";
