@@ -35,7 +35,7 @@ const App = () => (
               <Route path="/books/:bookId" element={<BookDetail />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/split-bills" element={<SplitBills />} />
-              <Route path="/app-update" element={<AppUpdate />} />
+              
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="*" element={<NotFound />} />
