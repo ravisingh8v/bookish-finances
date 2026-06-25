@@ -14,6 +14,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { hardRefresh } from "@/lib/hardRefresh";
 import {
   BarChart3,
   BookOpen,
