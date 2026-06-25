@@ -472,7 +472,7 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-blue-600 disabled:opacity-50"
+                                className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-primary disabled:opacity-50"
                                 onClick={(e) => handleDuplicate(book.id, e)}
                                 disabled={duplicateBook.isPending || !isOnline}
                                 title={
@@ -521,7 +521,7 @@ export default function Books() {
                         <span
                           className={
                             "font-medium " +
-                            ` ${bookTotals[book.id] < 0 ? "text-red-600" : bookTotals[book.id] != 0 ? "text-green-600" : "text-foreground/80"}`
+                            ` ${bookTotals[book.id] < 0 ? "text-destructive" : bookTotals[book.id] != 0 ? "text-success" : "text-foreground/80"}`
                           }
                         >
                           {book.currency} {formatINR(bookTotals[book.id] ?? 0)}
