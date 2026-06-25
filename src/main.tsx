@@ -21,37 +21,21 @@ async function ensureServiceWorkerControlsPage() {
 async function bootstrap() {
   await clearLegacyCachesIfNeeded();
 
-  let registration: ServiceWorkerRegistration | null = null;
-
-  registerSW({
+  // Auto-update: apply newly deployed versions automatically and reload.
+  const updateSW = registerSW({
     immediate: true,
-    onRegisteredSW(_swUrl, reg) {
-      registration = reg;
-      void ensureServiceWorkerControlsPage();
-
-      // Listen for state changes in waiting worker
-      reg?.addEventListener("updatefound", () => {
-        const newWorker = reg.installing;
-        if (newWorker) {
-          newWorker.addEventListener("statechange", () => {
-            if (
-              newWorker.state === "installed" &&
-              navigator.serviceWorker.controller
-            ) {
-              // There's a new service worker and we're controlled
-              // This means there's an update ready
-              if (registration) {
-                emitPWAUpdateReady(registration);
-              }
-            }
-          });
-        }
-      });
-    },
     onNeedRefresh() {
-      // Emit update ready event to show notification
-      if (registration) {
-        emitPWAUpdateReady(registration);
+      // A new version is ready — activate it and reload with no user action.
+      void updateSW(true);
+    },
+    onRegisteredSW(_swUrl, reg) {
+      void ensureServiceWorkerControlsPage();
+      if (reg) {
+        // Periodically poll for new deployments so long-lived tabs update.
+        setInterval(() => {
+          void reg.update();
+        }, 60 * 1000);
+        emitPWAUpdateReady(reg);
       }
     },
     onOfflineReady() {
