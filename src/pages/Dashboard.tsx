@@ -217,7 +217,7 @@ export default function Dashboard() {
       title: "Books",
       value: books.length.toString(),
       icon: BookOpen,
-      color: "text-blue-600",
+      color: "text-info",
     },
   ];
 
@@ -366,7 +366,7 @@ export default function Dashboard() {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-blue-600 disabled:opacity-50"
+                                className="h-8 w-8 sm:opacity-0 sm:group-hover:opacity-100 text-muted-foreground sm:hover:text-primary disabled:opacity-50"
                                 onClick={(e) => handleDuplicate(book.id, e)}
                                 disabled={duplicateBook.isPending || !isOnline}
                                 title={

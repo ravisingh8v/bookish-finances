@@ -28,6 +28,7 @@ import {
   ChevronDown,
   Loader2,
   Mail,
+  Pencil,
   Plus,
   SplitSquareHorizontal,
   Trash2,
@@ -42,10 +43,20 @@ const getCurrencySymbol = (c: string) =>
 
 export default function SplitBills() {
   const { user, profile } = useAuth();
-  const { splits, isLoading, createSplit, deleteSplit, toggleSettled, createPayment, paymentsEnabled } =
-    useSplitBills();
+  const {
+    splits,
+    isLoading,
+    createSplit,
+    editSplit,
+    deleteSplit,
+    deletePayment,
+    toggleSettled,
+    createPayment,
+    paymentsEnabled,
+  } = useSplitBills();
 
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("INR");
@@ -59,6 +70,7 @@ export default function SplitBills() {
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
   const resetForm = () => {
+    setEditingId(null);
     setTitle("");
     setAmount("");
     setCurrency("INR");
@@ -68,6 +80,17 @@ export default function SplitBills() {
     setActiveParticipant(null);
     setPaymentAmount("");
     setPaymentNote("");
+  };
+
+  const openEdit = (split: (typeof splits)[number]) => {
+    setEditingId(split.id);
+    setTitle(split.title);
+    setAmount(String(split.total_amount));
+    setCurrency(split.currency);
+    setNotes(split.notes ?? "");
+    setEmailInput("");
+    setEmails(split.participants.map((p) => p.email));
+    setOpen(true);
   };
 
   const toggleLogs = (participantId: string) => {
@@ -114,13 +137,24 @@ export default function SplitBills() {
       return;
     }
     try {
-      await createSplit.mutateAsync({
-        title: title.trim(),
-        total_amount: Number(amount),
-        currency,
-        emails,
-        notes: notes.trim() || undefined,
-      });
+      if (editingId) {
+        await editSplit.mutateAsync({
+          id: editingId,
+          title: title.trim(),
+          total_amount: Number(amount),
+          currency,
+          emails,
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        await createSplit.mutateAsync({
+          title: title.trim(),
+          total_amount: Number(amount),
+          currency,
+          emails,
+          notes: notes.trim() || undefined,
+        });
+      }
       setOpen(false);
       resetForm();
     } catch {}
@@ -195,7 +229,7 @@ export default function SplitBills() {
             </DialogTrigger>
             <DialogContent className="w-full max-w-md">
               <DialogHeader>
-                <DialogTitle>New Split Bill</DialogTitle>
+                <DialogTitle>{editingId ? "Edit Split Bill" : "New Split Bill"}</DialogTitle>
               </DialogHeader>
               <div className="space-y-3">
                 <div className="space-y-1.5">
@@ -302,12 +336,12 @@ export default function SplitBills() {
                 <Button
                   className="w-full"
                   onClick={handleCreate}
-                  disabled={createSplit.isPending}
+                  disabled={createSplit.isPending || editSplit.isPending}
                 >
-                  {createSplit.isPending && (
+                  {(createSplit.isPending || editSplit.isPending) && (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   )}
-                  Create Split
+                  {editingId ? "Save Changes" : "Create Split"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -315,9 +349,9 @@ export default function SplitBills() {
         </div>
 
         {!paymentsEnabled && (
-          <Card className="glass border-yellow-400/50 bg-yellow-50/80 text-yellow-900">
+          <Card className="glass border-warning/40 bg-warning/10">
             <CardContent className="p-4">
-              <p className="text-sm font-semibold">Split payment activity unavailable</p>
+              <p className="text-sm font-semibold text-warning">Split payment activity unavailable</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Partial payment tracking is disabled because the required database schema is not available yet. Apply the latest migration and refresh the page to enable payments.
               </p>
@@ -362,17 +396,27 @@ export default function SplitBills() {
                         </p>
                       </div>
                       {isOwner && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive shrink-0"
-                          onClick={() => {
-                            if (confirm("Delete this split bill?"))
-                              deleteSplit.mutate(split.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground sm:hover:text-foreground"
+                            onClick={() => openEdit(split)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => {
+                              if (confirm("Delete this split bill?"))
+                                deleteSplit.mutate(split.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       )}
                     </div>
 
@@ -468,9 +512,26 @@ export default function SplitBills() {
                                               hour12: true,
                                             })}
                                           </div>
-                                          <span className="font-medium">
-                                            {cur}{formatINR(payment.amount)}
-                                          </span>
+                                          <div className="flex items-center gap-1 shrink-0">
+                                            <span className="font-medium">
+                                              {cur}{formatINR(payment.amount)}
+                                            </span>
+                                            {(isSelf || isOwner) && (
+                                              <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-6 w-6 text-destructive"
+                                                onClick={() =>
+                                                  deletePayment.mutate({
+                                                    paymentId: payment.id,
+                                                    participantId: p.id,
+                                                  })
+                                                }
+                                              >
+                                                <Trash2 className="h-3 w-3" />
+                                              </Button>
+                                            )}
+                                          </div>
                                         </div>
                                       ))}
                                     </div>

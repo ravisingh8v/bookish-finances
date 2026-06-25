@@ -248,6 +248,120 @@ export function useSplitBills() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const editSplit = useMutation({
+    mutationFn: async (input: {
+      id: string;
+      title: string;
+      total_amount: number;
+      currency: string;
+      notes?: string;
+      emails: string[];
+    }) => {
+      assertOnline(isOnline);
+      if (!userId) throw new Error("Please sign in again.");
+
+      const cleanEmails = Array.from(
+        new Set(
+          input.emails
+            .map((e) => e.toLowerCase().trim())
+            .filter((e) => e.length > 0),
+        ),
+      );
+      if (cleanEmails.length === 0)
+        throw new Error("Add at least one person to split with.");
+
+      const headCount = cleanEmails.length + 1; // creator + invitees
+      const share =
+        headCount > 0
+          ? Math.round((input.total_amount / headCount) * 100) / 100
+          : 0;
+
+      // Update bill details.
+      const { error: billErr } = await db
+        .from("split_bills")
+        .update({
+          title: input.title,
+          total_amount: input.total_amount,
+          currency: input.currency,
+          notes: input.notes ?? null,
+        })
+        .eq("id", input.id);
+      if (billErr) throw billErr;
+
+      // Reconcile participants.
+      const { data: existing, error: exErr } = await db
+        .from("split_participants")
+        .select("id, email")
+        .eq("split_bill_id", input.id);
+      if (exErr) throw exErr;
+
+      const existingByEmail = new Map<string, string>(
+        (existing ?? []).map((p: any) => [p.email?.toLowerCase().trim(), p.id]),
+      );
+      const existingEmails = new Set(existingByEmail.keys());
+      const nextEmails = new Set(cleanEmails);
+
+      // Remove participants no longer included.
+      const toRemove = (existing ?? []).filter(
+        (p: any) => !nextEmails.has(p.email?.toLowerCase().trim()),
+      );
+      if (toRemove.length > 0) {
+        const { error: delErr } = await db
+          .from("split_participants")
+          .delete()
+          .in(
+            "id",
+            toRemove.map((p: any) => p.id),
+          );
+        if (delErr) throw delErr;
+      }
+
+      // Resolve emails to existing users for new additions.
+      const newEmails = cleanEmails.filter((e) => !existingEmails.has(e));
+      let userMap = new Map<string, string>();
+      if (newEmails.length > 0) {
+        const { data: profiles } = await db
+          .from("profiles")
+          .select("user_id, email")
+          .in("email", newEmails);
+        userMap = new Map(
+          (profiles ?? []).map((p: any) => [p.email?.toLowerCase(), p.user_id]),
+        );
+      }
+
+      // Insert new participants.
+      const rows = newEmails.map((email) => ({
+        split_bill_id: input.id,
+        email,
+        user_id: userMap.get(email) ?? null,
+        share_amount: share,
+      }));
+      if (rows.length > 0) {
+        const { error: insErr } = await db
+          .from("split_participants")
+          .insert(rows);
+        if (insErr) throw insErr;
+      }
+
+      // Recompute share for all remaining participants.
+      const keepIds = cleanEmails
+        .filter((e) => existingEmails.has(e))
+        .map((e) => existingByEmail.get(e)!);
+      if (keepIds.length > 0) {
+        const { error: updErr } = await db
+          .from("split_participants")
+          .update({ share_amount: share })
+          .in("id", keepIds);
+        if (updErr) throw updErr;
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success("Split bill updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const deleteSplit = useMutation({
     mutationFn: async (splitId: string) => {
       assertOnline(isOnline);
@@ -257,6 +371,33 @@ export function useSplitBills() {
     onSuccess: () => {
       invalidate();
       toast("Split bill deleted");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const deletePayment = useMutation({
+    mutationFn: async ({
+      paymentId,
+      participantId,
+    }: {
+      paymentId: string;
+      participantId: string;
+    }) => {
+      assertOnline(isOnline);
+      const { error } = await db
+        .from("split_payments")
+        .delete()
+        .eq("id", paymentId);
+      if (error) throw error;
+      // Re-open settlement since the remaining amount changed.
+      await db
+        .from("split_participants")
+        .update({ is_settled: false })
+        .eq("id", participantId);
+    },
+    onSuccess: () => {
+      invalidate();
+      toast("Payment removed");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -398,7 +539,9 @@ export function useSplitBills() {
     splits: (splitsQuery.data ?? []) as SplitBill[],
     isLoading: splitsQuery.isLoading,
     createSplit,
+    editSplit,
     deleteSplit,
+    deletePayment,
     toggleSettled,
     createPayment,
     paymentsEnabled,
