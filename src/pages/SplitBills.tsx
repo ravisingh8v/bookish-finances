@@ -43,10 +43,20 @@ const getCurrencySymbol = (c: string) =>
 
 export default function SplitBills() {
   const { user, profile } = useAuth();
-  const { splits, isLoading, createSplit, deleteSplit, toggleSettled, createPayment, paymentsEnabled } =
-    useSplitBills();
+  const {
+    splits,
+    isLoading,
+    createSplit,
+    editSplit,
+    deleteSplit,
+    deletePayment,
+    toggleSettled,
+    createPayment,
+    paymentsEnabled,
+  } = useSplitBills();
 
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState("INR");
