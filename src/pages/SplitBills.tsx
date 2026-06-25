@@ -137,13 +137,24 @@ export default function SplitBills() {
       return;
     }
     try {
-      await createSplit.mutateAsync({
-        title: title.trim(),
-        total_amount: Number(amount),
-        currency,
-        emails,
-        notes: notes.trim() || undefined,
-      });
+      if (editingId) {
+        await editSplit.mutateAsync({
+          id: editingId,
+          title: title.trim(),
+          total_amount: Number(amount),
+          currency,
+          emails,
+          notes: notes.trim() || undefined,
+        });
+      } else {
+        await createSplit.mutateAsync({
+          title: title.trim(),
+          total_amount: Number(amount),
+          currency,
+          emails,
+          notes: notes.trim() || undefined,
+        });
+      }
       setOpen(false);
       resetForm();
     } catch {}
