@@ -396,17 +396,27 @@ export default function SplitBills() {
                         </p>
                       </div>
                       {isOwner && (
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-destructive shrink-0"
-                          onClick={() => {
-                            if (confirm("Delete this split bill?"))
-                              deleteSplit.mutate(split.id);
-                          }}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-muted-foreground sm:hover:text-foreground"
+                            onClick={() => openEdit(split)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive"
+                            onClick={() => {
+                              if (confirm("Delete this split bill?"))
+                                deleteSplit.mutate(split.id);
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       )}
                     </div>
 
