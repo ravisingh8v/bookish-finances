@@ -1077,7 +1077,7 @@ export default function BookDetail() {
                                   </DropdownMenuTrigger>
                                   <DropdownMenuPortal>
                                     <DropdownMenuContent
-                                      className="DropdownMenuContent p-1 bg-white text-gray-700 text-sm font-medium z-[999] rounded-lg shadow-lg border"
+                                      className="DropdownMenuContent p-1 bg-popover text-popover-foreground text-sm font-medium z-[999] rounded-lg shadow-lg border"
                                       sideOffset={5}
                                     >
                                       {canEdit && (
@@ -1096,7 +1096,7 @@ export default function BookDetail() {
                                       )}
                                       {canDelete && (
                                         <DropdownMenuItem
-                                          className="DropdownMenuItem p-2 rounded sm:hover:bg-red-50 text-destructive focus-visible:outline-none cursor-pointer"
+                                          className="DropdownMenuItem p-2 rounded sm:hover:bg-destructive/10 text-destructive focus-visible:outline-none cursor-pointer"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             if (confirm("Delete this expense?"))
