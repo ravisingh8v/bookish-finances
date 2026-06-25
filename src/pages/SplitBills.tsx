@@ -229,7 +229,7 @@ export default function SplitBills() {
             </DialogTrigger>
             <DialogContent className="w-full max-w-md">
               <DialogHeader>
-                <DialogTitle>New Split Bill</DialogTitle>
+                <DialogTitle>{editingId ? "Edit Split Bill" : "New Split Bill"}</DialogTitle>
               </DialogHeader>
               <div className="space-y-3">
                 <div className="space-y-1.5">
@@ -336,12 +336,12 @@ export default function SplitBills() {
                 <Button
                   className="w-full"
                   onClick={handleCreate}
-                  disabled={createSplit.isPending}
+                  disabled={createSplit.isPending || editSplit.isPending}
                 >
-                  {createSplit.isPending && (
+                  {(createSplit.isPending || editSplit.isPending) && (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   )}
-                  Create Split
+                  {editingId ? "Save Changes" : "Create Split"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -349,9 +349,9 @@ export default function SplitBills() {
         </div>
 
         {!paymentsEnabled && (
-          <Card className="glass border-yellow-400/50 bg-yellow-50/80 text-yellow-900">
+          <Card className="glass border-warning/40 bg-warning/10">
             <CardContent className="p-4">
-              <p className="text-sm font-semibold">Split payment activity unavailable</p>
+              <p className="text-sm font-semibold text-warning">Split payment activity unavailable</p>
               <p className="text-xs text-muted-foreground mt-1">
                 Partial payment tracking is disabled because the required database schema is not available yet. Apply the latest migration and refresh the page to enable payments.
               </p>
