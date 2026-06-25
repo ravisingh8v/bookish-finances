@@ -28,6 +28,7 @@ import {
   ChevronDown,
   Loader2,
   Mail,
+  Pencil,
   Plus,
   SplitSquareHorizontal,
   Trash2,
