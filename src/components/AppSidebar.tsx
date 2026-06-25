@@ -86,11 +86,20 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className={`p-3 ${collapsed ? "pl-0" : ""}`}>
+      <SidebarFooter className={`p-3 ${collapsed ? "pl-0" : ""} gap-1`}>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start text-muted-foreground sm:hover:bg-red-50 sm:hover:text-destructive"
+          className="w-full justify-start text-muted-foreground sm:hover:bg-muted/60 sm:hover:text-foreground"
+          onClick={() => hardRefresh()}
+        >
+          <RefreshCw className="h-4 w-4 mr-2" />
+          {!collapsed && "Hard Refresh"}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground sm:hover:bg-destructive/10 sm:hover:text-destructive"
           onClick={() => signOut()}
         >
           <LogOut className="h-4 w-4 mr-2" />
