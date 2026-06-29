@@ -23,6 +23,7 @@ export interface SplitParticipant {
   id: string;
   split_bill_id: string;
   email: string;
+  name: string | null;
   user_id: string | null;
   share_amount: number;
   is_settled: boolean;
@@ -65,6 +66,7 @@ export interface NewSplitInput {
   total_amount: number;
   currency: string;
   emails: string[];
+  names?: Record<string, string>;
   notes?: string;
 }
 
@@ -229,6 +231,7 @@ export function useSplitBills() {
       const rows = cleanEmails.map((email) => ({
         split_bill_id: bill.id,
         email,
+        name: input.names?.[email]?.trim() || null,
         user_id: userMap.get(email) ?? null,
         share_amount: share,
       }));
@@ -256,6 +259,7 @@ export function useSplitBills() {
       currency: string;
       notes?: string;
       emails: string[];
+      names?: Record<string, string>;
     }) => {
       assertOnline(isOnline);
       if (!userId) throw new Error("Please sign in again.");
@@ -333,6 +337,7 @@ export function useSplitBills() {
       const rows = newEmails.map((email) => ({
         split_bill_id: input.id,
         email,
+        name: input.names?.[email]?.trim() || null,
         user_id: userMap.get(email) ?? null,
         share_amount: share,
       }));
@@ -343,15 +348,16 @@ export function useSplitBills() {
         if (insErr) throw insErr;
       }
 
-      // Recompute share for all remaining participants.
-      const keepIds = cleanEmails
-        .filter((e) => existingEmails.has(e))
-        .map((e) => existingByEmail.get(e)!);
-      if (keepIds.length > 0) {
+      // Recompute share (and refresh names) for all remaining participants.
+      const keepEmails = cleanEmails.filter((e) => existingEmails.has(e));
+      for (const email of keepEmails) {
         const { error: updErr } = await db
           .from("split_participants")
-          .update({ share_amount: share })
-          .in("id", keepIds);
+          .update({
+            share_amount: share,
+            name: input.names?.[email]?.trim() || null,
+          })
+          .eq("id", existingByEmail.get(email)!);
         if (updErr) throw updErr;
       }
     },

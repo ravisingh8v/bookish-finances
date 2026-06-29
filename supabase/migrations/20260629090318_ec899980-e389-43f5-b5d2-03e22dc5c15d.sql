@@ -1,0 +1,1 @@
+ALTER TABLE public.split_participants ADD COLUMN IF NOT EXISTS name text;

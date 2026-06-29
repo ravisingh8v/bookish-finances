@@ -264,6 +264,7 @@ export type Database = {
           email: string
           id: string
           is_settled: boolean
+          name: string | null
           share_amount: number
           split_bill_id: string
           updated_at: string
@@ -274,6 +275,7 @@ export type Database = {
           email: string
           id?: string
           is_settled?: boolean
+          name?: string | null
           share_amount?: number
           split_bill_id: string
           updated_at?: string
@@ -284,6 +286,7 @@ export type Database = {
           email?: string
           id?: string
           is_settled?: boolean
+          name?: string | null
           share_amount?: number
           split_bill_id?: string
           updated_at?: string

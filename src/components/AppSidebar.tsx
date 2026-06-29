@@ -20,10 +20,13 @@ import {
   BookOpen,
   LayoutDashboard,
   LogOut,
+  Moon,
   RefreshCw,
   Settings,
   SplitSquareHorizontal,
+  Sun,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
 
 const mainItems = [
@@ -38,7 +41,9 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
+  const isDark = theme === "dark";
 
   return (
     <Sidebar collapsible="icon">
@@ -88,6 +93,19 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className={`p-3 ${collapsed ? "pl-0" : ""} gap-1`}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground sm:hover:bg-muted/60 sm:hover:text-foreground"
+          onClick={() => setTheme(isDark ? "light" : "dark")}
+        >
+          {isDark ? (
+            <Sun className="h-4 w-4 mr-2" />
+          ) : (
+            <Moon className="h-4 w-4 mr-2" />
+          )}
+          {!collapsed && (isDark ? "Light Mode" : "Dark Mode")}
+        </Button>
         <Button
           variant="ghost"
           size="sm"

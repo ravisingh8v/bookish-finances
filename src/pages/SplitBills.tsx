@@ -62,7 +62,9 @@ export default function SplitBills() {
   const [currency, setCurrency] = useState("INR");
   const [notes, setNotes] = useState("");
   const [emailInput, setEmailInput] = useState("");
+  const [nameInput, setNameInput] = useState("");
   const [emails, setEmails] = useState<string[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [activeParticipant, setActiveParticipant] = useState<SplitParticipant | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
@@ -76,7 +78,9 @@ export default function SplitBills() {
     setCurrency("INR");
     setNotes("");
     setEmailInput("");
+    setNameInput("");
     setEmails([]);
+    setNames({});
     setActiveParticipant(null);
     setPaymentAmount("");
     setPaymentNote("");
@@ -89,7 +93,15 @@ export default function SplitBills() {
     setCurrency(split.currency);
     setNotes(split.notes ?? "");
     setEmailInput("");
+    setNameInput("");
     setEmails(split.participants.map((p) => p.email));
+    setNames(
+      Object.fromEntries(
+        split.participants
+          .filter((p) => p.name && p.name.trim())
+          .map((p) => [p.email, p.name as string]),
+      ),
+    );
     setOpen(true);
   };
 
@@ -114,7 +126,10 @@ export default function SplitBills() {
       return;
     }
     setEmails((prev) => [...prev, e]);
+    const n = nameInput.trim();
+    if (n) setNames((prev) => ({ ...prev, [e]: n }));
     setEmailInput("");
+    setNameInput("");
   };
 
   const headCount = emails.length + 1;
@@ -144,6 +159,7 @@ export default function SplitBills() {
           total_amount: Number(amount),
           currency,
           emails,
+          names,
           notes: notes.trim() || undefined,
         });
       } else {
@@ -152,6 +168,7 @@ export default function SplitBills() {
           total_amount: Number(amount),
           currency,
           emails,
+          names,
           notes: notes.trim() || undefined,
         });
       }
@@ -270,14 +287,13 @@ export default function SplitBills() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="split-email">Split with (email)</Label>
-                  <div className="flex gap-2">
+                  <Label htmlFor="split-email">Split with</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
-                      id="split-email"
-                      type="email"
-                      placeholder="friend@example.com"
-                      value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
+                      id="split-name"
+                      placeholder="Name (optional)"
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
@@ -285,9 +301,24 @@ export default function SplitBills() {
                         }
                       }}
                     />
-                    <Button type="button" variant="outline" onClick={addEmail}>
-                      Add
-                    </Button>
+                    <div className="flex gap-2">
+                      <Input
+                        id="split-email"
+                        type="email"
+                        placeholder="friend@example.com"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addEmail();
+                          }
+                        }}
+                      />
+                      <Button type="button" variant="outline" onClick={addEmail}>
+                        Add
+                      </Button>
+                    </div>
                   </div>
                   {emails.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
@@ -296,12 +327,17 @@ export default function SplitBills() {
                           key={e}
                           className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2 py-1"
                         >
-                          {e}
+                          {names[e] ? `${names[e]} (${e})` : e}
                           <button
                             type="button"
-                            onClick={() =>
-                              setEmails((prev) => prev.filter((x) => x !== e))
-                            }
+                            onClick={() => {
+                              setEmails((prev) => prev.filter((x) => x !== e));
+                              setNames((prev) => {
+                                const next = { ...prev };
+                                delete next[e];
+                                return next;
+                              });
+                            }}
                           >
                             <X className="h-3 w-3" />
                           </button>
@@ -441,7 +477,10 @@ export default function SplitBills() {
                               <div className="flex items-center gap-2 min-w-0">
                                 <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                                 <div className="min-w-0">
-                                  <p className="text-sm truncate">{p.email}</p>
+                                  <p className="text-sm truncate">{p.name?.trim() || p.email}</p>
+                                  {p.name?.trim() && (
+                                    <p className="text-[11px] text-muted-foreground truncate">{p.email}</p>
+                                  )}
                                   {!p.is_settled && (
                                     <p className="text-[11px] text-muted-foreground">
                                       Paid {cur}{formatINR(p.amount_paid)} • Remaining {cur}{formatINR(p.remaining_amount)}
@@ -565,7 +604,7 @@ export default function SplitBills() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Participant</Label>
-              <Input readOnly value={activeParticipant?.email ?? ""} />
+              <Input readOnly value={activeParticipant?.name?.trim() || activeParticipant?.email || ""} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="payment-amount">Amount</Label>
