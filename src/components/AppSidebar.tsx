@@ -20,10 +20,13 @@ import {
   BookOpen,
   LayoutDashboard,
   LogOut,
+  Moon,
   RefreshCw,
   Settings,
   SplitSquareHorizontal,
+  Sun,
 } from "lucide-react";
+import { useTheme } from "next-themes";
 import { useNavigate } from "react-router-dom";
 
 const mainItems = [
