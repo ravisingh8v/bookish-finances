@@ -78,7 +78,9 @@ export default function SplitBills() {
     setCurrency("INR");
     setNotes("");
     setEmailInput("");
+    setNameInput("");
     setEmails([]);
+    setNames({});
     setActiveParticipant(null);
     setPaymentAmount("");
     setPaymentNote("");
