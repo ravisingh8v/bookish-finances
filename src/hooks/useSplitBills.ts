@@ -231,6 +231,7 @@ export function useSplitBills() {
       const rows = cleanEmails.map((email) => ({
         split_bill_id: bill.id,
         email,
+        name: input.names?.[email]?.trim() || null,
         user_id: userMap.get(email) ?? null,
         share_amount: share,
       }));
