@@ -97,6 +97,19 @@ export function AppSidebar() {
           variant="ghost"
           size="sm"
           className="w-full justify-start text-muted-foreground sm:hover:bg-muted/60 sm:hover:text-foreground"
+          onClick={() => setTheme(isDark ? "light" : "dark")}
+        >
+          {isDark ? (
+            <Sun className="h-4 w-4 mr-2" />
+          ) : (
+            <Moon className="h-4 w-4 mr-2" />
+          )}
+          {!collapsed && (isDark ? "Light Mode" : "Dark Mode")}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground sm:hover:bg-muted/60 sm:hover:text-foreground"
           onClick={() => hardRefresh()}
         >
           <RefreshCw className="h-4 w-4 mr-2" />
