@@ -93,7 +93,15 @@ export default function SplitBills() {
     setCurrency(split.currency);
     setNotes(split.notes ?? "");
     setEmailInput("");
+    setNameInput("");
     setEmails(split.participants.map((p) => p.email));
+    setNames(
+      Object.fromEntries(
+        split.participants
+          .filter((p) => p.name && p.name.trim())
+          .map((p) => [p.email, p.name as string]),
+      ),
+    );
     setOpen(true);
   };
 
