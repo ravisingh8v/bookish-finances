@@ -23,6 +23,7 @@ export interface SplitParticipant {
   id: string;
   split_bill_id: string;
   email: string;
+  name: string | null;
   user_id: string | null;
   share_amount: number;
   is_settled: boolean;
