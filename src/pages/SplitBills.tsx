@@ -62,7 +62,9 @@ export default function SplitBills() {
   const [currency, setCurrency] = useState("INR");
   const [notes, setNotes] = useState("");
   const [emailInput, setEmailInput] = useState("");
+  const [nameInput, setNameInput] = useState("");
   const [emails, setEmails] = useState<string[]>([]);
+  const [names, setNames] = useState<Record<string, string>>({});
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [activeParticipant, setActiveParticipant] = useState<SplitParticipant | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
