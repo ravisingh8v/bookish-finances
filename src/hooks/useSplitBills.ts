@@ -259,6 +259,7 @@ export function useSplitBills() {
       currency: string;
       notes?: string;
       emails: string[];
+      names?: Record<string, string>;
     }) => {
       assertOnline(isOnline);
       if (!userId) throw new Error("Please sign in again.");
