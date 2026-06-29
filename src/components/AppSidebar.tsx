@@ -41,7 +41,9 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const { signOut } = useAuth();
+  const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
+  const isDark = theme === "dark";
 
   return (
     <Sidebar collapsible="icon">
