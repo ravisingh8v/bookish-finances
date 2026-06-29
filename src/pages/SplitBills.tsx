@@ -604,7 +604,7 @@ export default function SplitBills() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Participant</Label>
-              <Input readOnly value={activeParticipant?.email ?? ""} />
+              <Input readOnly value={activeParticipant?.name?.trim() || activeParticipant?.email || ""} />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="payment-amount">Amount</Label>
