@@ -348,15 +348,16 @@ export function useSplitBills() {
         if (insErr) throw insErr;
       }
 
-      // Recompute share for all remaining participants.
-      const keepIds = cleanEmails
-        .filter((e) => existingEmails.has(e))
-        .map((e) => existingByEmail.get(e)!);
-      if (keepIds.length > 0) {
+      // Recompute share (and refresh names) for all remaining participants.
+      const keepEmails = cleanEmails.filter((e) => existingEmails.has(e));
+      for (const email of keepEmails) {
         const { error: updErr } = await db
           .from("split_participants")
-          .update({ share_amount: share })
-          .in("id", keepIds);
+          .update({
+            share_amount: share,
+            name: input.names?.[email]?.trim() || null,
+          })
+          .eq("id", existingByEmail.get(email)!);
         if (updErr) throw updErr;
       }
     },
