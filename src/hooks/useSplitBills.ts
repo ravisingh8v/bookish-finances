@@ -337,6 +337,7 @@ export function useSplitBills() {
       const rows = newEmails.map((email) => ({
         split_bill_id: input.id,
         email,
+        name: input.names?.[email]?.trim() || null,
         user_id: userMap.get(email) ?? null,
         share_amount: share,
       }));
