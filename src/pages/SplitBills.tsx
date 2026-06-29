@@ -287,14 +287,13 @@ export default function SplitBills() {
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="split-email">Split with (email)</Label>
-                  <div className="flex gap-2">
+                  <Label htmlFor="split-email">Split with</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
-                      id="split-email"
-                      type="email"
-                      placeholder="friend@example.com"
-                      value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
+                      id="split-name"
+                      placeholder="Name (optional)"
+                      value={nameInput}
+                      onChange={(e) => setNameInput(e.target.value)}
                       onKeyDown={(e) => {
                         if (e.key === "Enter") {
                           e.preventDefault();
@@ -302,9 +301,24 @@ export default function SplitBills() {
                         }
                       }}
                     />
-                    <Button type="button" variant="outline" onClick={addEmail}>
-                      Add
-                    </Button>
+                    <div className="flex gap-2">
+                      <Input
+                        id="split-email"
+                        type="email"
+                        placeholder="friend@example.com"
+                        value={emailInput}
+                        onChange={(e) => setEmailInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addEmail();
+                          }
+                        }}
+                      />
+                      <Button type="button" variant="outline" onClick={addEmail}>
+                        Add
+                      </Button>
+                    </div>
                   </div>
                   {emails.length > 0 && (
                     <div className="flex flex-wrap gap-1.5 pt-1">
@@ -313,12 +327,17 @@ export default function SplitBills() {
                           key={e}
                           className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2 py-1"
                         >
-                          {e}
+                          {names[e] ? `${names[e]} (${e})` : e}
                           <button
                             type="button"
-                            onClick={() =>
-                              setEmails((prev) => prev.filter((x) => x !== e))
-                            }
+                            onClick={() => {
+                              setEmails((prev) => prev.filter((x) => x !== e));
+                              setNames((prev) => {
+                                const next = { ...prev };
+                                delete next[e];
+                                return next;
+                              });
+                            }}
                           >
                             <X className="h-3 w-3" />
                           </button>
