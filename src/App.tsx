@@ -21,7 +21,13 @@ import queryClient from "@/lib/queryClient";
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="light"
+      enableSystem={false}
+      storageKey="bookish-theme"
+    >
+      <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
@@ -45,6 +51,7 @@ const App = () => (
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 
