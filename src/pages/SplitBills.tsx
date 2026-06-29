@@ -159,6 +159,7 @@ export default function SplitBills() {
           total_amount: Number(amount),
           currency,
           emails,
+          names,
           notes: notes.trim() || undefined,
         });
       } else {
@@ -167,6 +168,7 @@ export default function SplitBills() {
           total_amount: Number(amount),
           currency,
           emails,
+          names,
           notes: notes.trim() || undefined,
         });
       }
