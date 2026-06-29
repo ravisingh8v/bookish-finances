@@ -66,6 +66,7 @@ export interface NewSplitInput {
   total_amount: number;
   currency: string;
   emails: string[];
+  names?: Record<string, string>;
   notes?: string;
 }
 
