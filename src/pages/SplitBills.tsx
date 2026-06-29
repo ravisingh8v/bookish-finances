@@ -126,7 +126,10 @@ export default function SplitBills() {
       return;
     }
     setEmails((prev) => [...prev, e]);
+    const n = nameInput.trim();
+    if (n) setNames((prev) => ({ ...prev, [e]: n }));
     setEmailInput("");
+    setNameInput("");
   };
 
   const headCount = emails.length + 1;
