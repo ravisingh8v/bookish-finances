@@ -21,6 +21,24 @@ async function ensureServiceWorkerControlsPage() {
 async function bootstrap() {
   await clearLegacyCachesIfNeeded();
 
+  let isRefreshing = false;
+  const refreshWhenControllerChanges = () => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (isRefreshing) return;
+        isRefreshing = true;
+        window.location.reload();
+      });
+    }
+  };
+
+  const activateWaitingServiceWorker = async (reg: ServiceWorkerRegistration) => {
+    if (!reg.waiting) return;
+    reg.waiting.postMessage({ type: "SKIP_WAITING" });
+  };
+
+  refreshWhenControllerChanges();
+
   // Auto-update: apply newly deployed versions automatically and reload.
   const updateSW = registerSW({
     immediate: true,
@@ -33,7 +51,7 @@ async function bootstrap() {
       if (reg) {
         if (reg.waiting) {
           console.log("SW waiting on startup; activating latest version");
-          void updateSW(true);
+          void activateWaitingServiceWorker(reg);
           return;
         }
 
@@ -41,7 +59,7 @@ async function bootstrap() {
           reg.installing.addEventListener("statechange", () => {
             if (reg.installing?.state === "installed") {
               console.log("SW installed on startup; activating latest version");
-              void updateSW(true);
+              void activateWaitingServiceWorker(reg);
             }
           });
         }
