@@ -47,16 +47,24 @@
     <meta name="apple-mobile-web-app-title" content="Expenses" />
     <style>
       html,
-      body {
+      body,
+      #root {
         min-height: 100%;
         margin: 0;
         background: #ffffff;
         color-scheme: light dark;
       }
 
+      html.dark,
+      html.dark body,
+      html.dark #root {
+        background: #0b1220;
+      }
+
       @media (prefers-color-scheme: dark) {
         html,
-        body {
+        body,
+        #root {
           background: #0b1220;
         }
       }
