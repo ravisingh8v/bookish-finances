@@ -138,7 +138,7 @@ export function CategoryPicker({
               }
             }}
             placeholder="Search or type to create"
-            className="h-10 bg-white"
+            className="h-10 bg-background"
           />
         </div>
         <ScrollArea
