@@ -108,7 +108,7 @@ export function CategoryPicker({
           type="button"
           variant="outline"
           disabled={disabled}
-          className="h-11 w-full justify-between bg-white px-3 font-normal"
+          className="h-11 w-full justify-between bg-background px-3 font-normal"
         >
           <span
             className={cn(
