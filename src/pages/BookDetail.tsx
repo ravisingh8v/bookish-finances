@@ -625,8 +625,8 @@ export default function BookDetail() {
                                   ? "border-destructive bg-destructive/10 text-destructive"
                                   : "border-primary bg-primary/10 text-primary"
                                 : t.value === "debit"
-                                  ? "border-border bg-white text-destructive sm:hover:border-destructive sm:hover:bg-destructive/10 sm:hover:text-destructive"
-                                  : "border-border bg-white text-primary sm:hover:border-primary sm:hover:bg-primary/10"
+                                  ? "border-border bg-background text-destructive sm:hover:border-destructive sm:hover:bg-destructive/10 sm:hover:text-destructive"
+                                  : "border-border bg-background text-primary sm:hover:border-primary sm:hover:bg-primary/10"
                             }`}
                           >
                             <t.icon className="h-4 w-4" />

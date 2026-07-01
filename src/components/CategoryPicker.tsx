@@ -108,7 +108,7 @@ export function CategoryPicker({
           type="button"
           variant="outline"
           disabled={disabled}
-          className="h-11 w-full justify-between bg-white px-3 font-normal"
+          className="h-11 w-full justify-between bg-background px-3 font-normal"
         >
           <span
             className={cn(
@@ -123,9 +123,9 @@ export function CategoryPicker({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[min(var(--radix-popover-trigger-width),22rem)] max-w-[calc(100vw-2rem)] overflow-hidden bg-white p-0"
+        className="w-[min(var(--radix-popover-trigger-width),22rem)] max-w-[calc(100vw-2rem)] overflow-hidden bg-popover p-0"
       >
-        <div className="border-b bg-white p-3">
+        <div className="border-b bg-popover p-3">
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
@@ -138,7 +138,7 @@ export function CategoryPicker({
               }
             }}
             placeholder="Search or type to create"
-            className="h-10 bg-white"
+            className="h-10 bg-background"
           />
         </div>
         <ScrollArea
