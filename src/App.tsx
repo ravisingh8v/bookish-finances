@@ -12,6 +12,8 @@ import Auth from "./pages/Auth";
 import BookDetail from "./pages/BookDetail";
 import Books from "./pages/Books";
 import Dashboard from "./pages/Dashboard";
+import DueDetail from "./pages/DueDetail";
+import Dues from "./pages/Dues";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import SettingsPage from "./pages/SettingsPage";
@@ -41,8 +43,9 @@ const App = () => (
               <Route path="/books" element={<Books />} />
               <Route path="/books/:bookId" element={<BookDetail />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/dues" element={<Dues />} />
+              <Route path="/dues/:dueId" element={<DueDetail />} />
               <Route path="/split-bills" element={<SplitBills />} />
-              
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="*" element={<NotFound />} />
