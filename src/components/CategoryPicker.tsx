@@ -123,9 +123,9 @@ export function CategoryPicker({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-[min(var(--radix-popover-trigger-width),22rem)] max-w-[calc(100vw-2rem)] overflow-hidden bg-white p-0"
+        className="w-[min(var(--radix-popover-trigger-width),22rem)] max-w-[calc(100vw-2rem)] overflow-hidden bg-popover p-0"
       >
-        <div className="border-b bg-white p-3">
+        <div className="border-b bg-popover p-3">
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
