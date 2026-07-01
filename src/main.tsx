@@ -31,6 +31,22 @@ async function bootstrap() {
     onRegisteredSW(_swUrl, reg) {
       void ensureServiceWorkerControlsPage();
       if (reg) {
+        if (reg.waiting) {
+          console.log("SW waiting on startup; activating latest version");
+          void updateSW(true);
+          return;
+        }
+
+        if (reg.installing) {
+          reg.installing.addEventListener("statechange", () => {
+            if (reg.installing?.state === "installed") {
+              console.log("SW installed on startup; activating latest version");
+              void updateSW(true);
+            }
+          });
+        }
+
+        void reg.update();
         // Periodically poll for new deployments so long-lived tabs update.
         setInterval(() => {
           void reg.update();
