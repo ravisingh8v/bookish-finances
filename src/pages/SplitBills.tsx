@@ -604,7 +604,10 @@ export default function SplitBills() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Participant</Label>
-              <Input readOnly value={activeParticipant?.name?.trim() || activeParticipant?.email || ""} />
+              <Input
+                disabled
+                value={activeParticipant?.name?.trim() || activeParticipant?.email || ""}
+              />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="payment-amount">Amount</Label>
@@ -613,6 +616,7 @@ export default function SplitBills() {
                 type="number"
                 inputMode="decimal"
                 placeholder="0.00"
+                autoFocus
                 value={paymentAmount}
                 onChange={(e) => setPaymentAmount(e.target.value)}
               />
