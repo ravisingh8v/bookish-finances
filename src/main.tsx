@@ -4,91 +4,53 @@ import App from "./App.tsx";
 import "./index.css";
 import { emitPWAInstallReady, emitPWAUpdateReady } from "./lib/pwa";
 
-const BUILD_ID_STORAGE_KEY = "expenseflow-build-id";
-async function clearLegacyCachesIfNeeded() {
-  // Disabled: Causes double loads on first app open
-  console.log("App version:", __APP_BUILD_ID__);
-  localStorage.setItem(BUILD_ID_STORAGE_KEY, __APP_BUILD_ID__);
-}
-
-async function ensureServiceWorkerControlsPage() {
-  // Simplified: Rely on vite-pwa prompt, no aggressive reloads
-  if ("serviceWorker" in navigator && navigator.serviceWorker.controller) {
-    console.log("SW controls page");
-  }
-}
-
-async function bootstrap() {
-  await clearLegacyCachesIfNeeded();
-
+function bootstrap() {
   let isRefreshing = false;
-  const refreshWhenControllerChanges = () => {
-    if ("serviceWorker" in navigator) {
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (isRefreshing) return;
-        isRefreshing = true;
-        window.location.reload();
-      });
-    }
-  };
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (isRefreshing) return;
+      isRefreshing = true;
+      window.location.reload();
+    });
+  }
 
-  const activateWaitingServiceWorker = async (reg: ServiceWorkerRegistration) => {
-    if (!reg.waiting) return;
-    reg.waiting.postMessage({ type: "SKIP_WAITING" });
-  };
-
-  refreshWhenControllerChanges();
-
-  // Auto-update: apply newly deployed versions automatically and reload.
   const updateSW = registerSW({
     immediate: true,
     onNeedRefresh() {
-      // A new version is ready — activate it and reload with no user action.
       void updateSW(true);
     },
     onRegisteredSW(_swUrl, reg) {
-      void ensureServiceWorkerControlsPage();
       if (reg) {
         if (reg.waiting) {
-          console.log("SW waiting on startup; activating latest version");
-          void activateWaitingServiceWorker(reg);
+          reg.waiting.postMessage({ type: "SKIP_WAITING" });
           return;
         }
 
         if (reg.installing) {
           reg.installing.addEventListener("statechange", () => {
             if (reg.installing?.state === "installed") {
-              console.log("SW installed on startup; activating latest version");
-              void activateWaitingServiceWorker(reg);
+              reg.waiting?.postMessage({ type: "SKIP_WAITING" });
             }
           });
         }
 
         void reg.update();
-        // Periodically poll for new deployments so long-lived tabs update.
         setInterval(() => {
           void reg.update();
         }, 60 * 1000);
         emitPWAUpdateReady(reg);
       }
     },
-    onOfflineReady() {
-      void ensureServiceWorkerControlsPage();
-    },
+    onOfflineReady() {},
   });
 
-  // PWA Install Prompt
-  let deferredInstallPrompt: Event | null = null;
   window.addEventListener("beforeinstallprompt", (e) => {
     e.preventDefault();
-    deferredInstallPrompt = e;
     emitPWAInstallReady(e);
-    console.log("PWA install prompt ready");
   });
 
   createRoot(document.getElementById("root")!).render(<App />);
 
-  // Fade out the static splash screen once React has mounted.
   requestAnimationFrame(() => {
     setTimeout(() => {
       const splash = document.getElementById("app-splash");
