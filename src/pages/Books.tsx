@@ -646,6 +646,59 @@ export default function Books() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={archivedOpen} onOpenChange={setArchivedOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Archived Books</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {archivedBooks.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                No archived books.
+              </p>
+            ) : (
+              archivedBooks.map((book) => (
+                <div
+                  key={book.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border p-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: book.color + "20", color: book.color }}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{book.name}</p>
+                      {book.description && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {book.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() =>
+                      setArchived.mutate(
+                        { bookId: book.id, archived: false },
+                        { onSuccess: () => toast.success("Book restored") },
+                      )
+                    }
+                  >
+                    <ArchiveRestore className="h-4 w-4 mr-1" />
+                    Restore
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }
