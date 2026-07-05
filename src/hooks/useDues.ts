@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo } from "react";
 import { toast } from "sonner";
@@ -153,7 +154,7 @@ export function useDues() {
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
           ),
           people: peopleByDue.get(row.id) ?? [],
-          emiDetails: (row.emi_details as EmiDetails | null) ?? undefined,
+          emiDetails: (row.emi_details as unknown as EmiDetails | null) ?? undefined,
         }))
         .sort(
           (a, b) =>
@@ -205,7 +206,7 @@ export function useDues() {
         due_date: payload.dueDate || null,
         frequency: payload.frequency,
         notes: payload.notes ?? null,
-        emi_details: payload.emiDetails ?? null,
+        emi_details: (payload.emiDetails ?? null) as unknown as Json,
       });
       if (error) throw error;
     },
