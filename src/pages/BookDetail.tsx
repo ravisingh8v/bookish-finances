@@ -439,6 +439,29 @@ export default function BookDetail() {
     setOpen(true);
   };
 
+  const [copyExpenseSource, setCopyExpenseSource] = useState<
+    (typeof expenses)[number] | null
+  >(null);
+  const [copyTargetIds, setCopyTargetIds] = useState<string[]>([]);
+  const copyTargets = books.filter((b) => b.id !== bookId);
+
+  const handleConfirmCopy = async () => {
+    if (!copyExpenseSource || copyTargetIds.length === 0) return;
+    try {
+      await copyExpense.mutateAsync({
+        expense: copyExpenseSource,
+        targetBookIds: copyTargetIds,
+      });
+      toast.success(
+        `Copied to ${copyTargetIds.length} book${copyTargetIds.length > 1 ? "s" : ""}`,
+      );
+      setCopyExpenseSource(null);
+      setCopyTargetIds([]);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   const handleSaveExpense = async () => {
     if (!title.trim()) {
       toast.error("Title is required");
