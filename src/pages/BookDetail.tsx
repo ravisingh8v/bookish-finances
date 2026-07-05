@@ -48,6 +48,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Edit,
+  BookOpen,
   Copy,
   EllipsisVertical,
   Filter,
