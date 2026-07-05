@@ -262,6 +262,13 @@ export default function Books() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 justify-end">
+            {archivedBooks.length > 0 && (
+              <Button variant="outline" onClick={() => setArchivedOpen(true)}>
+                <Archive className="h-4 w-4 mr-2" />
+                Archived ({archivedBooks.length})
+              </Button>
+            )}
+
 
             <Dialog
               open={open}
