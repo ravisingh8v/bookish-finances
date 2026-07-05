@@ -69,14 +69,17 @@ export default function Books() {
   const { isOnline } = useOfflineSync();
   const {
     books,
+    archivedBooks,
     isLoading,
     createBook,
     updateBook,
     deleteBook,
     duplicateBook,
     reorderBooks,
+    setArchived,
     isBookOwner,
   } = useBooks();
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [name, setName] = useState("");
