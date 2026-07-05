@@ -87,8 +87,118 @@ export type Database = {
           },
         ]
       }
+      due_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          due_id: string
+          id: string
+          notes: string | null
+          user_id: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          due_id: string
+          id?: string
+          notes?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          due_id?: string
+          id?: string
+          notes?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "due_payments_due_id_fkey"
+            columns: ["due_id"]
+            isOneToOne: false
+            referencedRelation: "dues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      due_people: {
+        Row: {
+          created_at: string
+          due_id: string
+          email: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          due_id: string
+          email: string
+          id?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          due_id?: string
+          email?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "due_people_due_id_fkey"
+            columns: ["due_id"]
+            isOneToOne: false
+            referencedRelation: "dues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dues: {
+        Row: {
+          created_at: string
+          due_date: string | null
+          emi_details: Json | null
+          frequency: string
+          id: string
+          notes: string | null
+          title: string
+          total_amount: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          due_date?: string | null
+          emi_details?: Json | null
+          frequency?: string
+          id?: string
+          notes?: string | null
+          title: string
+          total_amount?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          due_date?: string | null
+          emi_details?: Json | null
+          frequency?: string
+          id?: string
+          notes?: string | null
+          title?: string
+          total_amount?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       expense_books: {
         Row: {
+          archived: boolean
           color: string
           created_at: string
           created_by: string
@@ -101,6 +211,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          archived?: boolean
           color?: string
           created_at?: string
           created_by: string
@@ -113,6 +224,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          archived?: boolean
           color?: string
           created_at?: string
           created_by?: string

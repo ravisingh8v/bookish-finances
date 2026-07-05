@@ -37,6 +37,8 @@ import { formatINR } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import {
+  Archive,
+  ArchiveRestore,
   ArrowLeft,
   BookOpen,
   Copy,
@@ -67,14 +69,17 @@ export default function Books() {
   const { isOnline } = useOfflineSync();
   const {
     books,
+    archivedBooks,
     isLoading,
     createBook,
     updateBook,
     deleteBook,
     duplicateBook,
     reorderBooks,
+    setArchived,
     isBookOwner,
   } = useBooks();
+  const [archivedOpen, setArchivedOpen] = useState(false);
   const [open, setOpen] = useState(false);
   const [editingBook, setEditingBook] = useState<Book | null>(null);
   const [name, setName] = useState("");
@@ -257,6 +262,13 @@ export default function Books() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2 justify-end">
+            {archivedBooks.length > 0 && (
+              <Button variant="outline" onClick={() => setArchivedOpen(true)}>
+                <Archive className="h-4 w-4 mr-2" />
+                Archived ({archivedBooks.length})
+              </Button>
+            )}
+
 
             <Dialog
               open={open}
@@ -490,6 +502,21 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setArchived.mutate(
+                                    { bookId: book.id, archived: true },
+                                    { onSuccess: () => toast.success("Book archived") },
+                                  );
+                                }}
+                                title="Archive this book"
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -619,6 +646,59 @@ export default function Books() {
           </div>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={archivedOpen} onOpenChange={setArchivedOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Archived Books</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {archivedBooks.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                No archived books.
+              </p>
+            ) : (
+              archivedBooks.map((book) => (
+                <div
+                  key={book.id}
+                  className="flex items-center justify-between gap-3 rounded-xl border border-border p-3"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div
+                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: book.color + "20", color: book.color }}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{book.name}</p>
+                      {book.description && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {book.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0"
+                    onClick={() =>
+                      setArchived.mutate(
+                        { bookId: book.id, archived: false },
+                        { onSuccess: () => toast.success("Book restored") },
+                      )
+                    }
+                  >
+                    <ArchiveRestore className="h-4 w-4 mr-1" />
+                    Restore
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

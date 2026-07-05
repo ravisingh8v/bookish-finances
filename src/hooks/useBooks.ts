@@ -13,6 +13,7 @@ export interface Book {
   color: string;
   icon: string;
   sort_order: number;
+  archived: boolean;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -333,13 +334,42 @@ export function useBooks() {
     },
   });
 
+  const setArchived = useMutation({
+    mutationFn: async ({ bookId, archived }: { bookId: string; archived: boolean }) => {
+      assertOnline(isOnline);
+      const { error } = await supabase
+        .from("expense_books")
+        .update({ archived })
+        .eq("id", bookId);
+      if (error) throw error;
+    },
+    onMutate: ({ bookId, archived }) => {
+      queryClient.setQueryData(["books"], (old: Book[] | undefined) =>
+        (old ?? []).map((book) =>
+          book.id === bookId ? { ...book, archived } : book,
+        ),
+      );
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["books"] });
+      queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
   const isBookOwner = (book: Pick<Book, "members">) =>
     book.members?.some(
       (member) => member.user_id === user?.id && member.role === "owner",
     );
 
+  const allBooks = (booksQuery.data ?? []) as Book[];
+
   return {
-    books: (booksQuery.data ?? []) as Book[],
+    books: allBooks.filter((book) => !book.archived),
+    archivedBooks: allBooks.filter((book) => book.archived),
+    allBooks,
     isLoading: booksQuery.isLoading && !booksQuery.data,
     isError: booksQuery.isError,
     createBook,
@@ -347,6 +377,7 @@ export function useBooks() {
     deleteBook,
     duplicateBook,
     reorderBooks,
+    setArchived,
     isBookOwner,
   };
 }

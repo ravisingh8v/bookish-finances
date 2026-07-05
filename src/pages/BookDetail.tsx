@@ -48,6 +48,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ArrowLeft,
   Edit,
+  BookOpen,
+  Copy,
   EllipsisVertical,
   Filter,
   Loader2,
@@ -242,6 +244,7 @@ export default function BookDetail() {
     createExpense,
     updateExpense,
     deleteExpense,
+    copyExpense,
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -436,6 +439,29 @@ export default function BookDetail() {
     setNotes(expense.notes ?? "");
     setEditingExpenseId(expense.id);
     setOpen(true);
+  };
+
+  const [copyExpenseSource, setCopyExpenseSource] = useState<
+    (typeof expenses)[number] | null
+  >(null);
+  const [copyTargetIds, setCopyTargetIds] = useState<string[]>([]);
+  const copyTargets = books.filter((b) => b.id !== bookId);
+
+  const handleConfirmCopy = async () => {
+    if (!copyExpenseSource || copyTargetIds.length === 0) return;
+    try {
+      await copyExpense.mutateAsync({
+        expense: copyExpenseSource,
+        targetBookIds: copyTargetIds,
+      });
+      toast.success(
+        `Copied to ${copyTargetIds.length} book${copyTargetIds.length > 1 ? "s" : ""}`,
+      );
+      setCopyExpenseSource(null);
+      setCopyTargetIds([]);
+    } catch (e: any) {
+      toast.error(e.message);
+    }
   };
 
   const handleSaveExpense = async () => {
@@ -1094,6 +1120,21 @@ export default function BookDetail() {
                                           </div>
                                         </DropdownMenuItem>
                                       )}
+                                      {copyTargets.length > 0 && (
+                                        <DropdownMenuItem
+                                          className="DropdownMenuItem p-2 rounded sm:hover:bg-accent sm:hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCopyTargetIds([]);
+                                            setCopyExpenseSource(expense);
+                                          }}
+                                        >
+                                          <div className="flex gap-2 items-center">
+                                            <Copy className="h-4 w-4" />
+                                            <span>Copy to book</span>
+                                          </div>
+                                        </DropdownMenuItem>
+                                      )}
                                       {canDelete && (
                                         <DropdownMenuItem
                                           className="DropdownMenuItem p-2 rounded sm:hover:bg-destructive/10 text-destructive focus-visible:outline-none cursor-pointer"
@@ -1228,6 +1269,67 @@ export default function BookDetail() {
                 buttonText="Save Changes"
               />
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog
+          open={!!copyExpenseSource}
+          onOpenChange={(v) => {
+            if (!v) {
+              setCopyExpenseSource(null);
+              setCopyTargetIds([]);
+            }
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Copy expense to books</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Copy "{copyExpenseSource?.title}" into other books.
+            </p>
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto py-2">
+              {copyTargets.map((b) => {
+                const checked = copyTargetIds.includes(b.id);
+                return (
+                  <label
+                    key={b.id}
+                    className="flex items-center gap-3 rounded-xl border border-border p-3 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4"
+                      checked={checked}
+                      onChange={(e) =>
+                        setCopyTargetIds((prev) =>
+                          e.target.checked
+                            ? [...prev, b.id]
+                            : prev.filter((id) => id !== b.id),
+                        )
+                      }
+                    />
+                    <span
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: b.color + "20", color: b.color }}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                    </span>
+                    <span className="font-medium truncate">{b.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={handleConfirmCopy}
+                disabled={copyTargetIds.length === 0 || copyExpense.isPending}
+              >
+                {copyExpense.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                )}
+                Copy
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
