@@ -1118,6 +1118,21 @@ export default function BookDetail() {
                                           </div>
                                         </DropdownMenuItem>
                                       )}
+                                      {copyTargets.length > 0 && (
+                                        <DropdownMenuItem
+                                          className="DropdownMenuItem p-2 rounded sm:hover:bg-accent sm:hover:text-accent-foreground focus-visible:outline-none cursor-pointer"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCopyTargetIds([]);
+                                            setCopyExpenseSource(expense);
+                                          }}
+                                        >
+                                          <div className="flex gap-2 items-center">
+                                            <Copy className="h-4 w-4" />
+                                            <span>Copy to book</span>
+                                          </div>
+                                        </DropdownMenuItem>
+                                      )}
                                       {canDelete && (
                                         <DropdownMenuItem
                                           className="DropdownMenuItem p-2 rounded sm:hover:bg-destructive/10 text-destructive focus-visible:outline-none cursor-pointer"
