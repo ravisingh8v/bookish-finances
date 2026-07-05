@@ -382,6 +382,7 @@ export function useExpenses(bookId: string) {
     },
   });
 
+  const fetchNextPage = async () => {
     if (!isOnline || !bookId) return;
     const currentCount = expenses.length;
     if (currentCount >= MAX_EXPENSES) return;
