@@ -33,7 +33,7 @@ import { useNavigate } from "react-router-dom";
 const mainItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Books", url: "/books", icon: BookOpen },
-  { title: "Dues", url: "/dues", icon: Wallet },
+  { title: "Debts", url: "/debts", icon: Wallet },
   { title: "Split Bills", url: "/split-bills", icon: SplitSquareHorizontal },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },

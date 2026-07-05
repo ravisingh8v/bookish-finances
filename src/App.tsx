@@ -6,20 +6,25 @@ import { AuthProvider } from "@/hooks/useAuth";
 import { OfflineSyncProvider } from "@/hooks/useOfflineSync";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "next-themes";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
 import Analytics from "./pages/Analytics";
 import Auth from "./pages/Auth";
 import BookDetail from "./pages/BookDetail";
 import Books from "./pages/Books";
 import Dashboard from "./pages/Dashboard";
-import DueDetail from "./pages/DueDetail";
-import Dues from "./pages/Dues";
+import DebtDetail from "./pages/DebtDetail";
+import Debts from "./pages/Debts";
 import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import SettingsPage from "./pages/SettingsPage";
 import SplitBills from "./pages/SplitBills";
 
 import queryClient from "@/lib/queryClient";
+
+const LegacyDueRedirect = () => {
+  const { dueId } = useParams();
+  return <Navigate to={dueId ? `/debts/${dueId}` : "/debts"} replace />;
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -43,8 +48,10 @@ const App = () => (
               <Route path="/books" element={<Books />} />
               <Route path="/books/:bookId" element={<BookDetail />} />
               <Route path="/analytics" element={<Analytics />} />
-              <Route path="/dues" element={<Dues />} />
-              <Route path="/dues/:dueId" element={<DueDetail />} />
+              <Route path="/debts" element={<Debts />} />
+              <Route path="/debts/:debtId" element={<DebtDetail />} />
+              <Route path="/dues" element={<Navigate to="/debts" replace />} />
+              <Route path="/dues/:dueId" element={<LegacyDueRedirect />} />
               <Route path="/split-bills" element={<SplitBills />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/reset-password" element={<ResetPassword />} />
