@@ -13,6 +13,7 @@ export interface Book {
   color: string;
   icon: string;
   sort_order: number;
+  archived?: boolean;
   created_at: string;
   updated_at: string;
   created_by: string;
