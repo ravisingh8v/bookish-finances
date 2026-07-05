@@ -495,6 +495,21 @@ export default function Books() {
                               <Button
                                 variant="ghost"
                                 size="icon"
+                                className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-primary"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setArchived.mutate(
+                                    { bookId: book.id, archived: true },
+                                    { onSuccess: () => toast.success("Book archived") },
+                                  );
+                                }}
+                                title="Archive this book"
+                              >
+                                <Archive className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
                                 className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation();
