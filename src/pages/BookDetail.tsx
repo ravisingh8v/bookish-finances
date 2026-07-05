@@ -1270,6 +1270,67 @@ export default function BookDetail() {
             </div>
           </DialogContent>
         </Dialog>
+
+        <Dialog
+          open={!!copyExpenseSource}
+          onOpenChange={(v) => {
+            if (!v) {
+              setCopyExpenseSource(null);
+              setCopyTargetIds([]);
+            }
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Copy expense to books</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Copy "{copyExpenseSource?.title}" into other books.
+            </p>
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto py-2">
+              {copyTargets.map((b) => {
+                const checked = copyTargetIds.includes(b.id);
+                return (
+                  <label
+                    key={b.id}
+                    className="flex items-center gap-3 rounded-xl border border-border p-3 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4"
+                      checked={checked}
+                      onChange={(e) =>
+                        setCopyTargetIds((prev) =>
+                          e.target.checked
+                            ? [...prev, b.id]
+                            : prev.filter((id) => id !== b.id),
+                        )
+                      }
+                    />
+                    <span
+                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ backgroundColor: b.color + "20", color: b.color }}
+                    >
+                      <BookOpen className="h-4 w-4" />
+                    </span>
+                    <span className="font-medium truncate">{b.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={handleConfirmCopy}
+                disabled={copyTargetIds.length === 0 || copyExpense.isPending}
+              >
+                {copyExpense.isPending && (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                )}
+                Copy
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
