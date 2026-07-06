@@ -662,53 +662,93 @@ export default function Books() {
       </AlertDialog>
 
       <Dialog open={archivedOpen} onOpenChange={setArchivedOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Archived Books</DialogTitle>
+            <DialogTitle>Archived Books ({archivedBooks.length})</DialogTitle>
           </DialogHeader>
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+          <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
             {archivedBooks.length === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">
                 No archived books.
               </p>
             ) : (
-              archivedBooks.map((book) => (
-                <div
-                  key={book.id}
-                  className="flex items-center justify-between gap-3 rounded-xl border border-border p-3"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div
-                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0"
-                      style={{ backgroundColor: book.color + "20", color: book.color }}
-                    >
-                      <BookOpen className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="font-medium truncate">{book.name}</p>
-                      {book.description && (
-                        <p className="text-xs text-muted-foreground truncate">
-                          {book.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="shrink-0"
-                    onClick={() =>
-                      setArchived.mutate(
-                        { bookId: book.id, archived: false },
-                        { onSuccess: () => toast.success("Book restored") },
-                      )
-                    }
-                  >
-                    <ArchiveRestore className="h-4 w-4 mr-1" />
-                    Restore
-                  </Button>
-                </div>
-              ))
+              archivedBooks.map((book) => {
+                const total = archivedTotals[book.id] ?? 0;
+                const memberCount = book.members?.length ?? 0;
+                return (
+                  <Card key={book.id} className="glass">
+                    <CardContent className="p-4 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div
+                            className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
+                            style={{ backgroundColor: book.color + "20", color: book.color }}
+                          >
+                            <BookOpen className="h-5 w-5" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-display font-semibold truncate">{book.name}</p>
+                            {book.description && (
+                              <p className="text-xs text-muted-foreground truncate">
+                                {book.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className="shrink-0">
+                          Archived
+                        </Badge>
+                      </div>
+                      <div className="flex items-center justify-between text-sm">
+                        <span
+                          className={
+                            "font-semibold " +
+                            (total < 0
+                              ? "text-destructive"
+                              : total !== 0
+                                ? "text-success"
+                                : "text-foreground/80")
+                          }
+                        >
+                          {book.currency} {formatINR(total)}
+                        </span>
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Users className="h-3 w-3" />
+                          {memberCount}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() => {
+                            setArchivedOpen(false);
+                            navigate(`/books/${book.id}`);
+                          }}
+                        >
+                          <BookOpen className="h-4 w-4 mr-1" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex-1"
+                          onClick={() =>
+                            setArchived.mutate(
+                              { bookId: book.id, archived: false },
+                              { onSuccess: () => toast.success("Book restored") },
+                            )
+                          }
+                        >
+                          <ArchiveRestore className="h-4 w-4 mr-1" />
+                          Restore
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </div>
         </DialogContent>
