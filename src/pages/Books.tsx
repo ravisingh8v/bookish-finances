@@ -114,6 +114,20 @@ export default function Books() {
     refetchOnWindowFocus: true,
   });
 
+  const archivedIdsKey = archivedBooks
+    .map((book) => book.id)
+    .sort((a, b) => a.localeCompare(b))
+    .join("|");
+  const { data: archivedTotals = {} } = useQuery({
+    queryKey: ["book-totals", "archived", archivedIdsKey],
+    queryFn: async () => {
+      return await getBookTotals(archivedBooks.map((book) => book.id));
+    },
+    enabled: archivedOpen && archivedBooks.length > 0 && isOnline,
+    refetchOnWindowFocus: true,
+  });
+
+
 
   const handleDuplicate = (bookId: string, e: React.MouseEvent) => {
     e.stopPropagation();
