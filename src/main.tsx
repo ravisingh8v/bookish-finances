@@ -2,7 +2,7 @@ import { createRoot } from "react-dom/client";
 import { registerSW } from "virtual:pwa-register";
 import App from "./App.tsx";
 import "./index.css";
-import { emitPWAInstallReady, emitPWAUpdateReady } from "./lib/pwa";
+import { emitPWAInstallReady, emitPWAUpdateReady, checkForUpdates } from "./lib/pwa";
 
 function bootstrap() {
   let isRefreshing = false;
@@ -17,27 +17,26 @@ function bootstrap() {
   const updateSW = registerSW({
     immediate: true,
     onNeedRefresh() {
-      void updateSW(true);
+      // A new service worker is available. Emit an update-ready event
+      // so the UI can prompt the user instead of forcing activation.
+      void checkForUpdates();
     },
     onRegisteredSW(_swUrl, reg) {
       if (reg) {
-        if (reg.waiting) {
-          reg.waiting.postMessage({ type: "SKIP_WAITING" });
-          return;
+        // If a worker is already waiting or installing, notify the app
+        // so it can ask the user to apply the update. Avoid forcing
+        // SKIP_WAITING here to prevent unexpected behavior on installed
+        // mobile PWAs.
+        if (reg.waiting || reg.installing) {
+          emitPWAUpdateReady(reg);
         }
 
-        if (reg.installing) {
-          reg.installing.addEventListener("statechange", () => {
-            if (reg.installing?.state === "installed") {
-              reg.waiting?.postMessage({ type: "SKIP_WAITING" });
-            }
-          });
-        }
-
+        // Trigger an update check immediately and periodically.
         void reg.update();
         setInterval(() => {
           void reg.update();
         }, 60 * 1000);
+        // Also emit update-ready for completeness when registration occurs.
         emitPWAUpdateReady(reg);
       }
     },

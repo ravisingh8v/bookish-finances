@@ -663,10 +663,10 @@ export default function Books() {
 
       <Dialog open={archivedOpen} onOpenChange={setArchivedOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
+          <DialogHeader >
             <DialogTitle>Archived Books ({archivedBooks.length})</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
+          <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1 mt-6">
             {archivedBooks.length === 0 ? (
               <p className="text-sm text-muted-foreground py-6 text-center">
                 No archived books.
