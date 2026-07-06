@@ -14,6 +14,79 @@ export type Database = {
   }
   public: {
     Tables: {
+      book_members: {
+        Row: {
+          book_id: string
+          id: string
+          joined_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          id?: string
+          joined_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_members_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "expense_books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          book_id: string | null
+          color: string
+          created_at: string
+          created_by: string | null
+          icon: string
+          id: string
+          is_default: boolean
+          name: string
+        }
+        Insert: {
+          book_id?: string | null
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          icon?: string
+          id?: string
+          is_default?: boolean
+          name: string
+        }
+        Update: {
+          book_id?: string | null
+          color?: string
+          created_at?: string
+          created_by?: string | null
+          icon?: string
+          id?: string
+          is_default?: boolean
+          name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "expense_books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       debt_activities: {
         Row: {
           actor_id: string | null
@@ -268,79 +341,6 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
-      }
-      book_members: {
-        Row: {
-          book_id: string
-          id: string
-          joined_at: string
-          role: string
-          user_id: string
-        }
-        Insert: {
-          book_id: string
-          id?: string
-          joined_at?: string
-          role?: string
-          user_id: string
-        }
-        Update: {
-          book_id?: string
-          id?: string
-          joined_at?: string
-          role?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "book_members_book_id_fkey"
-            columns: ["book_id"]
-            isOneToOne: false
-            referencedRelation: "expense_books"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      categories: {
-        Row: {
-          book_id: string | null
-          color: string
-          created_at: string
-          created_by: string | null
-          icon: string
-          id: string
-          is_default: boolean
-          name: string
-        }
-        Insert: {
-          book_id?: string | null
-          color?: string
-          created_at?: string
-          created_by?: string | null
-          icon?: string
-          id?: string
-          is_default?: boolean
-          name: string
-        }
-        Update: {
-          book_id?: string | null
-          color?: string
-          created_at?: string
-          created_by?: string | null
-          icon?: string
-          id?: string
-          is_default?: boolean
-          name?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "categories_book_id_fkey"
-            columns: ["book_id"]
-            isOneToOne: false
-            referencedRelation: "expense_books"
-            referencedColumns: ["id"]
-          },
-        ]
       }
       due_payments: {
         Row: {
@@ -755,26 +755,13 @@ export type Database = {
     }
     Functions: {
       act_on_debt: {
-        Args: {
-          _action_name: string
-          _debt_id: string
-        }
+        Args: { _action_name: string; _debt_id: string }
         Returns: undefined
       }
-      create_debt: {
-        Args: {
-          _payload: Json
-        }
-        Returns: string
-      }
-      get_my_debts: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
-      }
+      create_debt: { Args: { _payload: Json }; Returns: string }
+      get_my_debts: { Args: never; Returns: Json }
       is_debt_participant: {
-        Args: {
-          _target: Database["public"]["Tables"]["debts"]["Row"]
-        }
+        Args: { _target: Database["public"]["Tables"]["debts"]["Row"] }
         Returns: boolean
       }
       record_debt_payment: {

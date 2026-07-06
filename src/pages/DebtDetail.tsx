@@ -15,7 +15,7 @@ import { useDebts } from "@/hooks/useDebts";
 import { ArrowLeft, CheckCircle2, Circle, CreditCard, UserRound } from "lucide-react";
 
 const money=(n:number)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(n||0);
-const pretty=(s:string)=>s.replaceAll("_"," ").replace(/\b\w/g,c=>c.toUpperCase());
+const pretty=(s:string)=>s.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
 export default function DebtDetail(){const{debtId}=useParams();const{debts,isLoading,recordPayment}=useDebts();const debt=debts.find(d=>d.id===debtId);const[open,setOpen]=useState(false),[amount,setAmount]=useState(""),[method,setMethod]=useState("upi"),[reference,setReference]=useState(""),[notes,setNotes]=useState("");
  if(isLoading)return <DashboardLayout><p>Loading…</p></DashboardLayout>;if(!debt)return <DashboardLayout><Card><CardContent className="p-8 text-center"><p>Debt not found or you do not have access.</p><Button asChild className="mt-4"><Link to="/debts">Back to debts</Link></Button></CardContent></Card></DashboardLayout>;
  const pct=debt.total_amount?debt.paid_amount/debt.total_amount*100:0;const timeline=[...(debt.activities||[]).map(a=>({id:a.id,title:pretty(a.event_type),date:a.created_at})),...(debt.payments||[]).map(p=>({id:p.id,title:`${money(p.amount)} paid`,date:p.created_at}))].sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime());
