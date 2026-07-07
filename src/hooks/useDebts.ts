@@ -211,13 +211,44 @@ export function useDebts() {
 
   const createDebt = useMutation({
     mutationFn: async (input: DebtInput) => {
-      const { data, error } = await db.rpc("create_debt", { _payload: input });
+      const { reflectBookId, ...payload } = input;
+      const { data, error } = await db.rpc("create_debt", { _payload: payload });
       if (error) throw error;
+      // Reflect a payable debt into a book as an expense (deduction).
+      if (reflectBookId && input.direction === "payable" && user?.id) {
+        const { error: expenseError } = await db.from("expenses").insert({
+          book_id: reflectBookId,
+          title: input.title,
+          amount: input.amount,
+          date: new Date().toISOString().slice(0, 10),
+          expense_type: "debit",
+          payment_method: "cash",
+          notes: input.notes || null,
+          paid_by: user.id,
+          created_by: user.id,
+        });
+        if (expenseError) throw expenseError;
+      }
       return data;
     },
     onSuccess: () => {
       invalidate();
+      queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
       toast.success("Debt saved");
+    },
+    onError: (error: Error) => toast.error(error.message),
+  });
+
+  const updateDebt = useMutation({
+    mutationFn: async (input: DebtEditInput) => {
+      const { id, ...rest } = input;
+      const { error } = await db.rpc("update_debt", { _debt_id: id, _payload: rest });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success("Debt updated");
     },
     onError: (error: Error) => toast.error(error.message),
   });
