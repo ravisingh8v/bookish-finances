@@ -5,66 +5,952 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { Debt, DebtEditInput, DebtInput, DebtType, isCompletedDebt, useDebts } from "@/hooks/useDebts";
+import {
+  Debt,
+  DebtEditInput,
+  DebtInput,
+  DebtType,
+  isCompletedDebt,
+  useDebts,
+} from "@/hooks/useDebts";
 import { useAuth } from "@/hooks/useAuth";
-import { useBooks } from "@/hooks/useBooks";
-import { ArrowDownLeft, ArrowUpRight, Calendar, ChevronDown, Pencil, Plus, Trash2, UserRound, WalletCards } from "lucide-react";
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Calendar,
+  ChevronDown,
+  Pencil,
+  Plus,
+  Trash2,
+  UserRound,
+  WalletCards,
+} from "lucide-react";
 
-const money=(n:number)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:0}).format(n||0);
-const pretty=(s:string)=>s.replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
-const statusTone:Record<string,string>={paid:"bg-emerald-100 text-emerald-700",overdue:"bg-red-100 text-red-700",pending:"bg-amber-100 text-amber-700",accepted:"bg-emerald-100 text-emerald-700",partially_paid:"bg-blue-100 text-blue-700",rejected:"bg-red-100 text-red-700",cancelled:"bg-slate-100 text-slate-600"};
+const money = (n: number) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(n || 0);
+const pretty = (s: string) =>
+  s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const formatDebtDate = (value?: string | null) => {
+  if (!value) return "";
+  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("en-IN", {
+    month: "short", day: "numeric", year: "2-digit",
+  });
+};
+const dateInput = (value?: string | null) => value?.slice(0, 10) || "";
+const statusTone: Record<string, string> = {
+  paid: "bg-emerald-100 text-emerald-700",
+  overdue: "bg-red-100 text-red-700",
+  pending: "bg-amber-100 text-amber-700",
+  accepted: "bg-emerald-100 text-emerald-700",
+  partially_paid: "bg-blue-100 text-blue-700",
+  rejected: "bg-red-100 text-red-700",
+  cancelled: "bg-slate-100 text-slate-600",
+};
 
-function Summary({name,outstanding,active,overdue}:{name:string;outstanding:number;active:number;overdue:number}){return <Card><CardContent className="p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">{name}</p><p className="mt-2 text-xl font-bold">{money(outstanding)}</p><div className="mt-2 flex justify-between text-xs text-muted-foreground"><span>{active} active</span><span className={overdue?"text-destructive":""}>{money(overdue)} overdue</span></div></CardContent></Card>}
-
-function Field({label,children}:{label:string;children:React.ReactNode}){return <div className="space-y-2"><Label>{label}</Label>{children}</div>}
-
-function EditDebt({debt,receivable,update}:{debt:Debt;receivable:boolean;update:(p:DebtEditInput)=>Promise<unknown>}){
- const[open,setOpen]=useState(false);
- const[f,setF]=useState({title:debt.description,notes:debt.notes||"",personAlias:debt.counterparty_alias||"",borrowerEmail:debt.counterparty_email||"",dueDate:debt.due_date||"",amount:debt.total_amount,direction:(debt.direction||"receivable") as "receivable"|"payable"});
- const reset=()=>setF({title:debt.description,notes:debt.notes||"",personAlias:debt.counterparty_alias||"",borrowerEmail:debt.counterparty_email||"",dueDate:debt.due_date||"",amount:debt.total_amount,direction:(debt.direction||"receivable") as "receivable"|"payable"});
- const canAmount=debt.debt_type==="one_time";
- const canDirection=debt.status==="pending";
- const save=async()=>{await update({id:debt.id,title:f.title,notes:f.notes,personAlias:f.personAlias,borrowerEmail:f.borrowerEmail,dueDate:f.dueDate||undefined,amount:canAmount?f.amount:undefined,direction:canDirection?f.direction:undefined});setOpen(false)};
- return <Dialog open={open} onOpenChange={o=>{setOpen(o);if(o)reset()}}><DialogTrigger asChild><Button size="icon" variant="ghost"><Pencil className="h-4 w-4"/></Button></DialogTrigger><DialogContent className="max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Edit debt</DialogTitle></DialogHeader><div className="space-y-4">{canDirection&&<Field label="Direction"><div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"><Button variant={f.direction==="receivable"?"default":"ghost"} size="sm" onClick={()=>setF({...f,direction:"receivable"})}><ArrowDownLeft className="mr-2 h-4 w-4"/>I’m owed</Button><Button variant={f.direction==="payable"?"default":"ghost"} size="sm" onClick={()=>setF({...f,direction:"payable"})}><ArrowUpRight className="mr-2 h-4 w-4"/>I owe</Button></div></Field>}<Field label="Title"><Input value={f.title} onChange={e=>setF({...f,title:e.target.value})}/></Field>{canAmount?<Field label="Amount"><Input type="number" value={f.amount||""} onChange={e=>setF({...f,amount:Number(e.target.value)})}/><p className="text-xs text-muted-foreground">{debt.paid_amount>0&&`Already paid ${money(debt.paid_amount)}. Amount can't be lower.`}{isCompletedDebt(debt)&&" Increasing the amount reopens this debt."}</p></Field>:<p className="text-xs text-muted-foreground">Amount can only be edited on one-time debts.</p>}<Field label="Due date"><Input type="date" value={f.dueDate} onChange={e=>setF({...f,dueDate:e.target.value})}/></Field><Field label="Alias / name"><Input value={f.personAlias} onChange={e=>setF({...f,personAlias:e.target.value})}/></Field><Field label="Email"><Input type="email" value={f.borrowerEmail} onChange={e=>setF({...f,borrowerEmail:e.target.value})}/></Field><Field label="Notes"><Textarea value={f.notes} onChange={e=>setF({...f,notes:e.target.value})}/></Field></div><DialogFooter><Button variant="outline" onClick={()=>setOpen(false)}>Cancel</Button><Button disabled={!f.title.trim()||(canAmount&&f.amount<=0)} onClick={save}>Save changes</Button></DialogFooter></DialogContent></Dialog>;
+function Summary({
+  name,
+  outstanding,
+  active,
+  overdue,
+}: {
+  name: string;
+  outstanding: number;
+  active: number;
+  overdue: number;
+}) {
+  return (
+    <Card>
+      <CardContent className="p-4">
+        <p className="text-xs font-semibold uppercase text-muted-foreground">
+          {name}
+        </p>
+        <p className="mt-2 text-xl font-bold">{money(outstanding)}</p>
+        <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+          <span>{active} active</span>
+          <span className={overdue ? "text-destructive" : ""}>
+            {money(overdue)} overdue
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
-function DebtCard({debt,receivable,act,remove,update}:{debt:Debt;receivable:boolean;act:(a:string)=>void;remove:()=>void;update:(p:DebtEditInput)=>Promise<unknown>}){
- const nav=useNavigate(),{user}=useAuth(); const person=receivable?debt.borrower:debt.lender;
- const alias=debt.counterparty_alias||person?.display_name||person?.email||"Personal tracking";
- const shared=Boolean(debt.counterparty_email||person), mine=!debt.created_by||debt.created_by===user?.id;
- const pct=debt.total_amount?Math.min(100,debt.paid_amount/debt.total_amount*100):0,next=debt.installments?.find(i=>i.remaining_amount>0);
- return <Card className="transition-all"><CardContent className="p-4"><div className="flex gap-3"><Avatar><AvatarFallback>{alias[0]?.toUpperCase()||<UserRound className="h-4 w-4"/>}</AvatarFallback></Avatar><div className="min-w-0 flex-1"><div className="flex justify-between gap-2"><div className="min-w-0"><p className="truncate font-semibold">{debt.description}</p><p className="truncate text-xs text-muted-foreground">{alias}</p></div><Badge className={statusTone[debt.status]}>{pretty(debt.status)}</Badge></div><div className="mt-2 flex flex-wrap gap-1"><Badge variant="outline">{pretty(debt.debt_type)}</Badge><Badge className={mine?"bg-blue-100 text-blue-700":"bg-violet-100 text-violet-700"}>{mine?"Created by you":`Added by ${person?.display_name||"someone"}`}</Badge><Badge variant="secondary">{shared?(person?"Shared":"Invite pending"):"Personal"}</Badge></div></div></div><div className="mt-4 grid grid-cols-3 text-sm"><div><small className="text-muted-foreground">Total</small><b className="block">{money(debt.total_amount)}</b></div><div><small className="text-muted-foreground">Paid</small><b className="block text-emerald-600">{money(debt.paid_amount)}</b></div><div><small className="text-muted-foreground">Remaining</small><b className="block">{money(debt.remaining_amount)}</b></div></div><Progress value={pct} className="mt-3 h-2"/><div className="mt-2 flex justify-between text-xs text-muted-foreground"><span>{Math.round(pct)}% paid</span>{(next||debt.due_date)&&<span className="flex items-center gap-1"><Calendar className="h-3 w-3"/>{next?.due_date||debt.due_date}</span>}</div><div className="mt-4 flex flex-wrap gap-2"><Button size="sm" className="flex-1" onClick={()=>nav(`/debts/${debt.id}`)}>View Details</Button>{!receivable&&debt.status==="pending"&&shared&&<><Button size="sm" variant="outline" onClick={()=>act("accept")}>Accept</Button><Button size="sm" variant="destructive" onClick={()=>act("reject")}>Reject</Button></>}{receivable&&debt.status==="pending"&&<Button size="sm" variant="outline" onClick={()=>act("cancel")}>Cancel</Button>}{mine&&<EditDebt debt={debt} receivable={receivable} update={update}/>}{mine&&<Button size="icon" variant="ghost" onClick={remove}><Trash2 className="h-4 w-4"/></Button>}</div></CardContent></Card>
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      {children}
+    </div>
+  );
 }
 
-type Form=DebtInput&{count:number;firstDate:string;fee:number;interest:number;months:number;reflect:boolean};
-const blank:Form={direction:"receivable",title:"",personAlias:"",borrowerEmail:"",debtType:"one_time",amount:0,dueDate:"",notes:"",count:2,firstDate:"",fee:0,interest:0,months:6,reflect:false,reflectBookId:undefined};
-const monthDate=(date:string,n:number)=>{const d=new Date(`${date}T12:00:00`);d.setMonth(d.getMonth()+n);return d.toISOString().slice(0,10)};
-
-function AddDebt({create}:{create:(p:DebtInput)=>Promise<unknown>}){
- const[open,setOpen]=useState(false),[f,setF]=useState(blank);
- const{books}=useBooks();
- const emi=useMemo(()=>{const fee=f.amount*f.fee/100,interest=f.amount*f.interest/100*(f.months/12),total=f.amount+fee+interest;return{fee,interest,total,monthly:total/f.months}},[f.amount,f.fee,f.interest,f.months]);
- const installments=useMemo(()=>{if(!f.firstDate)return[];const each=Math.floor(f.amount*100/f.count)/100;return Array.from({length:f.count},(_,i)=>({amount:i===f.count-1?f.amount-each*i:each,due_date:monthDate(f.firstDate,i)}))},[f.amount,f.count,f.firstDate]);
- const valid=f.title.trim()&&f.amount>0&&(f.debtType!=="one_time"||f.dueDate)&&(f.debtType==="one_time"||f.firstDate)&&(!f.reflect||!!f.reflectBookId);
- const save=async()=>{await create({...f,description:f.title,borrowerEmail:f.borrowerEmail?.trim()||undefined,personAlias:f.personAlias?.trim()||undefined,amount:f.debtType==="emi"?emi.total:f.amount,installments:f.debtType==="custom"?installments:undefined,reflectBookId:f.direction==="payable"&&f.reflect?f.reflectBookId:undefined,loan:f.debtType==="emi"?{principal_amount:f.amount,processing_fee_percent:f.fee,processing_fee:emi.fee,interest_rate:f.interest,interest_type:"flat",number_of_emis:f.months,emi_amount:emi.monthly,total_interest:emi.interest,total_repayable_amount:emi.total,payment_frequency:"monthly",loan_start_date:new Date().toISOString().slice(0,10),first_emi_date:f.firstDate,automatic_calculation:true}:undefined});setOpen(false);setF(blank)};
- return <Dialog open={open} onOpenChange={setOpen}><DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4"/>Add Debt</Button></DialogTrigger><DialogContent fullscreen className="flex flex-col"><DialogHeader className="border-b p-4"><DialogTitle>Add debt</DialogTitle></DialogHeader><div className="flex-1 overflow-y-auto p-4"><div className="mx-auto max-w-xl space-y-5"><div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1"><Button variant={f.direction==="receivable"?"default":"ghost"} onClick={()=>setF({...f,direction:"receivable"})}><ArrowDownLeft className="mr-2 h-4 w-4"/>I’m owed</Button><Button variant={f.direction==="payable"?"default":"ghost"} onClick={()=>setF({...f,direction:"payable"})}><ArrowUpRight className="mr-2 h-4 w-4"/>I owe</Button></div><Field label="Title"><Input placeholder="e.g. Laptop loan" value={f.title} onChange={e=>setF({...f,title:e.target.value})}/></Field><Field label="Amount"><Input type="number" value={f.amount||""} onChange={e=>setF({...f,amount:Number(e.target.value)})}/></Field><Field label="Payment type"><div className="grid grid-cols-3 gap-2">{(["one_time","custom","emi"] as DebtType[]).map(t=><Button key={t} size="sm" variant={f.debtType===t?"default":"outline"} onClick={()=>setF({...f,debtType:t})}>{t==="custom"?"Installments":pretty(t)}</Button>)}</div></Field>{f.debtType==="one_time"&&<Field label="Due date"><Input type="date" value={f.dueDate} onChange={e=>setF({...f,dueDate:e.target.value})}/></Field>}{f.debtType==="custom"&&<Card><CardContent className="grid grid-cols-2 gap-3 p-4"><Field label="Installments"><Input type="number" min="2" value={f.count} onChange={e=>setF({...f,count:Math.max(2,Number(e.target.value))})}/></Field><Field label="First due date"><Input type="date" value={f.firstDate} onChange={e=>setF({...f,firstDate:e.target.value})}/></Field><p className="col-span-2 text-xs text-muted-foreground">Equal payments on the same day each month.</p>{installments.length>0&&<p className="col-span-2 text-sm">{f.count} × about {money(installments[0].amount)}</p>}</CardContent></Card>}{f.debtType==="emi"&&<Card><CardContent className="grid grid-cols-2 gap-3 p-4"><Field label="Processing fee %"><Input type="number" value={f.fee} onChange={e=>setF({...f,fee:Number(e.target.value)})}/></Field><Field label="Interest % yearly"><Input type="number" value={f.interest} onChange={e=>setF({...f,interest:Number(e.target.value)})}/></Field><Field label="Number of months"><Input type="number" min="1" value={f.months} onChange={e=>setF({...f,months:Math.max(1,Number(e.target.value))})}/></Field><Field label="First EMI date"><Input type="date" value={f.firstDate} onChange={e=>setF({...f,firstDate:e.target.value})}/></Field><div className="col-span-2 grid grid-cols-2 rounded-lg bg-muted p-3 text-sm"><span>Monthly EMI</span><b className="text-right">{money(emi.monthly)}</b><span>Total payable</span><b className="text-right">{money(emi.total)}</b></div></CardContent></Card>}{f.direction==="payable"&&<Card><CardContent className="space-y-3 p-4"><div className="flex items-start gap-3"><Checkbox id="reflect" checked={f.reflect} onCheckedChange={v=>setF({...f,reflect:Boolean(v),reflectBookId:undefined})}/><div><Label htmlFor="reflect">Reflect into a book</Label><p className="text-xs text-muted-foreground">Adds this as an expense (deduction) in the selected book using the same title and notes.</p></div></div>{f.reflect&&<Field label="Book to deduct from"><Select value={f.reflectBookId} onValueChange={v=>setF({...f,reflectBookId:v})}><SelectTrigger><SelectValue placeholder="Select a book"/></SelectTrigger><SelectContent>{books.map(b=><SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>)}</SelectContent></Select></Field>}</CardContent></Card>}<Card><CardContent className="space-y-4 p-4"><div><Label>Person (optional)</Label><p className="text-xs text-muted-foreground">No account search. Email links automatically if they join later.</p></div><Field label="Alias / name"><Input placeholder="e.g. Rahul" value={f.personAlias} onChange={e=>setF({...f,personAlias:e.target.value})}/></Field><Field label="Email"><Input type="email" placeholder="rahul@example.com" value={f.borrowerEmail} onChange={e=>setF({...f,borrowerEmail:e.target.value})}/></Field></CardContent></Card><Field label="Notes (optional)"><Textarea value={f.notes} onChange={e=>setF({...f,notes:e.target.value})}/></Field></div></div><DialogFooter className="border-t p-4"><Button variant="outline" onClick={()=>setOpen(false)}>Cancel</Button><Button disabled={!valid} onClick={save}>Save debt</Button></DialogFooter></DialogContent></Dialog>
+function EditDebt({
+  debt,
+  receivable,
+  update,
+}: {
+  debt: Debt;
+  receivable: boolean;
+  update: (p: DebtEditInput) => Promise<unknown>;
+}) {
+  const [open, setOpen] = useState(false);
+  const initial = () => ({
+    title: debt.description,
+    notes: debt.notes || "",
+    personAlias: debt.counterparty_alias || "",
+    borrowerEmail: debt.counterparty_email || "",
+    dueDate: dateInput(debt.due_date),
+    amount: debt.total_amount,
+    direction: (debt.direction || "receivable") as "receivable" | "payable",
+    debtType: debt.debt_type,
+    count: Math.max(2, debt.installments?.length || 2),
+    firstDate:
+      dateInput(debt.installments?.[0]?.due_date) ||
+      dateInput(debt.loan_details?.first_emi_date) ||
+      "",
+    fee: debt.loan_details?.processing_fee_percent || 0,
+    interest: debt.loan_details?.interest_rate || 0,
+    months:
+      debt.loan_details?.number_of_emis ||
+      Math.max(1, debt.installments?.length || 6),
+  });
+  const [f, setF] = useState(initial);
+  const emi = useMemo(() => {
+    const fee = (f.amount * f.fee) / 100,
+      interest = ((f.amount * f.interest) / 100) * (f.months / 12),
+      total = f.amount + fee + interest;
+    return { fee, interest, total, monthly: total / f.months };
+  }, [f.amount, f.fee, f.interest, f.months]);
+  const installments = useMemo(() => {
+    if (!f.firstDate) return [];
+    const each = Math.floor((f.amount * 100) / f.count) / 100;
+    return Array.from({ length: f.count }, (_, i) => ({
+      amount: i === f.count - 1 ? f.amount - each * i : each,
+      due_date: monthDate(f.firstDate, i),
+    }));
+  }, [f.amount, f.count, f.firstDate]);
+  const valid =
+    f.title.trim() &&
+    f.amount >= debt.paid_amount &&
+    f.amount > 0 &&
+    (f.debtType !== "one_time" || f.dueDate) &&
+    (f.debtType === "one_time" || f.firstDate);
+  const save = async () => {
+    await update({
+      id: debt.id,
+      title: f.title,
+      notes: f.notes,
+      personAlias: f.personAlias,
+      borrowerEmail: f.borrowerEmail,
+      dueDate: f.dueDate,
+      amount: f.debtType === "emi" ? emi.total : f.amount,
+      direction: f.direction,
+      debtType: f.debtType,
+      installments: f.debtType === "custom" ? installments : undefined,
+      loan:
+        f.debtType === "emi"
+          ? {
+              principal_amount: f.amount,
+              processing_fee_percent: f.fee,
+              processing_fee: emi.fee,
+              interest_rate: f.interest,
+              interest_type: "flat",
+              number_of_emis: f.months,
+              emi_amount: emi.monthly,
+              total_interest: emi.interest,
+              total_repayable_amount: emi.total,
+              payment_frequency: "monthly",
+              loan_start_date:
+                debt.loan_details?.loan_start_date ||
+                new Date().toISOString().slice(0, 10),
+              first_emi_date: f.firstDate,
+              automatic_calculation: true,
+            }
+          : undefined,
+    });
+    setOpen(false);
+  };
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (o) setF(initial());
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button size="icon" variant="ghost">
+          <Pencil className="h-4 w-4" />
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Edit debt</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <Field label="Direction">
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+              <Button
+                variant={f.direction === "receivable" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setF({ ...f, direction: "receivable" })}
+              >
+                <ArrowDownLeft className="mr-2 h-4 w-4" />
+                I’m owed
+              </Button>
+              <Button
+                variant={f.direction === "payable" ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setF({ ...f, direction: "payable" })}
+              >
+                <ArrowUpRight className="mr-2 h-4 w-4" />I owe
+              </Button>
+            </div>
+          </Field>
+          <Field label="Title">
+            <Input
+              value={f.title}
+              onChange={(e) => setF({ ...f, title: e.target.value })}
+            />
+          </Field>
+          <Field label="Amount">
+            <Input
+              type="number"
+              value={f.amount || ""}
+              onChange={(e) => setF({ ...f, amount: Number(e.target.value) })}
+            />
+            <p className="text-xs text-muted-foreground">
+              {debt.paid_amount > 0 &&
+                `Already paid ${money(debt.paid_amount)}. Amount can't be lower.`}
+              {isCompletedDebt(debt) &&
+                " Increasing the amount reopens this debt."}
+            </p>
+          </Field>
+          <Field label="Payment type">
+            <div className="grid grid-cols-3 gap-2">
+              {(["one_time", "custom", "emi"] as DebtType[]).map((t) => (
+                <Button
+                  key={t}
+                  size="sm"
+                  variant={f.debtType === t ? "default" : "outline"}
+                  onClick={() => setF({ ...f, debtType: t })}
+                >
+                  {t === "custom" ? "Installments" : pretty(t)}
+                </Button>
+              ))}
+            </div>
+          </Field>
+          {f.debtType === "one_time" && (
+            <Field label="Due date">
+              <Input
+                type="date"
+                value={f.dueDate}
+                onChange={(e) => setF({ ...f, dueDate: e.target.value })}
+              />
+            </Field>
+          )}
+          {f.debtType === "custom" && (
+            <Card>
+              <CardContent className="grid grid-cols-2 gap-3 p-4">
+                <Field label="Installments">
+                  <Input
+                    type="number"
+                    min="2"
+                    value={f.count}
+                    onChange={(e) =>
+                      setF({ ...f, count: Math.max(2, Number(e.target.value)) })
+                    }
+                  />
+                </Field>
+                <Field label="First due date">
+                  <Input
+                    type="date"
+                    value={f.firstDate}
+                    onChange={(e) => setF({ ...f, firstDate: e.target.value })}
+                  />
+                </Field>
+                <p className="col-span-2 text-sm">
+                  {f.count} × about {money(installments[0]?.amount || 0)}
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {f.debtType === "emi" && (
+            <Card>
+              <CardContent className="grid grid-cols-2 gap-3 p-4">
+                <Field label="Processing fee %">
+                  <Input
+                    type="number"
+                    value={f.fee}
+                    onChange={(e) =>
+                      setF({ ...f, fee: Number(e.target.value) })
+                    }
+                  />
+                </Field>
+                <Field label="Interest % yearly">
+                  <Input
+                    type="number"
+                    value={f.interest}
+                    onChange={(e) =>
+                      setF({ ...f, interest: Number(e.target.value) })
+                    }
+                  />
+                </Field>
+                <Field label="Number of months">
+                  <Input
+                    type="number"
+                    min="1"
+                    value={f.months}
+                    onChange={(e) =>
+                      setF({
+                        ...f,
+                        months: Math.max(1, Number(e.target.value)),
+                      })
+                    }
+                  />
+                </Field>
+                <Field label="First EMI date">
+                  <Input
+                    type="date"
+                    value={f.firstDate}
+                    onChange={(e) => setF({ ...f, firstDate: e.target.value })}
+                  />
+                </Field>
+                <div className="col-span-2 grid grid-cols-2 rounded-lg bg-muted p-3 text-sm">
+                  <span>Monthly EMI</span>
+                  <b className="text-right">{money(emi.monthly)}</b>
+                  <span>Total payable</span>
+                  <b className="text-right">{money(emi.total)}</b>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <Card>
+            <CardContent className="space-y-4 p-4">
+              <div>
+                <Label>Person (optional)</Label>
+                <p className="text-xs text-muted-foreground">
+                  No account search. Email links automatically if they join later.
+                </p>
+              </div>
+              <Field label="Alias / name">
+                <Input
+                  placeholder="e.g. Rahul"
+                  value={f.personAlias}
+                  onChange={(e) => setF({ ...f, personAlias: e.target.value })}
+                />
+              </Field>
+              <Field label="Email">
+                <Input
+                  type="email"
+                  placeholder="rahul@example.com"
+                  value={f.borrowerEmail}
+                  onChange={(e) => setF({ ...f, borrowerEmail: e.target.value })}
+                />
+              </Field>
+            </CardContent>
+          </Card>
+          <Field label="Notes">
+            <Textarea
+              value={f.notes}
+              onChange={(e) => setF({ ...f, notes: e.target.value })}
+            />
+          </Field>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button disabled={!valid} onClick={save}>
+            Save changes
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 }
 
-function DebtTab({items,receivable,d}:{items:Debt[];receivable:boolean;d:ReturnType<typeof useDebts>}){
- const[showDone,setShowDone]=useState(false);
- const open=items.filter(x=>!isCompletedDebt(x));
- const done=items.filter(isCompletedDebt);
- const card=(x:Debt)=><DebtCard key={x.id} debt={x} receivable={receivable} act={a=>d.act({id:x.id,action:a})} remove={()=>d.deleteDebt(x.id)} update={d.updateDebt}/>;
- return <div className="space-y-4"><div className="grid gap-3 lg:grid-cols-2">{open.length?open.map(card):<Card className="lg:col-span-2"><CardContent className="flex flex-col items-center p-10"><WalletCards className="mb-2 h-8 w-8 text-muted-foreground"/><p>No active {receivable?"receivables":"payables"}</p></CardContent></Card>}</div>{done.length>0&&<Collapsible open={showDone} onOpenChange={setShowDone}><CollapsibleTrigger asChild><Button variant="ghost" className="w-full justify-between"><span>Completed &amp; closed <Badge variant="secondary" className="ml-2">{done.length}</Badge></span><ChevronDown className={`h-4 w-4 transition-transform ${showDone?"rotate-180":""}`}/></Button></CollapsibleTrigger><CollapsibleContent className="mt-3"><p className="mb-3 text-xs text-muted-foreground">Paid, rejected or cancelled debts. Editing one (e.g. raising its amount) moves it back to the active list.</p><div className="grid gap-3 opacity-90 lg:grid-cols-2">{done.map(card)}</div></CollapsibleContent></Collapsible>}</div>;
+function DebtCard({
+  debt,
+  receivable,
+  act,
+  remove,
+  update,
+}: {
+  debt: Debt;
+  receivable: boolean;
+  act: (a: string) => void;
+  remove: () => void;
+  update: (p: DebtEditInput) => Promise<unknown>;
+}) {
+  const nav = useNavigate(),
+    { user } = useAuth();
+  const person = receivable ? debt.borrower : debt.lender;
+  const alias =
+    debt.counterparty_alias ||
+    person?.display_name ||
+    person?.email ||
+    "Personal tracking";
+  const shared = Boolean(debt.counterparty_email || person),
+    mine = !debt.created_by || debt.created_by === user?.id;
+  const pct = debt.total_amount
+      ? Math.min(100, (debt.paid_amount / debt.total_amount) * 100)
+      : 0,
+    next = debt.installments?.find((i) => i.remaining_amount > 0);
+  return (
+    <Card className="transition-all">
+      <CardContent className="p-4">
+        <div className="flex gap-3">
+          <Avatar>
+            <AvatarFallback>
+              {alias[0]?.toUpperCase() || <UserRound className="h-4 w-4" />}
+            </AvatarFallback>
+          </Avatar>
+          <div className="min-w-0 flex-1">
+            <div className="flex justify-between gap-2">
+              <div className="min-w-0">
+                <p className="truncate font-semibold">{debt.description}</p>
+                <p className="truncate text-xs text-muted-foreground">
+                  {alias}
+                </p>
+              </div>
+              <Badge className={statusTone[debt.status]}>
+                {pretty(debt.status)}
+              </Badge>
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1">
+              <Badge variant="outline">{pretty(debt.debt_type)}</Badge>
+              <Badge
+                className={
+                  mine
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-violet-100 text-violet-700"
+                }
+              >
+                {mine
+                  ? "Created by you"
+                  : `Added by ${person?.display_name || "someone"}`}
+              </Badge>
+              <Badge variant="secondary">
+                {shared ? (person ? "Shared" : "Invite pending") : "Personal"}
+              </Badge>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 grid grid-cols-3 text-sm">
+          <div>
+            <small className="text-muted-foreground">Total</small>
+            <b className="block">{money(debt.total_amount)}</b>
+          </div>
+          <div>
+            <small className="text-muted-foreground">Paid</small>
+            <b className="block text-emerald-600">{money(debt.paid_amount)}</b>
+          </div>
+          <div>
+            <small className="text-muted-foreground">Remaining</small>
+            <b className="block">{money(debt.remaining_amount)}</b>
+          </div>
+        </div>
+        <Progress value={pct} className="mt-3 h-2" />
+        <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+          <span>{Math.round(pct)}% paid</span>
+          {(next || debt.due_date) && (
+            <span className="flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {formatDebtDate(next?.due_date || debt.due_date)}
+            </span>
+          )}
+        </div>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            className="flex-1"
+            onClick={() => nav(`/debts/${debt.id}`)}
+          >
+            View Details
+          </Button>
+          {!receivable && debt.status === "pending" && shared && (
+            <>
+              <Button size="sm" variant="outline" onClick={() => act("accept")}>
+                Accept
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => act("reject")}
+              >
+                Reject
+              </Button>
+            </>
+          )}
+          {receivable && debt.status === "pending" && (
+            <Button size="sm" variant="outline" onClick={() => act("cancel")}>
+              Cancel
+            </Button>
+          )}
+          {mine && (
+            <EditDebt debt={debt} receivable={receivable} update={update} />
+          )}
+          {mine && (
+            <Button size="icon" variant="ghost" onClick={remove}>
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
-export default function Debts(){const d=useDebts(),[tab,setTab]=useState("receivables"),net=d.receivableSummary.outstanding-d.payableSummary.outstanding;return <DashboardLayout><div className="mx-auto max-w-6xl space-y-6"><div className="flex justify-between"><div><h1 className="text-2xl font-bold">Debts</h1><p className="text-sm text-muted-foreground">Everything you owe and are owed.</p></div><AddDebt create={d.createDebt}/></div><div className="grid gap-3 sm:grid-cols-3"><Summary name="Receivables" {...d.receivableSummary}/><Summary name="Payables" {...d.payableSummary}/><Card><CardContent className="p-4"><p className="text-xs font-semibold uppercase text-muted-foreground">Net balance</p><p className={`mt-2 text-xl font-bold ${net>=0?"text-emerald-600":"text-destructive"}`}>{money(net)}</p></CardContent></Card></div><Tabs value={tab} onValueChange={setTab}><TabsList className="grid h-12 w-full grid-cols-2"><TabsTrigger value="receivables">Receivables <Badge className="ml-2" variant="secondary">{d.receivables.filter(x=>!isCompletedDebt(x)).length}</Badge></TabsTrigger><TabsTrigger value="payables">Payables <Badge className="ml-2" variant="secondary">{d.payables.filter(x=>!isCompletedDebt(x)).length}</Badge></TabsTrigger></TabsList><TabsContent value="receivables" className="mt-4"><DebtTab items={d.receivables} receivable d={d}/></TabsContent><TabsContent value="payables" className="mt-4"><DebtTab items={d.payables} receivable={false} d={d}/></TabsContent></Tabs></div></DashboardLayout>}
+type Form = DebtInput & {
+  count: number;
+  firstDate: string;
+  fee: number;
+  interest: number;
+  months: number;
+};
+const blank: Form = {
+  direction: "receivable",
+  title: "",
+  personAlias: "",
+  borrowerEmail: "",
+  debtType: "one_time",
+  amount: 0,
+  dueDate: "",
+  notes: "",
+  count: 2,
+  firstDate: "",
+  fee: 0,
+  interest: 0,
+  months: 6,
+};
+const monthDate = (date: string, n: number) => {
+  const d = new Date(`${date}T12:00:00`);
+  d.setMonth(d.getMonth() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+function AddDebt({ create }: { create: (p: DebtInput) => Promise<unknown> }) {
+  const [open, setOpen] = useState(false),
+    [f, setF] = useState(blank);
+  const emi = useMemo(() => {
+    const fee = (f.amount * f.fee) / 100,
+      interest = ((f.amount * f.interest) / 100) * (f.months / 12),
+      total = f.amount + fee + interest;
+    return { fee, interest, total, monthly: total / f.months };
+  }, [f.amount, f.fee, f.interest, f.months]);
+  const installments = useMemo(() => {
+    if (!f.firstDate) return [];
+    const each = Math.floor((f.amount * 100) / f.count) / 100;
+    return Array.from({ length: f.count }, (_, i) => ({
+      amount: i === f.count - 1 ? f.amount - each * i : each,
+      due_date: monthDate(f.firstDate, i),
+    }));
+  }, [f.amount, f.count, f.firstDate]);
+  const valid =
+    f.title.trim() &&
+    f.amount > 0 &&
+    (f.debtType !== "one_time" || f.dueDate) &&
+    (f.debtType === "one_time" || f.firstDate);
+  const save = async () => {
+    await create({
+      ...f,
+      description: f.title,
+      borrowerEmail: f.borrowerEmail?.trim() || undefined,
+      personAlias: f.personAlias?.trim() || undefined,
+      amount: f.debtType === "emi" ? emi.total : f.amount,
+      installments: f.debtType === "custom" ? installments : undefined,
+      loan:
+        f.debtType === "emi"
+          ? {
+              principal_amount: f.amount,
+              processing_fee_percent: f.fee,
+              processing_fee: emi.fee,
+              interest_rate: f.interest,
+              interest_type: "flat",
+              number_of_emis: f.months,
+              emi_amount: emi.monthly,
+              total_interest: emi.interest,
+              total_repayable_amount: emi.total,
+              payment_frequency: "monthly",
+              loan_start_date: new Date().toISOString().slice(0, 10),
+              first_emi_date: f.firstDate,
+              automatic_calculation: true,
+            }
+          : undefined,
+    });
+    setOpen(false);
+    setF(blank);
+  };
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Debt
+        </Button>
+      </DialogTrigger>
+      <DialogContent fullscreen className="flex flex-col">
+        <DialogHeader className="border-b p-4">
+          <DialogTitle>Add debt</DialogTitle>
+        </DialogHeader>
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mx-auto max-w-xl space-y-5">
+            <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+              <Button
+                variant={f.direction === "receivable" ? "default" : "ghost"}
+                onClick={() => setF({ ...f, direction: "receivable" })}
+              >
+                <ArrowDownLeft className="mr-2 h-4 w-4" />
+                I’m owed
+              </Button>
+              <Button
+                variant={f.direction === "payable" ? "default" : "ghost"}
+                onClick={() => setF({ ...f, direction: "payable" })}
+              >
+                <ArrowUpRight className="mr-2 h-4 w-4" />I owe
+              </Button>
+            </div>
+            <Field label="Title">
+              <Input
+                placeholder="e.g. Laptop loan"
+                value={f.title}
+                onChange={(e) => setF({ ...f, title: e.target.value })}
+              />
+            </Field>
+            <Field label="Amount">
+              <Input
+                type="number"
+                value={f.amount || ""}
+                onChange={(e) => setF({ ...f, amount: Number(e.target.value) })}
+              />
+            </Field>
+            <Field label="Payment type">
+              <div className="grid grid-cols-3 gap-2">
+                {(["one_time", "custom", "emi"] as DebtType[]).map((t) => (
+                  <Button
+                    key={t}
+                    size="sm"
+                    variant={f.debtType === t ? "default" : "outline"}
+                    onClick={() => setF({ ...f, debtType: t })}
+                  >
+                    {t === "custom" ? "Installments" : pretty(t)}
+                  </Button>
+                ))}
+              </div>
+            </Field>
+            {f.debtType === "one_time" && (
+              <Field label="Due date">
+                <Input
+                  type="date"
+                  value={f.dueDate}
+                  onChange={(e) => setF({ ...f, dueDate: e.target.value })}
+                />
+              </Field>
+            )}
+            {f.debtType === "custom" && (
+              <Card>
+                <CardContent className="grid grid-cols-2 gap-3 p-4">
+                  <Field label="Installments">
+                    <Input
+                      type="number"
+                      min="2"
+                      value={f.count}
+                      onChange={(e) =>
+                        setF({
+                          ...f,
+                          count: Math.max(2, Number(e.target.value)),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="First due date">
+                    <Input
+                      type="date"
+                      value={f.firstDate}
+                      onChange={(e) =>
+                        setF({ ...f, firstDate: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <p className="col-span-2 text-xs text-muted-foreground">
+                    Equal payments on the same day each month.
+                  </p>
+                  {installments.length > 0 && (
+                    <p className="col-span-2 text-sm">
+                      {f.count} × about {money(installments[0].amount)}
+                    </p>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+            {f.debtType === "emi" && (
+              <Card>
+                <CardContent className="grid grid-cols-2 gap-3 p-4">
+                  <Field label="Processing fee %">
+                    <Input
+                      type="number"
+                      value={f.fee}
+                      onChange={(e) =>
+                        setF({ ...f, fee: Number(e.target.value) })
+                      }
+                    />
+                  </Field>
+                  <Field label="Interest % yearly">
+                    <Input
+                      type="number"
+                      value={f.interest}
+                      onChange={(e) =>
+                        setF({ ...f, interest: Number(e.target.value) })
+                      }
+                    />
+                  </Field>
+                  <Field label="Number of months">
+                    <Input
+                      type="number"
+                      min="1"
+                      value={f.months}
+                      onChange={(e) =>
+                        setF({
+                          ...f,
+                          months: Math.max(1, Number(e.target.value)),
+                        })
+                      }
+                    />
+                  </Field>
+                  <Field label="First EMI date">
+                    <Input
+                      type="date"
+                      value={f.firstDate}
+                      onChange={(e) =>
+                        setF({ ...f, firstDate: e.target.value })
+                      }
+                    />
+                  </Field>
+                  <div className="col-span-2 grid grid-cols-2 rounded-lg bg-muted p-3 text-sm">
+                    <span>Monthly EMI</span>
+                    <b className="text-right">{money(emi.monthly)}</b>
+                    <span>Total payable</span>
+                    <b className="text-right">{money(emi.total)}</b>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            <Card>
+              <CardContent className="space-y-4 p-4">
+                <div>
+                  <Label>Person (optional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    No account search. Email links automatically if they join
+                    later.
+                  </p>
+                </div>
+                <Field label="Alias / name">
+                  <Input
+                    placeholder="e.g. Rahul"
+                    value={f.personAlias}
+                    onChange={(e) =>
+                      setF({ ...f, personAlias: e.target.value })
+                    }
+                  />
+                </Field>
+                <Field label="Email">
+                  <Input
+                    type="email"
+                    placeholder="rahul@example.com"
+                    value={f.borrowerEmail}
+                    onChange={(e) =>
+                      setF({ ...f, borrowerEmail: e.target.value })
+                    }
+                  />
+                </Field>
+              </CardContent>
+            </Card>
+            <Field label="Notes (optional)">
+              <Textarea
+                value={f.notes}
+                onChange={(e) => setF({ ...f, notes: e.target.value })}
+              />
+            </Field>
+          </div>
+        </div>
+        <DialogFooter className="border-t p-4">
+          <Button variant="outline" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button disabled={!valid} onClick={save}>
+            Save debt
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DebtTab({
+  items,
+  receivable,
+  d,
+}: {
+  items: Debt[];
+  receivable: boolean;
+  d: ReturnType<typeof useDebts>;
+}) {
+  const [showDone, setShowDone] = useState(false);
+  const open = items.filter((x) => !isCompletedDebt(x));
+  const done = items.filter(isCompletedDebt);
+  const card = (x: Debt) => (
+    <DebtCard
+      key={x.id}
+      debt={x}
+      receivable={receivable}
+      act={(a) => d.act({ id: x.id, action: a })}
+      remove={() => d.deleteDebt(x.id)}
+      update={d.updateDebt}
+    />
+  );
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 lg:grid-cols-2">
+        {open.length ? (
+          open.map(card)
+        ) : (
+          <Card className="lg:col-span-2">
+            <CardContent className="flex flex-col items-center p-10">
+              <WalletCards className="mb-2 h-8 w-8 text-muted-foreground" />
+              <p>No active {receivable ? "receivables" : "payables"}</p>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+      {done.length > 0 && (
+        <Collapsible open={showDone} onOpenChange={setShowDone}>
+          <CollapsibleTrigger asChild>
+            <Button variant="ghost" className="w-full justify-between">
+              <span>
+                Completed &amp; closed{" "}
+                <Badge variant="secondary" className="ml-2">
+                  {done.length}
+                </Badge>
+              </span>
+              <ChevronDown
+                className={`h-4 w-4 transition-transform ${showDone ? "rotate-180" : ""}`}
+              />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-3">
+            <p className="mb-3 text-xs text-muted-foreground">
+              Paid, rejected or cancelled debts. Editing one (e.g. raising its
+              amount) moves it back to the active list.
+            </p>
+            <div className="grid gap-3 opacity-90 lg:grid-cols-2">
+              {done.map(card)}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
+    </div>
+  );
+}
+
+export default function Debts() {
+  const d = useDebts(),
+    [tab, setTabState] = useState(
+      () => localStorage.getItem("debts-active-tab") || "receivables",
+    ),
+    net = d.receivableSummary.outstanding - d.payableSummary.outstanding;
+  const setTab = (value: string) => {
+    setTabState(value);
+    localStorage.setItem("debts-active-tab", value);
+  };
+  return (
+    <DashboardLayout>
+      <div className="mx-auto max-w-6xl space-y-6">
+        <div className="flex justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Debts</h1>
+            <p className="text-sm text-muted-foreground">
+              Everything you owe and are owed.
+            </p>
+          </div>
+          <AddDebt create={d.createDebt} />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <Summary name="Receivables" {...d.receivableSummary} />
+          <Summary name="Payables" {...d.payableSummary} />
+          <Card>
+            <CardContent className="p-4">
+              <p className="text-xs font-semibold uppercase text-muted-foreground">
+                Net balance
+              </p>
+              <p
+                className={`mt-2 text-xl font-bold ${net >= 0 ? "text-emerald-600" : "text-destructive"}`}
+              >
+                {money(net)}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList className="grid h-12 w-full grid-cols-2">
+            <TabsTrigger value="receivables">
+              Receivables{" "}
+              <Badge className="ml-2" variant="secondary">
+                {d.receivables.filter((x) => !isCompletedDebt(x)).length}
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="payables">
+              Payables{" "}
+              <Badge className="ml-2" variant="secondary">
+                {d.payables.filter((x) => !isCompletedDebt(x)).length}
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="receivables" className="mt-4">
+            <DebtTab items={d.receivables} receivable d={d} />
+          </TabsContent>
+          <TabsContent value="payables" className="mt-4">
+            <DebtTab items={d.payables} receivable={false} d={d} />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </DashboardLayout>
+  );
+}

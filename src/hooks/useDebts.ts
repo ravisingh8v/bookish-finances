@@ -35,6 +35,7 @@ export interface Payment {
   notes?: string | null;
   added_by: string;
   created_at: string;
+  book_id?: string | null;
 }
 
 export interface Activity {
@@ -122,7 +123,6 @@ export interface DebtInput {
   dueDate?: string;
   loan?: Partial<LoanDetails> & { processing_fee_percent?: number };
   installments?: { amount: number; due_date: string }[];
-  reflectBookId?: string;
 }
 
 export interface DebtEditInput {
@@ -134,9 +134,17 @@ export interface DebtEditInput {
   dueDate?: string;
   amount?: number;
   direction?: "receivable" | "payable";
+  debtType?: DebtType;
+  installments?: { amount: number; due_date: string }[];
+  loan?: Partial<LoanDetails> & { processing_fee_percent?: number };
 }
 
-const OPEN_STATUSES: DebtStatus[] = ["pending", "accepted", "partially_paid", "overdue"];
+const OPEN_STATUSES: DebtStatus[] = [
+  "pending",
+  "accepted",
+  "partially_paid",
+  "overdue",
+];
 export const isCompletedDebt = (debt: Debt) =>
   ["paid", "rejected", "cancelled"].includes(debt.status);
 
@@ -168,15 +176,16 @@ export function calculateLoan(
   frequency: Frequency,
 ) {
   const periods = Math.max(1, count);
-  const yearlyPeriods = { weekly: 52, monthly: 12, quarterly: 4, yearly: 1 }[frequency];
+  const yearlyPeriods = { weekly: 52, monthly: 12, quarterly: 4, yearly: 1 }[
+    frequency
+  ];
   const periodicRate = rate / 100 / yearlyPeriods;
   const emi =
     type === "reducing" && periodicRate > 0
-      ? principal *
-        periodicRate *
-        Math.pow(1 + periodicRate, periods) /
+      ? (principal * periodicRate * Math.pow(1 + periodicRate, periods)) /
         (Math.pow(1 + periodicRate, periods) - 1)
-      : (principal + principal * (rate / 100) * (periods / yearlyPeriods)) / periods;
+      : (principal + principal * (rate / 100) * (periods / yearlyPeriods)) /
+        periods;
 
   return {
     emi: Math.round(emi * 100) / 100,
@@ -200,35 +209,24 @@ export function useDebts() {
     },
   });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["debts"] });
+  const invalidate = () =>
+    queryClient.invalidateQueries({ queryKey: ["debts"] });
   const debts = debtsQuery.data ?? [];
   const receivables = debts.filter(
-    (debt) => debt.view_direction === "receivable" || (!debt.view_direction && debt.lender_id === user?.id),
+    (debt) =>
+      debt.view_direction === "receivable" ||
+      (!debt.view_direction && debt.lender_id === user?.id),
   );
   const payables = debts.filter(
-    (debt) => debt.view_direction === "payable" || (!debt.view_direction && debt.borrower_id === user?.id),
+    (debt) =>
+      debt.view_direction === "payable" ||
+      (!debt.view_direction && debt.borrower_id === user?.id),
   );
 
   const createDebt = useMutation({
     mutationFn: async (input: DebtInput) => {
-      const { reflectBookId, ...payload } = input;
-      const { data, error } = await db.rpc("create_debt", { _payload: payload });
+      const { data, error } = await db.rpc("create_debt", { _payload: input });
       if (error) throw error;
-      // Reflect a payable debt into a book as an expense (deduction).
-      if (reflectBookId && input.direction === "payable" && user?.id) {
-        const { error: expenseError } = await db.from("expenses").insert({
-          book_id: reflectBookId,
-          title: input.title,
-          amount: input.amount,
-          date: new Date().toISOString().slice(0, 10),
-          expense_type: "debit",
-          payment_method: "cash",
-          notes: input.notes || null,
-          paid_by: user.id,
-          created_by: user.id,
-        });
-        if (expenseError) throw expenseError;
-      }
       return data;
     },
     onSuccess: () => {
@@ -243,7 +241,10 @@ export function useDebts() {
   const updateDebt = useMutation({
     mutationFn: async (input: DebtEditInput) => {
       const { id, ...rest } = input;
-      const { error } = await db.rpc("update_debt", { _debt_id: id, _payload: rest });
+      const { error } = await db.rpc("update_debt", {
+        _debt_id: id,
+        _payload: rest,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -255,7 +256,10 @@ export function useDebts() {
 
   const act = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: string }) => {
-      const { error } = await db.rpc("act_on_debt", { _debt_id: id, _action_name: action });
+      const { error } = await db.rpc("act_on_debt", {
+        _debt_id: id,
+        _action_name: action,
+      });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -312,16 +316,22 @@ export function useDebts() {
 
   const summaryOf = (list: Debt[]) => ({
     outstanding: list
-      .filter((debt) => !["rejected", "cancelled", "paid"].includes(debt.status))
+      .filter(
+        (debt) => !["rejected", "cancelled", "paid"].includes(debt.status),
+      )
       .reduce((sum, debt) => sum + debt.remaining_amount, 0),
     active: list.filter((debt) =>
-      ["pending", "accepted", "partially_paid", "overdue"].includes(debt.status),
+      ["pending", "accepted", "partially_paid", "overdue"].includes(
+        debt.status,
+      ),
     ).length,
     overdue: list
       .filter(
         (debt) =>
           debt.status === "overdue" ||
-          (!!debt.due_date && new Date(debt.due_date) < new Date() && debt.remaining_amount > 0),
+          (!!debt.due_date &&
+            new Date(debt.due_date) < new Date() &&
+            debt.remaining_amount > 0),
       )
       .reduce((sum, debt) => sum + debt.remaining_amount, 0),
   });
