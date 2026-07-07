@@ -122,7 +122,23 @@ export interface DebtInput {
   dueDate?: string;
   loan?: Partial<LoanDetails> & { processing_fee_percent?: number };
   installments?: { amount: number; due_date: string }[];
+  reflectBookId?: string;
 }
+
+export interface DebtEditInput {
+  id: string;
+  title?: string;
+  notes?: string;
+  personAlias?: string;
+  borrowerEmail?: string;
+  dueDate?: string;
+  amount?: number;
+  direction?: "receivable" | "payable";
+}
+
+const OPEN_STATUSES: DebtStatus[] = ["pending", "accepted", "partially_paid", "overdue"];
+export const isCompletedDebt = (debt: Debt) =>
+  ["paid", "rejected", "cancelled"].includes(debt.status);
 
 const db = supabase as any;
 const toNumber = (value: unknown) => Number(value) || 0;
