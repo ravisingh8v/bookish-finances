@@ -300,7 +300,7 @@ export function useDebts() {
 
   const deleteDebt = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await db.from("debts").delete().eq("id", id);
+      const { error } = await db.rpc("delete_debt", { _debt_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
