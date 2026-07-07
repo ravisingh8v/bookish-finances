@@ -759,6 +759,7 @@ export type Database = {
         Returns: undefined
       }
       create_debt: { Args: { _payload: Json }; Returns: string }
+      delete_debt: { Args: { _debt_id: string }; Returns: undefined }
       get_my_debts: { Args: never; Returns: Json }
       is_debt_participant: {
         Args: { _target: Database["public"]["Tables"]["debts"]["Row"] }
@@ -774,6 +775,10 @@ export type Database = {
           _target_installment?: string
         }
         Returns: string
+      }
+      update_debt: {
+        Args: { _debt_id: string; _payload: Json }
+        Returns: undefined
       }
     }
     Enums: {
