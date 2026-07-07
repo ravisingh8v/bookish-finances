@@ -334,6 +334,7 @@ export function useDebts() {
     payableSummary: summaryOf(payables),
     isLoading: debtsQuery.isLoading,
     createDebt: createDebt.mutateAsync,
+    updateDebt: updateDebt.mutateAsync,
     act: act.mutateAsync,
     recordPayment: recordPayment.mutateAsync,
     deleteDebt: deleteDebt.mutateAsync,
