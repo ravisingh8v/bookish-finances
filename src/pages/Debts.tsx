@@ -394,8 +394,9 @@ function EditDebt({
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
+          </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="border-t p-4">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
