@@ -885,7 +885,7 @@ function DebtTab({
               Paid, rejected or cancelled debts. Editing one (e.g. raising its
               amount) moves it back to the active list.
             </p>
-            <div className="grid gap-3 opacity-90 lg:grid-cols-2">
+            <div className="grid gap-3 opacity-90 md:grid-cols-2 xl:grid-cols-3">
               {done.map(card)}
             </div>
           </CollapsibleContent>
