@@ -434,86 +434,81 @@ function DebtCard({
       ? Math.min(100, (debt.paid_amount / debt.total_amount) * 100)
       : 0,
     next = debt.installments?.find((i) => i.remaining_amount > 0);
+  const dueDate = next?.due_date || debt.due_date;
   return (
-    <Card className="transition-all">
-      <CardContent className="p-4">
-        <div className="flex gap-3">
-          <Avatar>
-            <AvatarFallback>
+    <Card className="transition-all hover:shadow-sm">
+      <CardContent className="space-y-2.5 p-3">
+        <div className="flex items-center gap-2.5">
+          <Avatar className="h-8 w-8 shrink-0">
+            <AvatarFallback className="text-xs">
               {alias[0]?.toUpperCase() || <UserRound className="h-4 w-4" />}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <div className="flex justify-between gap-2">
-              <div className="min-w-0">
-                <p className="truncate font-semibold">{debt.description}</p>
-                <p className="truncate text-xs text-muted-foreground">
-                  {alias}
-                </p>
-              </div>
-              <Badge className={statusTone[debt.status]}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="truncate text-sm font-semibold">
+                {debt.description}
+              </p>
+              <b className="shrink-0 text-sm">{money(debt.remaining_amount)}</b>
+            </div>
+            <div className="flex items-center justify-between gap-2">
+              <p className="truncate text-xs text-muted-foreground">{alias}</p>
+              <Badge
+                className={`shrink-0 px-1.5 py-0 text-[10px] ${statusTone[debt.status]}`}
+              >
                 {pretty(debt.status)}
               </Badge>
             </div>
-            <div className="mt-2 flex flex-wrap gap-1">
-              <Badge variant="outline">{pretty(debt.debt_type)}</Badge>
-              <Badge
-                className={
-                  mine
-                    ? "bg-blue-100 text-blue-700"
-                    : "bg-violet-100 text-violet-700"
-                }
-              >
-                {mine
-                  ? "Created by you"
-                  : `Added by ${person?.display_name || "someone"}`}
-              </Badge>
-              <Badge variant="secondary">
-                {shared ? (person ? "Shared" : "Invite pending") : "Personal"}
-              </Badge>
-            </div>
           </div>
         </div>
-        <div className="mt-4 grid grid-cols-3 text-sm">
-          <div>
-            <small className="text-muted-foreground">Total</small>
-            <b className="block">{money(debt.total_amount)}</b>
-          </div>
-          <div>
-            <small className="text-muted-foreground">Paid</small>
-            <b className="block text-emerald-600">{money(debt.paid_amount)}</b>
-          </div>
-          <div>
-            <small className="text-muted-foreground">Remaining</small>
-            <b className="block">{money(debt.remaining_amount)}</b>
-          </div>
+
+        <div className="flex items-center gap-1.5">
+          <Progress value={pct} className="h-1.5 flex-1" />
+          <span className="shrink-0 text-[10px] text-muted-foreground">
+            {Math.round(pct)}%
+          </span>
         </div>
-        <Progress value={pct} className="mt-3 h-2" />
-        <div className="mt-2 flex justify-between text-xs text-muted-foreground">
-          <span>{Math.round(pct)}% paid</span>
-          {(next || debt.due_date) && (
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {formatDebtDate(next?.due_date || debt.due_date)}
-            </span>
-          )}
+
+        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+          <span>
+            <span className="text-emerald-600">{money(debt.paid_amount)}</span>
+            {" / "}
+            {money(debt.total_amount)}
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="capitalize">{pretty(debt.debt_type)}</span>
+            {dueDate && (
+              <span className="flex items-center gap-0.5">
+                <Calendar className="h-3 w-3" />
+                {formatDebtDate(dueDate)}
+              </span>
+            )}
+          </span>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
+
+        <div className="flex items-center gap-1.5">
           <Button
             size="sm"
-            className="flex-1"
+            variant="secondary"
+            className="h-8 flex-1"
             onClick={() => nav(`/debts/${debt.id}`)}
           >
-            View Details
+            View
           </Button>
           {!receivable && debt.status === "pending" && shared && (
             <>
-              <Button size="sm" variant="outline" onClick={() => act("accept")}>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8"
+                onClick={() => act("accept")}
+              >
                 Accept
               </Button>
               <Button
                 size="sm"
                 variant="destructive"
+                className="h-8"
                 onClick={() => act("reject")}
               >
                 Reject
@@ -521,7 +516,12 @@ function DebtCard({
             </>
           )}
           {receivable && debt.status === "pending" && (
-            <Button size="sm" variant="outline" onClick={() => act("cancel")}>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-8"
+              onClick={() => act("cancel")}
+            >
               Cancel
             </Button>
           )}
@@ -529,7 +529,12 @@ function DebtCard({
             <EditDebt debt={debt} receivable={receivable} update={update} />
           )}
           {mine && (
-            <Button size="icon" variant="ghost" onClick={remove}>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="h-8 w-8 shrink-0"
+              onClick={remove}
+            >
               <Trash2 className="h-4 w-4" />
             </Button>
           )}
