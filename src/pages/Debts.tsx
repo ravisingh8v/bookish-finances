@@ -90,12 +90,12 @@ function Summary({
 }) {
   return (
     <Card>
-      <CardContent className="p-4">
-        <p className="text-xs font-semibold uppercase text-muted-foreground">
+      <CardContent className="p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           {name}
         </p>
-        <p className="mt-2 text-xl font-bold">{money(outstanding)}</p>
-        <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+        <p className="mt-0.5 text-base font-bold">{money(outstanding)}</p>
+        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
           <span>{active} active</span>
           <span className={overdue ? "text-destructive" : ""}>
             {money(overdue)} overdue
@@ -220,11 +220,12 @@ function EditDebt({
           <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overflow-x-hidden">
-        <DialogHeader>
+      <DialogContent fullscreen className="flex flex-col">
+        <DialogHeader className="border-b p-4">
           <DialogTitle>Edit debt</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mx-auto max-w-xl space-y-5">
           <Field label="Direction">
             <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
               <Button
@@ -393,8 +394,9 @@ function EditDebt({
               onChange={(e) => setF({ ...f, notes: e.target.value })}
             />
           </Field>
+          </div>
         </div>
-        <DialogFooter>
+        <DialogFooter className="border-t p-4">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
@@ -907,7 +909,7 @@ export default function Debts() {
   };
   return (
     <DashboardLayout>
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-4">
         <div className="flex justify-between">
           <div>
             <h1 className="text-2xl font-bold">Debts</h1>
@@ -917,16 +919,16 @@ export default function Debts() {
           </div>
           <AddDebt create={d.createDebt} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2">
           <Summary name="Receivables" {...d.receivableSummary} />
           <Summary name="Payables" {...d.payableSummary} />
           <Card>
-            <CardContent className="p-4">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">
+            <CardContent className="p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Net balance
               </p>
               <p
-                className={`mt-2 text-xl font-bold ${net >= 0 ? "text-emerald-600" : "text-destructive"}`}
+                className={`mt-0.5 text-base font-bold ${net >= 0 ? "text-emerald-600" : "text-destructive"}`}
               >
                 {money(net)}
               </p>
