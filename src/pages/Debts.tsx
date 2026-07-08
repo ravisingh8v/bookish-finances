@@ -220,11 +220,12 @@ function EditDebt({
           <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overflow-x-hidden">
-        <DialogHeader>
+      <DialogContent fullscreen className="flex flex-col">
+        <DialogHeader className="border-b p-4">
           <DialogTitle>Edit debt</DialogTitle>
         </DialogHeader>
-        <div className="space-y-4">
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="mx-auto max-w-xl space-y-5">
           <Field label="Direction">
             <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
               <Button
