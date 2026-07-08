@@ -857,7 +857,7 @@ function DebtTab({
         {open.length ? (
           open.map(card)
         ) : (
-          <Card className="lg:col-span-2">
+          <Card className="md:col-span-2 xl:col-span-3">
             <CardContent className="flex flex-col items-center p-10">
               <WalletCards className="mb-2 h-8 w-8 text-muted-foreground" />
               <p>No active {receivable ? "receivables" : "payables"}</p>
