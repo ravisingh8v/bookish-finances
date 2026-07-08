@@ -216,11 +216,11 @@ function EditDebt({
       }}
     >
       <DialogTrigger asChild>
-        <Button size="icon" variant="ghost">
+        <Button size="icon" variant="ghost" className="h-8 w-8 shrink-0">
           <Pencil className="h-4 w-4" />
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-h-[85vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <DialogTitle>Edit debt</DialogTitle>
         </DialogHeader>
