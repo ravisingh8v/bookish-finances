@@ -909,7 +909,7 @@ export default function Debts() {
   };
   return (
     <DashboardLayout>
-      <div className="mx-auto max-w-6xl space-y-6">
+      <div className="mx-auto max-w-6xl space-y-4">
         <div className="flex justify-between">
           <div>
             <h1 className="text-2xl font-bold">Debts</h1>
