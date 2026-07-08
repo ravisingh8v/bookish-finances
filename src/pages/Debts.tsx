@@ -90,12 +90,12 @@ function Summary({
 }) {
   return (
     <Card>
-      <CardContent className="p-4">
-        <p className="text-xs font-semibold uppercase text-muted-foreground">
+      <CardContent className="p-3">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
           {name}
         </p>
-        <p className="mt-2 text-xl font-bold">{money(outstanding)}</p>
-        <div className="mt-2 flex justify-between text-xs text-muted-foreground">
+        <p className="mt-0.5 text-base font-bold">{money(outstanding)}</p>
+        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
           <span>{active} active</span>
           <span className={overdue ? "text-destructive" : ""}>
             {money(overdue)} overdue
