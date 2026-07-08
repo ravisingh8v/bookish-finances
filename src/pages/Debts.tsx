@@ -853,7 +853,7 @@ function DebtTab({
   );
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {open.length ? (
           open.map(card)
         ) : (
