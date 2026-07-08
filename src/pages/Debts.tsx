@@ -919,16 +919,16 @@ export default function Debts() {
           </div>
           <AddDebt create={d.createDebt} />
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-3 gap-2">
           <Summary name="Receivables" {...d.receivableSummary} />
           <Summary name="Payables" {...d.payableSummary} />
           <Card>
-            <CardContent className="p-4">
-              <p className="text-xs font-semibold uppercase text-muted-foreground">
+            <CardContent className="p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
                 Net balance
               </p>
               <p
-                className={`mt-2 text-xl font-bold ${net >= 0 ? "text-emerald-600" : "text-destructive"}`}
+                className={`mt-0.5 text-base font-bold ${net >= 0 ? "text-emerald-600" : "text-destructive"}`}
               >
                 {money(net)}
               </p>
