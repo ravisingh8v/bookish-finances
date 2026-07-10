@@ -277,6 +277,8 @@ export function useDebts() {
       reference,
       notes,
       installmentId,
+      bookId,
+      expenseType,
     }: {
       id: string;
       amount: number;
@@ -284,6 +286,8 @@ export function useDebts() {
       reference?: string;
       notes?: string;
       installmentId?: string;
+      bookId?: string;
+      expenseType?: "credit" | "debit";
     }) => {
       const { error } = await db.rpc("record_debt_payment", {
         _debt_id: id,
@@ -294,9 +298,31 @@ export function useDebts() {
         _target_installment: installmentId || null,
       });
       if (error) throw error;
+
+      // Optionally reflect this payment as an entry in a book.
+      if (bookId && user?.id) {
+        const debt = debts.find((d) => d.id === id);
+        const title = notes?.trim() || debt?.description || "Debt payment";
+        const { error: expenseError } = await db.from("expenses").insert({
+          book_id: bookId,
+          title,
+          amount,
+          date: new Date().toISOString(),
+          expense_type: expenseType ?? "debit",
+          payment_method: method || "cash",
+          notes: notes?.trim() || null,
+          tags: [],
+          paid_by: user.id,
+          created_by: user.id,
+        });
+        if (expenseError) throw expenseError;
+      }
     },
     onSuccess: () => {
       invalidate();
+      queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+      queryClient.invalidateQueries({ queryKey: ["expenses"] });
+      queryClient.invalidateQueries({ queryKey: ["book-detail-totals"] });
       toast.success("Payment recorded");
     },
     onError: (error: Error) => toast.error(error.message),
