@@ -134,8 +134,8 @@ export function useSplitBills() {
           .map((p) => {
             const payments = (paymentsByParticipant.get(p.id) ?? []).sort(
               (a, b) =>
-                new Date(a.created_at).getTime() -
-                new Date(b.created_at).getTime(),
+                new Date(b.created_at).getTime() -
+                new Date(a.created_at).getTime(),
             );
             const amount_paid = payments.reduce(
               (sum, payment) => sum + payment.amount,
