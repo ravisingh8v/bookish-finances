@@ -269,11 +269,11 @@ export default function DebtDetail() {
           </CardContent>
         </Card>
         <Tabs defaultValue="overview">
-          <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="installments">Installments</TabsTrigger>
-            <TabsTrigger value="payments">Payments</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 gap-1">
+            <TabsTrigger value="overview" className="px-1 text-xs sm:text-sm">Overview</TabsTrigger>
+            <TabsTrigger value="installments" className="px-1 text-xs sm:text-sm">Installments</TabsTrigger>
+            <TabsTrigger value="payments" className="px-1 text-xs sm:text-sm">Payments</TabsTrigger>
+            <TabsTrigger value="activity" className="px-1 text-xs sm:text-sm">Activity</TabsTrigger>
           </TabsList>
           <TabsContent value="overview">
             <Card>
