@@ -25,6 +25,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useDebts } from "@/hooks/useDebts";
+import { useBooks } from "@/hooks/useBooks";
 import {
   ArrowLeft,
   CheckCircle2,
