@@ -173,12 +173,47 @@ export default function DebtDetail() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Notes</Label>
+                      <Label>Note</Label>
                       <Textarea
+                        placeholder="Used as the entry title when reflected in a book"
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label>Reflect in book (optional)</Label>
+                      <Select value={bookId} onValueChange={setBookId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Don't reflect" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Don't reflect</SelectItem>
+                          {activeBooks.map((b) => (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {bookId !== "none" && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant={expenseType === "debit" ? "default" : "outline"}
+                          onClick={() => setExpenseType("debit")}
+                        >
+                          Debit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={expenseType === "credit" ? "default" : "outline"}
+                          onClick={() => setExpenseType("credit")}
+                        >
+                          Credit
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <DialogFooter>
                     <Button
@@ -189,9 +224,14 @@ export default function DebtDetail() {
                           method,
                           reference,
                           notes,
+                          bookId: bookId === "none" ? undefined : bookId,
+                          expenseType,
                         });
                         setOpen(false);
                         setAmount("");
+                        setNotes("");
+                        setReference("");
+                        setBookId("none");
                       }}
                       disabled={
                         !Number(amount) ||
