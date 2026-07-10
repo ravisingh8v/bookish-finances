@@ -25,6 +25,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useDebts } from "@/hooks/useDebts";
+import { useBooks } from "@/hooks/useBooks";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -55,12 +56,16 @@ const formatDebtDate = (value?: string | null, withTime = false) => {
 export default function DebtDetail() {
   const { debtId } = useParams();
   const { debts, isLoading, recordPayment } = useDebts();
+  const { books } = useBooks();
+  const activeBooks = (books ?? []).filter((b) => !b.archived);
   const debt = debts.find((d) => d.id === debtId);
   const [open, setOpen] = useState(false),
     [amount, setAmount] = useState(""),
     [method, setMethod] = useState("upi"),
     [reference, setReference] = useState(""),
-    [notes, setNotes] = useState("");
+    [notes, setNotes] = useState(""),
+    [bookId, setBookId] = useState("none"),
+    [expenseType, setExpenseType] = useState<"credit" | "debit">("debit");
   if (isLoading)
     return (
       <DashboardLayout>
@@ -168,12 +173,47 @@ export default function DebtDetail() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label>Notes</Label>
+                      <Label>Note</Label>
                       <Textarea
+                        placeholder="Used as the entry title when reflected in a book"
                         value={notes}
                         onChange={(e) => setNotes(e.target.value)}
                       />
                     </div>
+                    <div className="space-y-2">
+                      <Label>Reflect in book (optional)</Label>
+                      <Select value={bookId} onValueChange={setBookId}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Don't reflect" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Don't reflect</SelectItem>
+                          {activeBooks.map((b) => (
+                            <SelectItem key={b.id} value={b.id}>
+                              {b.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    {bookId !== "none" && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant={expenseType === "debit" ? "default" : "outline"}
+                          onClick={() => setExpenseType("debit")}
+                        >
+                          Debit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant={expenseType === "credit" ? "default" : "outline"}
+                          onClick={() => setExpenseType("credit")}
+                        >
+                          Credit
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <DialogFooter>
                     <Button
@@ -184,9 +224,14 @@ export default function DebtDetail() {
                           method,
                           reference,
                           notes,
+                          bookId: bookId === "none" ? undefined : bookId,
+                          expenseType,
                         });
                         setOpen(false);
                         setAmount("");
+                        setNotes("");
+                        setReference("");
+                        setBookId("none");
                       }}
                       disabled={
                         !Number(amount) ||
@@ -224,11 +269,11 @@ export default function DebtDetail() {
           </CardContent>
         </Card>
         <Tabs defaultValue="overview">
-          <TabsList className="grid h-auto w-full grid-cols-2 sm:grid-cols-4">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="installments">Installments</TabsTrigger>
-            <TabsTrigger value="payments">Payments</TabsTrigger>
-            <TabsTrigger value="activity">Activity</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-4 gap-1">
+            <TabsTrigger value="overview" className="px-1 text-xs sm:text-sm">Overview</TabsTrigger>
+            <TabsTrigger value="installments" className="px-1 text-xs sm:text-sm">Installments</TabsTrigger>
+            <TabsTrigger value="payments" className="px-1 text-xs sm:text-sm">Payments</TabsTrigger>
+            <TabsTrigger value="activity" className="px-1 text-xs sm:text-sm">Activity</TabsTrigger>
           </TabsList>
           <TabsContent value="overview">
             <Card>
