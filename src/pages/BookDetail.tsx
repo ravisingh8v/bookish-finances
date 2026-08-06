@@ -245,6 +245,10 @@ export default function BookDetail() {
     updateExpense,
     deleteExpense,
     copyExpense,
+    bulkDeleteExpenses,
+    bulkUpdateCategory,
+    bulkCopyExpenses,
+
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
