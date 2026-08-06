@@ -1499,6 +1499,84 @@ export default function BookDetail() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Bulk copy dialog */}
+        <Dialog
+          open={bulkCopyOpen}
+          onOpenChange={(v) => {
+            setBulkCopyOpen(v);
+            if (!v) setBulkCopyIds([]);
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Copy {selectedIds.length} entries</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto py-2">
+              {copyTargets.map((b) => (
+                <label
+                  key={b.id}
+                  className="flex items-center gap-3 rounded-xl border border-border p-3 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={bulkCopyIds.includes(b.id)}
+                    onChange={(e) =>
+                      setBulkCopyIds((prev) =>
+                        e.target.checked
+                          ? [...prev, b.id]
+                          : prev.filter((id) => id !== b.id),
+                      )
+                    }
+                  />
+                  <span
+                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: b.color + "20", color: b.color }}
+                  >
+                    <BookOpen className="h-4 w-4" />
+                  </span>
+                  <span className="font-medium truncate">{b.name}</span>
+                </label>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button onClick={handleBulkCopy} disabled={bulkCopyIds.length === 0}>
+                Copy
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk category dialog */}
+        <Dialog open={bulkCategoryOpen} onOpenChange={setBulkCategoryOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Change category</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Applies to {selectedIds.length} selected entries.
+            </p>
+            <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <DialogFooter>
+              <Button onClick={handleBulkCategory} disabled={!bulkCategoryId}>
+                Apply
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </DashboardLayout>
   );
