@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import {
+  RecordDebtPayment,
+  canRecordPayment,
+} from "@/components/RecordDebtPayment";
+
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,7 +49,10 @@ import {
   ArrowUpRight,
   Calendar,
   ChevronDown,
+  CreditCard,
   Pencil,
+
+
   Plus,
   Trash2,
   UserRound,
@@ -437,9 +445,19 @@ function DebtCard({
       : 0,
     next = debt.installments?.find((i) => i.remaining_amount > 0);
   const dueDate = next?.due_date || debt.due_date;
+  const overdue =
+    !!dueDate &&
+    debt.remaining_amount > 0 &&
+    !isCompletedDebt(debt) &&
+    new Date(`${dueDate.slice(0, 10)}T23:59:59`) < new Date();
   return (
-    <Card className="transition-all hover:shadow-sm">
+    <Card
+      className={`transition-all hover:shadow-sm ${
+        overdue ? "border-destructive/50 bg-destructive/5" : ""
+      }`}
+    >
       <CardContent className="space-y-2.5 p-3">
+
         <div className="flex items-center gap-2.5">
           <Avatar className="h-8 w-8 shrink-0">
             <AvatarFallback className="text-xs">
@@ -480,11 +498,15 @@ function DebtCard({
           <span className="flex items-center gap-2">
             <span className="capitalize">{pretty(debt.debt_type)}</span>
             {dueDate && (
-              <span className="flex items-center gap-0.5">
+              <span
+                className={`flex items-center gap-0.5 ${overdue ? "font-semibold text-destructive" : ""}`}
+              >
                 <Calendar className="h-3 w-3" />
+                {overdue ? "Overdue " : ""}
                 {formatDebtDate(dueDate)}
               </span>
             )}
+
           </span>
         </div>
 
@@ -497,6 +519,18 @@ function DebtCard({
           >
             View
           </Button>
+          {canRecordPayment(debt) && (
+            <RecordDebtPayment
+              debt={debt}
+              trigger={
+                <Button size="sm" className="h-8 flex-1">
+                  <CreditCard className="mr-1 h-3.5 w-3.5" />
+                  Pay
+                </Button>
+              }
+            />
+          )}
+
           {!receivable && debt.status === "pending" && shared && (
             <>
               <Button

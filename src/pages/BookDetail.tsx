@@ -245,6 +245,10 @@ export default function BookDetail() {
     updateExpense,
     deleteExpense,
     copyExpense,
+    bulkDeleteExpenses,
+    bulkUpdateCategory,
+    bulkCopyExpenses,
+
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
@@ -446,6 +450,72 @@ export default function BookDetail() {
   >(null);
   const [copyTargetIds, setCopyTargetIds] = useState<string[]>([]);
   const copyTargets = books.filter((b) => b.id !== bookId);
+
+  // Bulk selection
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkCopyOpen, setBulkCopyOpen] = useState(false);
+  const [bulkCopyIds, setBulkCopyIds] = useState<string[]>([]);
+  const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds([]);
+  };
+  const selectedExpenses = expenses.filter((e) => selectedIds.includes(e.id));
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Delete ${selectedIds.length} selected entr${selectedIds.length > 1 ? "ies" : "y"}?`))
+      return;
+    try {
+      await bulkDeleteExpenses.mutateAsync(selectedIds);
+      toast.success(`Deleted ${selectedIds.length} entries`);
+      exitSelectMode();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  const handleBulkCopy = async () => {
+    if (bulkCopyIds.length === 0) return;
+    try {
+      await bulkCopyExpenses.mutateAsync({
+        items: selectedExpenses,
+        targetBookIds: bulkCopyIds,
+      });
+      toast.success(
+        `Copied ${selectedExpenses.length} entries to ${bulkCopyIds.length} book${bulkCopyIds.length > 1 ? "s" : ""}`,
+      );
+      setBulkCopyOpen(false);
+      setBulkCopyIds([]);
+      exitSelectMode();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  const handleBulkCategory = async () => {
+    if (!bulkCategoryId || selectedIds.length === 0) return;
+    try {
+      await bulkUpdateCategory.mutateAsync({
+        expenseIds: selectedIds,
+        categoryId: bulkCategoryId,
+      });
+      toast.success("Category updated");
+      setBulkCategoryOpen(false);
+      setBulkCategoryId("");
+      exitSelectMode();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
 
   const handleConfirmCopy = async () => {
     if (!copyExpenseSource || copyTargetIds.length === 0) return;
@@ -998,6 +1068,83 @@ export default function BookDetail() {
             </AnimatePresence>
 
 
+            {/* Bulk selection bar */}
+            {canEdit && filtered.length > 0 && (
+              selectMode ? (
+                <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-xl border bg-background/95 p-2 backdrop-blur">
+                  <span className="px-1 text-sm font-medium">
+                    {selectedIds.length} selected
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setSelectedIds(
+                        selectedIds.length === filtered.length
+                          ? []
+                          : filtered.map((e) => e.id),
+                      )
+                    }
+                  >
+                    {selectedIds.length === filtered.length
+                      ? "Clear all"
+                      : "Select all"}
+                  </Button>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={selectedIds.length === 0}
+                      onClick={() => {
+                        setBulkCategoryId("");
+                        setBulkCategoryOpen(true);
+                      }}
+                    >
+                      Category
+                    </Button>
+                    {copyTargets.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={selectedIds.length === 0}
+                        onClick={() => {
+                          setBulkCopyIds([]);
+                          setBulkCopyOpen(true);
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={selectedIds.length === 0}
+                      onClick={handleBulkDelete}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={exitSelectMode}>
+                      Done
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-xs"
+                    onClick={() => setSelectMode(true)}
+                  >
+                    Select
+                  </Button>
+                </div>
+              )
+            )}
+
+
             {/* Expense List */}
             {isLoading ? (
               <div className="space-y-3">
@@ -1037,13 +1184,33 @@ export default function BookDetail() {
                       }
                     >
                       <Card
-                        className={`glass sm:hover:shadow-md transition-shadow group ${canEdit ? "cursor-pointer" : ""}`}
-                        onClick={canEdit ? () => handleEditExpense(expense) : undefined}
+                        className={`glass sm:hover:shadow-md transition-shadow group ${canEdit ? "cursor-pointer" : ""} ${
+                          selectMode && selectedIds.includes(expense.id)
+                            ? "ring-2 ring-primary"
+                            : ""
+                        }`}
+                        onClick={
+                          selectMode
+                            ? () => toggleSelected(expense.id)
+                            : canEdit
+                              ? () => handleEditExpense(expense)
+                              : undefined
+                        }
                       >
                         <CardContent className="p-3 sm:p-4 flex flex-col gap-3">
                           {/* Top Row: Icon, Title, Amount, Actions */}
                           <div className="flex items-start gap-2 sm:gap-3">
+                            {selectMode && (
+                              <input
+                                type="checkbox"
+                                className="mt-3 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                                checked={selectedIds.includes(expense.id)}
+                                onChange={() => toggleSelected(expense.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            )}
                             <div
+
                               className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
                               style={{
                                 backgroundColor:
@@ -1332,6 +1499,84 @@ export default function BookDetail() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Bulk copy dialog */}
+        <Dialog
+          open={bulkCopyOpen}
+          onOpenChange={(v) => {
+            setBulkCopyOpen(v);
+            if (!v) setBulkCopyIds([]);
+          }}
+        >
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Copy {selectedIds.length} entries</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto py-2">
+              {copyTargets.map((b) => (
+                <label
+                  key={b.id}
+                  className="flex items-center gap-3 rounded-xl border border-border p-3 cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    className="w-4 h-4"
+                    checked={bulkCopyIds.includes(b.id)}
+                    onChange={(e) =>
+                      setBulkCopyIds((prev) =>
+                        e.target.checked
+                          ? [...prev, b.id]
+                          : prev.filter((id) => id !== b.id),
+                      )
+                    }
+                  />
+                  <span
+                    className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                    style={{ backgroundColor: b.color + "20", color: b.color }}
+                  >
+                    <BookOpen className="h-4 w-4" />
+                  </span>
+                  <span className="font-medium truncate">{b.name}</span>
+                </label>
+              ))}
+            </div>
+            <DialogFooter>
+              <Button onClick={handleBulkCopy} disabled={bulkCopyIds.length === 0}>
+                Copy
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk category dialog */}
+        <Dialog open={bulkCategoryOpen} onOpenChange={setBulkCategoryOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Change category</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              Applies to {selectedIds.length} selected entries.
+            </p>
+            <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select a category" />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <DialogFooter>
+              <Button onClick={handleBulkCategory} disabled={!bulkCategoryId}>
+                Apply
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
       </div>
     </DashboardLayout>
   );

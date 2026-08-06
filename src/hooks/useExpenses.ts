@@ -382,7 +382,83 @@ export function useExpenses(bookId: string) {
     },
   });
 
+  const bulkDeleteExpenses = useMutation({
+    mutationFn: async (expenseIds: string[]) => {
+      assertOnline(isOnline);
+      if (expenseIds.length === 0) return [];
+      const { error } = await supabase
+        .from("expenses")
+        .delete()
+        .in("id", expenseIds);
+      if (error) throw error;
+      return expenseIds;
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const bulkUpdateCategory = useMutation({
+    mutationFn: async ({
+      expenseIds,
+      categoryId,
+    }: {
+      expenseIds: string[];
+      categoryId: string;
+    }) => {
+      assertOnline(isOnline);
+      if (expenseIds.length === 0) return [];
+      const { error } = await supabase
+        .from("expenses")
+        .update({ category_id: categoryId || null })
+        .in("id", expenseIds);
+      if (error) throw error;
+      return expenseIds;
+    },
+    onSuccess: invalidateAll,
+  });
+
+  const bulkCopyExpenses = useMutation({
+    mutationFn: async ({
+      items,
+      targetBookIds,
+    }: {
+      items: Expense[];
+      targetBookIds: string[];
+    }) => {
+      assertOnline(isOnline);
+      const uid = user?.id;
+      if (!uid) throw new Error("User ID not available. Please log in again.");
+      if (targetBookIds.length === 0)
+        throw new Error("Select a book to copy to.");
+      const rows = targetBookIds.flatMap((targetBookId) =>
+        items.map((expense) => ({
+          book_id: targetBookId,
+          title: expense.title,
+          amount: expense.amount,
+          date: expense.date,
+          category_id: expense.category_id || null,
+          expense_type: expense.expense_type ?? "debit",
+          payment_method: expense.payment_method ?? "cash",
+          notes: expense.notes ?? null,
+          tags: expense.tags ?? [],
+          paid_by: uid,
+          created_by: uid,
+        })),
+      );
+      const { error } = await supabase.from("expenses").insert(rows);
+      if (error) throw error;
+      return targetBookIds;
+    },
+    onSuccess: (targetBookIds) => {
+      (targetBookIds ?? []).forEach((id) => {
+        queryClient.invalidateQueries({ queryKey: ["expenses", id] });
+        queryClient.invalidateQueries({ queryKey: ["book-detail-totals", id] });
+      });
+      queryClient.invalidateQueries({ queryKey: ["book-totals"] });
+    },
+  });
+
   const fetchNextPage = async () => {
+
     if (!isOnline || !bookId) return;
     const currentCount = expenses.length;
     if (currentCount >= MAX_EXPENSES) return;
@@ -413,6 +489,10 @@ export function useExpenses(bookId: string) {
     updateExpense,
     deleteExpense,
     copyExpense,
+    bulkDeleteExpenses,
+    bulkUpdateCategory,
+    bulkCopyExpenses,
+
     fetchNextPage,
     hasNextPage: isOnline && expenses.length >= PAGE_SIZE,
     isFetchingNextPage: false,

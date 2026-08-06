@@ -1,38 +1,17 @@
-import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import {
+  RecordDebtPayment,
+  canRecordPayment,
+} from "@/components/RecordDebtPayment";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Textarea } from "@/components/ui/textarea";
 import { useDebts } from "@/hooks/useDebts";
-import { useBooks } from "@/hooks/useBooks";
-import {
-  ArrowLeft,
-  CheckCircle2,
-  Circle,
-  CreditCard,
-  UserRound,
-} from "lucide-react";
+import { ArrowLeft, CheckCircle2, Circle, UserRound } from "lucide-react";
+
 
 const money = (n: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -55,17 +34,9 @@ const formatDebtDate = (value?: string | null, withTime = false) => {
 };
 export default function DebtDetail() {
   const { debtId } = useParams();
-  const { debts, isLoading, recordPayment } = useDebts();
-  const { books } = useBooks();
-  const activeBooks = (books ?? []).filter((b) => !b.archived);
+  const { debts, isLoading } = useDebts();
   const debt = debts.find((d) => d.id === debtId);
-  const [open, setOpen] = useState(false),
-    [amount, setAmount] = useState(""),
-    [method, setMethod] = useState("upi"),
-    [reference, setReference] = useState(""),
-    [notes, setNotes] = useState(""),
-    [bookId, setBookId] = useState("none"),
-    [expenseType, setExpenseType] = useState<"credit" | "debit">("debit");
+
   if (isLoading)
     return (
       <DashboardLayout>
@@ -120,130 +91,8 @@ export default function DebtDetail() {
               {formatDebtDate(debt.created_at, true)}
             </p>
           </div>
-          {debt.remaining_amount > 0 &&
-            !["pending", "rejected", "cancelled"].includes(debt.status) && (
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Record payment
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Record payment</DialogTitle>
-                  </DialogHeader>
-                  <div className="space-y-4">
-                    <div className="space-y-2">
-                      <Label>Amount</Label>
-                      <Input
-                        type="number"
-                        max={debt.remaining_amount}
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Payment method</Label>
-                      <Select value={method} onValueChange={setMethod}>
-                        <SelectTrigger>
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[
-                            "upi",
-                            "cash",
-                            "bank_transfer",
-                            "card",
-                            "cheque",
-                            "other",
-                          ].map((x) => (
-                            <SelectItem key={x} value={x}>
-                              {pretty(x)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Reference number</Label>
-                      <Input
-                        value={reference}
-                        onChange={(e) => setReference(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Note</Label>
-                      <Textarea
-                        placeholder="Used as the entry title when reflected in a book"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Reflect in book (optional)</Label>
-                      <Select value={bookId} onValueChange={setBookId}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Don't reflect" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Don't reflect</SelectItem>
-                          {activeBooks.map((b) => (
-                            <SelectItem key={b.id} value={b.id}>
-                              {b.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    {bookId !== "none" && (
-                      <div className="grid grid-cols-2 gap-2">
-                        <Button
-                          type="button"
-                          variant={expenseType === "debit" ? "default" : "outline"}
-                          onClick={() => setExpenseType("debit")}
-                        >
-                          Debit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant={expenseType === "credit" ? "default" : "outline"}
-                          onClick={() => setExpenseType("credit")}
-                        >
-                          Credit
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                  <DialogFooter>
-                    <Button
-                      onClick={async () => {
-                        await recordPayment({
-                          id: debt.id,
-                          amount: Number(amount),
-                          method,
-                          reference,
-                          notes,
-                          bookId: bookId === "none" ? undefined : bookId,
-                          expenseType,
-                        });
-                        setOpen(false);
-                        setAmount("");
-                        setNotes("");
-                        setReference("");
-                        setBookId("none");
-                      }}
-                      disabled={
-                        !Number(amount) ||
-                        Number(amount) > debt.remaining_amount
-                      }
-                    >
-                      Save payment
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
+          {canRecordPayment(debt) && <RecordDebtPayment debt={debt} />}
+
         </div>
         <Card>
           <CardContent className="p-4">

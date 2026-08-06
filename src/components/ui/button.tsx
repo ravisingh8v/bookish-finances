@@ -1,8 +1,10 @@
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 import * as React from "react";
 
 import { cn } from "@/lib/utils";
+
 
 const buttonVariants = cva(
   "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
@@ -38,20 +40,74 @@ export interface ButtonProps
     React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /** Force the loading spinner. When omitted, async onClick handlers are tracked automatically. */
+  loading?: boolean;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  (
+    {
+      className,
+      variant,
+      size,
+      asChild = false,
+      loading,
+      disabled,
+      onClick,
+      children,
+      ...props
+    },
+    ref,
+  ) => {
     const Comp = asChild ? Slot : "button";
+    const [pending, setPending] = React.useState(false);
+    const mounted = React.useRef(true);
+    React.useEffect(() => {
+      mounted.current = true;
+      return () => {
+        mounted.current = false;
+      };
+    }, []);
+
+    const handleClick = (event: React.MouseEvent<HTMLButtonElement>) => {
+      const result = onClick?.(event) as unknown;
+      if (
+        !asChild &&
+        result &&
+        typeof (result as Promise<unknown>).then === "function"
+      ) {
+        setPending(true);
+        void (result as Promise<unknown>).finally(() => {
+          if (mounted.current) setPending(false);
+        });
+      }
+    };
+
+    const isLoading = loading ?? (!asChild && pending);
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        disabled={asChild ? disabled : disabled || isLoading}
+        onClick={onClick ? handleClick : undefined}
         {...props}
-      />
+      >
+        {asChild ? (
+          children
+        ) : isLoading ? (
+          <>
+            <Loader2 className="animate-spin" />
+            {children}
+          </>
+        ) : (
+          children
+        )}
+      </Comp>
     );
   },
 );
 Button.displayName = "Button";
 
 export { Button, buttonVariants };
+
