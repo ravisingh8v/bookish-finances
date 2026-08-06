@@ -49,7 +49,8 @@ import {
   ArrowUpRight,
   Calendar,
   ChevronDown,
-  Pencil,
+  CreditCard,
+
   Plus,
   Trash2,
   UserRound,
