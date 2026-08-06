@@ -511,6 +511,18 @@ function DebtCard({
           >
             View
           </Button>
+          {canRecordPayment(debt) && (
+            <RecordDebtPayment
+              debt={debt}
+              trigger={
+                <Button size="sm" className="h-8 flex-1">
+                  <CreditCard className="mr-1 h-3.5 w-3.5" />
+                  Pay
+                </Button>
+              }
+            />
+          )}
+
           {!receivable && debt.status === "pending" && shared && (
             <>
               <Button
