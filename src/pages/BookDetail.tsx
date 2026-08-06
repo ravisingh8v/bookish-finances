@@ -1068,6 +1068,83 @@ export default function BookDetail() {
             </AnimatePresence>
 
 
+            {/* Bulk selection bar */}
+            {canEdit && filtered.length > 0 && (
+              selectMode ? (
+                <div className="sticky top-2 z-20 flex flex-wrap items-center gap-2 rounded-xl border bg-background/95 p-2 backdrop-blur">
+                  <span className="px-1 text-sm font-medium">
+                    {selectedIds.length} selected
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() =>
+                      setSelectedIds(
+                        selectedIds.length === filtered.length
+                          ? []
+                          : filtered.map((e) => e.id),
+                      )
+                    }
+                  >
+                    {selectedIds.length === filtered.length
+                      ? "Clear all"
+                      : "Select all"}
+                  </Button>
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={selectedIds.length === 0}
+                      onClick={() => {
+                        setBulkCategoryId("");
+                        setBulkCategoryOpen(true);
+                      }}
+                    >
+                      Category
+                    </Button>
+                    {copyTargets.length > 0 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={selectedIds.length === 0}
+                        onClick={() => {
+                          setBulkCopyIds([]);
+                          setBulkCopyOpen(true);
+                        }}
+                      >
+                        <Copy className="h-4 w-4" />
+                        Copy
+                      </Button>
+                    )}
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={selectedIds.length === 0}
+                      onClick={handleBulkDelete}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={exitSelectMode}>
+                      Done
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex justify-end">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-8 text-xs"
+                    onClick={() => setSelectMode(true)}
+                  >
+                    Select
+                  </Button>
+                </div>
+              )
+            )}
+
+
             {/* Expense List */}
             {isLoading ? (
               <div className="space-y-3">
