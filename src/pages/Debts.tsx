@@ -490,11 +490,15 @@ function DebtCard({
           <span className="flex items-center gap-2">
             <span className="capitalize">{pretty(debt.debt_type)}</span>
             {dueDate && (
-              <span className="flex items-center gap-0.5">
+              <span
+                className={`flex items-center gap-0.5 ${overdue ? "font-semibold text-destructive" : ""}`}
+              >
                 <Calendar className="h-3 w-3" />
+                {overdue ? "Overdue " : ""}
                 {formatDebtDate(dueDate)}
               </span>
             )}
+
           </span>
         </div>
 
