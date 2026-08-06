@@ -1184,13 +1184,33 @@ export default function BookDetail() {
                       }
                     >
                       <Card
-                        className={`glass sm:hover:shadow-md transition-shadow group ${canEdit ? "cursor-pointer" : ""}`}
-                        onClick={canEdit ? () => handleEditExpense(expense) : undefined}
+                        className={`glass sm:hover:shadow-md transition-shadow group ${canEdit ? "cursor-pointer" : ""} ${
+                          selectMode && selectedIds.includes(expense.id)
+                            ? "ring-2 ring-primary"
+                            : ""
+                        }`}
+                        onClick={
+                          selectMode
+                            ? () => toggleSelected(expense.id)
+                            : canEdit
+                              ? () => handleEditExpense(expense)
+                              : undefined
+                        }
                       >
                         <CardContent className="p-3 sm:p-4 flex flex-col gap-3">
                           {/* Top Row: Icon, Title, Amount, Actions */}
                           <div className="flex items-start gap-2 sm:gap-3">
+                            {selectMode && (
+                              <input
+                                type="checkbox"
+                                className="mt-3 h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+                                checked={selectedIds.includes(expense.id)}
+                                onChange={() => toggleSelected(expense.id)}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            )}
                             <div
+
                               className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center shrink-0 mt-0.5"
                               style={{
                                 backgroundColor:
