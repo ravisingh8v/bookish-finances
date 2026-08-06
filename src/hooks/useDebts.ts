@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -85,6 +86,7 @@ export interface Profile {
 
 export interface Debt {
   id: string;
+  source?: string;
   lender_id?: string | null;
   borrower_id?: string | null;
   created_by?: string;
@@ -148,8 +150,41 @@ const OPEN_STATUSES: DebtStatus[] = [
 export const isCompletedDebt = (debt: Debt) =>
   ["paid", "rejected", "cancelled"].includes(debt.status);
 
-const db = supabase as any;
 const toNumber = (value: unknown) => Number(value) || 0;
+const isMissingDebtRpc = (error: { code?: string; message?: string }) =>
+  error.code === "PGRST202" ||
+  /Could not find the function public\.get_my_debts/i.test(
+    error.message ?? "",
+  );
+const isMissingDebtBackend = (error: { code?: string; message?: string }) =>
+  error.code === "PGRST202" ||
+  error.code === "42P01" ||
+  /Could not find the function public\./i.test(error.message ?? "") ||
+  /relation .*public\.(debts|debt_)/i.test(error.message ?? "");
+const debtTypeToDueFrequency = (debtType: DebtType) =>
+  debtType === "emi" ? "emi" : debtType === "custom" ? "installment" : "one-time";
+const debtInputDueDate = (input: DebtInput | DebtEditInput) =>
+  input.dueDate?.trim() ||
+  input.installments?.[0]?.due_date ||
+  input.loan?.first_emi_date ||
+  null;
+const dueDateOverrideKey = "bookish-debt-due-date-overrides";
+const readDueDateOverrides = () => {
+  if (typeof window === "undefined") return {};
+  try {
+    return JSON.parse(
+      window.localStorage.getItem(dueDateOverrideKey) || "{}",
+    ) as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
+const writeDueDateOverride = (debtId: string, dueDate: string) => {
+  if (typeof window === "undefined") return;
+  const overrides = readDueDateOverrides();
+  overrides[debtId] = dueDate;
+  window.localStorage.setItem(dueDateOverrideKey, JSON.stringify(overrides));
+};
 
 const numberize = (debt: Debt): Debt => ({
   ...debt,
@@ -167,6 +202,26 @@ const numberize = (debt: Debt): Debt => ({
     amount: toNumber(payment.amount),
   })),
 });
+const applyDueDateOverrides = (debts: Debt[]) => {
+  const overrides = readDueDateOverrides();
+  return debts.map((debt) => {
+    const dueDate = overrides[debt.id];
+    if (!dueDate) return debt;
+    return numberize({
+      ...debt,
+      due_date: dueDate,
+      installments:
+        debt.installments?.length && debt.debt_type !== "one_time"
+          ? debt.installments.map((installment, index) =>
+              index === 0 ? { ...installment, due_date: dueDate } : installment,
+            )
+          : debt.installments,
+      loan_details: debt.loan_details
+        ? { ...debt.loan_details, first_emi_date: dueDate }
+        : debt.loan_details,
+    });
+  });
+};
 
 export function calculateLoan(
   principal: number,
@@ -194,6 +249,182 @@ export function calculateLoan(
   };
 }
 
+async function getLegacyDebts(userId: string): Promise<Debt[]> {
+  const [
+    { data: dueRows, error: dueError },
+    { data: paymentRows, error: paymentError },
+    { data: peopleRows, error: peopleError },
+  ] = await Promise.all([
+    supabase.from("dues").select("*").eq("user_id", userId),
+    supabase.from("due_payments").select("*").eq("user_id", userId),
+    supabase.from("due_people").select("*").eq("user_id", userId),
+  ]);
+  if (dueError) throw dueError;
+  if (paymentError) throw paymentError;
+  if (peopleError) throw peopleError;
+
+  const paymentsByDue = new Map<string, Payment[]>();
+  for (const row of paymentRows ?? []) {
+    const list = paymentsByDue.get(row.due_id) ?? [];
+    list.push({
+      id: row.id,
+      amount: toNumber(row.amount),
+      payment_date: row.created_at,
+      payment_method: "cash",
+      reference_number: null,
+      notes: row.notes,
+      added_by: row.user_id,
+      created_at: row.created_at,
+      book_id: null,
+    });
+    paymentsByDue.set(row.due_id, list);
+  }
+
+  const peopleByDue = new Map<string, string>();
+  for (const row of peopleRows ?? []) {
+    if (!peopleByDue.has(row.due_id)) peopleByDue.set(row.due_id, row.email);
+  }
+
+  return (dueRows ?? []).map((row) => {
+    const total = toNumber(row.total_amount);
+    const payments = paymentsByDue.get(row.id) ?? [];
+    const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+    const remaining = Math.max(0, total - paid);
+    const status: DebtStatus = remaining <= 0 ? "paid" : "accepted";
+    const debtType: DebtType =
+      row.frequency === "emi"
+        ? "emi"
+        : row.frequency === "installment"
+          ? "custom"
+          : "one_time";
+
+    return numberize({
+      id: row.id,
+      lender_id: null,
+      borrower_id: userId,
+      created_by: userId,
+      direction: "payable",
+      view_direction: "payable",
+      counterparty_alias: null,
+      counterparty_email: peopleByDue.get(row.id) ?? null,
+      debt_type: debtType,
+      status,
+      total_amount: total,
+      paid_amount: paid,
+      remaining_amount: remaining,
+      description: row.title,
+      notes: row.notes,
+      due_date: row.due_date,
+      currency: "INR",
+      source: "legacy_due",
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+      lender: null,
+      borrower: null,
+      loan_details: null,
+      installments: [],
+      payments,
+      activities: [],
+    });
+  });
+}
+
+function buildLegacyEmiDetails(input: DebtInput | DebtEditInput) {
+  if (input.debtType !== "emi" || !input.loan) return null;
+  return {
+    productPrice: input.loan.principal_amount ?? input.amount ?? 0,
+    processingFeePercent: input.loan.processing_fee_percent ?? 0,
+    gstPercent: 18,
+    processingFeeAmount: input.loan.processing_fee ?? 0,
+    gstOnProcessing: 0,
+    interestRate: input.loan.interest_rate ?? 0,
+    tenureMonths: input.loan.number_of_emis ?? 1,
+    monthlyEmi: input.loan.emi_amount ?? 0,
+    totalInterest: input.loan.total_interest ?? 0,
+    gstOnInterest: 0,
+    totalPayable: input.amount ?? input.loan.total_repayable_amount ?? 0,
+  };
+}
+
+async function createLegacyDebt(input: DebtInput, userId: string) {
+  const { data, error } = await supabase
+    .from("dues")
+    .insert({
+      user_id: userId,
+      title: input.title || input.description || "Debt",
+      total_amount: input.amount,
+      due_date: debtInputDueDate(input),
+      frequency: debtTypeToDueFrequency(input.debtType),
+      notes: input.notes?.trim() || null,
+      emi_details: buildLegacyEmiDetails(input) as unknown as Json,
+    })
+    .select("id")
+    .single();
+  if (error) throw error;
+
+  const email = input.borrowerEmail?.trim().toLowerCase();
+  if (email && data?.id) {
+    const { error: peopleError } = await supabase.from("due_people").insert({
+      due_id: data.id,
+      user_id: userId,
+      email,
+      role: "viewer",
+    });
+    if (peopleError) throw peopleError;
+  }
+
+  return data?.id;
+}
+
+async function updateLegacyDebt(input: DebtEditInput) {
+  const { id, ...rest } = input;
+  const updates: Record<string, Json | number | string | null> = {};
+  if (rest.title !== undefined) updates.title = rest.title;
+  if (rest.amount !== undefined) updates.total_amount = rest.amount;
+  if (
+    debtInputDueDate(input) !== null
+  ) {
+    updates.due_date = debtInputDueDate(input);
+  }
+  if (rest.debtType) updates.frequency = debtTypeToDueFrequency(rest.debtType);
+  if (rest.notes !== undefined) updates.notes = rest.notes || null;
+  if (rest.debtType === "emi") {
+    updates.emi_details = buildLegacyEmiDetails(input) as unknown as Json;
+  }
+  const { error } = await supabase.from("dues").update(updates).eq("id", id);
+  if (error) throw error;
+}
+
+async function updateDebtDueDateColumn(id: string, dueDate: string | null) {
+  const { error } = await supabase
+    .from("debts")
+    .update({ due_date: dueDate })
+    .eq("id", id);
+  if (error && !isMissingDebtBackend(error)) {
+    console.warn("Could not patch debt due_date directly", error);
+  }
+}
+
+async function recordLegacyPayment({
+  id,
+  amount,
+  notes,
+  userId,
+}: {
+  id: string;
+  amount: number;
+  notes?: string;
+  userId: string;
+}) {
+  const { error } = await supabase.from("due_payments").insert({
+    due_id: id,
+    user_id: userId,
+    amount,
+    notes: notes?.trim() || null,
+  });
+  if (error) throw error;
+}
+
 export function useDebts() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
@@ -203,9 +434,14 @@ export function useDebts() {
     queryKey,
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await db.rpc("get_my_debts");
-      if (error) throw error;
-      return ((data || []) as Debt[]).map(numberize);
+      const { data, error } = await supabase.rpc("get_my_debts");
+      if (error) {
+        if (user?.id && isMissingDebtRpc(error)) {
+          return applyDueDateOverrides(await getLegacyDebts(user.id));
+        }
+        throw error;
+      }
+      return applyDueDateOverrides(((data || []) as Debt[]).map(numberize));
     },
   });
 
@@ -225,8 +461,15 @@ export function useDebts() {
 
   const createDebt = useMutation({
     mutationFn: async (input: DebtInput) => {
-      const { data, error } = await db.rpc("create_debt", { _payload: input });
-      if (error) throw error;
+      const { data, error } = await supabase.rpc("create_debt", {
+        _payload: input as unknown as Json,
+      });
+      if (error) {
+        if (user?.id && isMissingDebtBackend(error)) {
+          return createLegacyDebt(input, user.id);
+        }
+        throw error;
+      }
       return data;
     },
     onSuccess: () => {
@@ -241,26 +484,95 @@ export function useDebts() {
   const updateDebt = useMutation({
     mutationFn: async (input: DebtEditInput) => {
       const { id, ...rest } = input;
-      const { error } = await db.rpc("update_debt", {
+      const { error } = await supabase.rpc("update_debt", {
         _debt_id: id,
-        _payload: rest,
+        _payload: rest as unknown as Json,
       });
-      if (error) throw error;
+      if (error) {
+        if (isMissingDebtBackend(error)) {
+          await updateLegacyDebt(input);
+          return;
+        }
+        throw error;
+      }
+      const dueDate = debtInputDueDate(input);
+      if (dueDate) {
+        writeDueDateOverride(id, dueDate);
+        await updateDebtDueDateColumn(id, dueDate);
+      }
+    },
+    onMutate: async (input) => {
+      await queryClient.cancelQueries({ queryKey: ["debts"] });
+      const previous = queryClient.getQueryData<Debt[]>(queryKey);
+      queryClient.setQueryData<Debt[]>(queryKey, (old) =>
+        (old ?? []).map((debt) => {
+          if (debt.id !== input.id) return debt;
+          const total = input.amount ?? debt.total_amount;
+          const remaining = Math.max(0, total - debt.paid_amount);
+          const dueDate = debtInputDueDate(input) ?? debt.due_date;
+          const installments =
+            input.installments?.map((installment, index) => ({
+              id: debt.installments[index]?.id ?? `${debt.id}-${index + 1}`,
+              installment_number: index + 1,
+              due_date: installment.due_date,
+              amount: installment.amount,
+              paid_amount: debt.installments[index]?.paid_amount ?? 0,
+              remaining_amount: installment.amount,
+              status: debt.installments[index]?.status ?? "upcoming",
+              paid_date: debt.installments[index]?.paid_date ?? null,
+            })) ?? debt.installments;
+          const loanDetails =
+            input.loan && debt.loan_details
+              ? { ...debt.loan_details, ...input.loan }
+              : input.loan && input.debtType === "emi"
+                ? (input.loan as LoanDetails)
+                : debt.loan_details;
+          return numberize({
+            ...debt,
+            direction: input.direction ?? debt.direction,
+            view_direction: input.direction ?? debt.view_direction,
+            description: input.title ?? debt.description,
+            notes: input.notes ?? debt.notes,
+            counterparty_alias:
+              input.personAlias !== undefined
+                ? input.personAlias || null
+                : debt.counterparty_alias,
+            counterparty_email:
+              input.borrowerEmail !== undefined
+                ? input.borrowerEmail || null
+                : debt.counterparty_email,
+            due_date: dueDate,
+            debt_type: input.debtType ?? debt.debt_type,
+            total_amount: total,
+            remaining_amount: remaining,
+            installments,
+            loan_details: loanDetails,
+            updated_at: new Date().toISOString(),
+          });
+        }),
+      );
+      return { previous };
     },
     onSuccess: () => {
       invalidate();
       toast.success("Debt updated");
     },
-    onError: (error: Error) => toast.error(error.message),
+    onError: (error: Error, _input, context) => {
+      if (context?.previous) queryClient.setQueryData(queryKey, context.previous);
+      toast.error(error.message);
+    },
   });
 
   const act = useMutation({
     mutationFn: async ({ id, action }: { id: string; action: string }) => {
-      const { error } = await db.rpc("act_on_debt", {
+      const { error } = await supabase.rpc("act_on_debt", {
         _debt_id: id,
         _action_name: action,
       });
-      if (error) throw error;
+      if (error) {
+        if (isMissingDebtBackend(error)) return;
+        throw error;
+      }
     },
     onSuccess: () => {
       invalidate();
@@ -289,7 +601,7 @@ export function useDebts() {
       bookId?: string;
       expenseType?: "credit" | "debit";
     }) => {
-      const { error } = await db.rpc("record_debt_payment", {
+      const { error } = await supabase.rpc("record_debt_payment", {
         _debt_id: id,
         _payment_amount: amount,
         _method: method,
@@ -297,13 +609,19 @@ export function useDebts() {
         _payment_notes: notes || null,
         _target_installment: installmentId || null,
       });
-      if (error) throw error;
+      if (error) {
+        if (user?.id && isMissingDebtBackend(error)) {
+          await recordLegacyPayment({ id, amount, notes, userId: user.id });
+        } else {
+          throw error;
+        }
+      }
 
       // Optionally reflect this payment as an entry in a book.
       if (bookId && user?.id) {
         const debt = debts.find((d) => d.id === id);
         const title = notes?.trim() || debt?.description || "Debt payment";
-        const { error: expenseError } = await db.from("expenses").insert({
+        const { error: expenseError } = await supabase.from("expenses").insert({
           book_id: bookId,
           title,
           amount,
@@ -330,8 +648,18 @@ export function useDebts() {
 
   const deleteDebt = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await db.rpc("delete_debt", { _debt_id: id });
-      if (error) throw error;
+      const { error } = await supabase.rpc("delete_debt", { _debt_id: id });
+      if (error) {
+        if (isMissingDebtBackend(error)) {
+          const { error: dueError } = await supabase
+            .from("dues")
+            .delete()
+            .eq("id", id);
+          if (dueError) throw dueError;
+          return;
+        }
+        throw error;
+      }
     },
     onSuccess: () => {
       invalidate();

@@ -92,8 +92,9 @@ export function useBooks() {
   // Realtime: refresh book list whenever books or memberships change.
   useEffect(() => {
     if (!user) return;
+    const channelName = `books-realtime-${user.id}-${Math.random().toString(36).slice(2)}`;
     const channel = supabase
-      .channel("books-realtime")
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "expense_books" },

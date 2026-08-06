@@ -62,6 +62,8 @@ const COLORS = [
   "#EC4899",
   "#06B6D4",
 ];
+const errorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Something went wrong";
 
 export default function Books() {
   const navigate = useNavigate();
@@ -156,8 +158,8 @@ export default function Books() {
       toast.success("Book duplicated!");
       setDuplicateDialogOpen(false);
       setDuplicateBookId(null);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e));
     }
   };
 
@@ -260,8 +262,8 @@ export default function Books() {
       }
       setOpen(false);
       resetForm();
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e: unknown) {
+      toast.error(errorMessage(e));
     }
   };
 
@@ -432,12 +434,13 @@ export default function Books() {
               return (
                 <motion.div
                   key={book.id}
+                  className="h-full"
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: i * 0.05 }}
                 >
                   <Card
-                    className="glass sm:hover:shadow-lg transition-all cursor-pointer group"
+                    className="glass h-full sm:hover:shadow-lg transition-all cursor-pointer group"
                     data-book-id={book.id}
                     draggable={isOnline}
                     onDragStart={(event) => handleBookDragStart(event, book.id)}
@@ -463,7 +466,7 @@ export default function Books() {
                       navigate(`/books/${book.id}`);
                     }}
                   >
-                    <CardContent className="p-4 space-y-2">
+                    <CardContent className="flex h-full flex-col p-4">
                       <div className="flex items-start justify-between">
                         <div
                           className="w-10 h-10 rounded-xl flex items-center justify-center"
@@ -475,8 +478,6 @@ export default function Books() {
                           <BookOpen className="h-5 w-5" />
                         </div>
                         <div className="flex items-center gap-1">
-                          {false && null}
-
                           {userRole && (
                             <Badge
                               variant="outline"
@@ -548,7 +549,7 @@ export default function Books() {
                           )}
                         </div>
                       </div>
-                      <div className="min-w-0">
+                      <div className="min-w-0 pt-2">
                         <h3 className="font-display font-semibold truncate">
                           {book.name}
                         </h3>
@@ -558,7 +559,7 @@ export default function Books() {
                           </p>
                         )}
                       </div>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <div className="mt-auto flex items-center justify-between pt-3 text-xs text-muted-foreground">
                         <span
                           className={
                             "font-medium " +
@@ -572,7 +573,7 @@ export default function Books() {
                           {memberCount}
                         </span>
                       </div>
-                      <div className="text-[9px] sm:text-[10px] text-muted-foreground/50 pt-1.5 border-t border-border/50">
+                      <div className="mt-2 border-t border-border/50 pt-1.5 text-[9px] text-muted-foreground/50 sm:text-[10px]">
                         {new Date(
                           book.updated_at && book.updated_at !== book.created_at
                             ? book.updated_at

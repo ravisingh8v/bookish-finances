@@ -1,15 +1,13 @@
 import { Link, useParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import {
-  RecordDebtPayment,
-  canRecordPayment,
-} from "@/components/RecordDebtPayment";
+import { RecordDebtPayment } from "@/components/RecordDebtPayment";
+import { canRecordPayment } from "@/lib/debtUtils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useDebts } from "@/hooks/useDebts";
+import { Debt, Profile, useDebts } from "@/hooks/useDebts";
 import { ArrowLeft, CheckCircle2, Circle, UserRound } from "lucide-react";
 
 
@@ -71,6 +69,32 @@ export default function DebtDetail() {
       date: p.created_at,
     })),
   ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const participants: Array<[string, Profile | null | undefined]> = [
+    ["Lender", debt.lender],
+    ["Borrower", debt.borrower],
+  ];
+  const participantLabel = (
+    role: string,
+    person: Profile | null | undefined,
+    currentDebt: Debt,
+  ) =>
+    person?.display_name ||
+    person?.email ||
+    (((role === "Lender" && currentDebt.direction === "payable") ||
+      (role === "Borrower" && currentDebt.direction === "receivable"))
+      ? currentDebt.counterparty_alias
+      : "Not linked");
+  const participantEmail = (
+    role: string,
+    person: Profile | null | undefined,
+    currentDebt: Debt,
+  ) =>
+    person?.email ||
+    (((role === "Lender" && currentDebt.direction === "payable") ||
+      (role === "Borrower" && currentDebt.direction === "receivable"))
+      ? currentDebt.counterparty_email
+      : "");
+
   return (
     <DashboardLayout>
       <div className="mx-auto max-w-4xl space-y-5">
@@ -130,10 +154,7 @@ export default function DebtDetail() {
                 <div>
                   <h2 className="font-semibold">Participants</h2>
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                    {[
-                      ["Lender", debt.lender],
-                      ["Borrower", debt.borrower],
-                    ].map(([role, p]: any) => (
+                    {participants.map(([role, p]) => (
                       <div
                         className="flex items-center gap-3 rounded-lg bg-muted p-3"
                         key={role}
@@ -144,19 +165,10 @@ export default function DebtDetail() {
                             {role}
                           </p>
                           <p className="font-medium">
-                            {p?.display_name ||
-                              p?.email ||
-                              (((role === "Lender" && debt.direction === "payable") ||
-                                (role === "Borrower" && debt.direction === "receivable"))
-                                ? debt.counterparty_alias
-                                : "Not linked")}
+                            {participantLabel(role, p, debt)}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {p?.email ||
-                              (((role === "Lender" && debt.direction === "payable") ||
-                                (role === "Borrower" && debt.direction === "receivable"))
-                                ? debt.counterparty_email
-                                : "")}
+                            {participantEmail(role, p, debt)}
                           </p>
                         </div>
                       </div>

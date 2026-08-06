@@ -1,10 +1,8 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
-import {
-  RecordDebtPayment,
-  canRecordPayment,
-} from "@/components/RecordDebtPayment";
+import { RecordDebtPayment } from "@/components/RecordDebtPayment";
+import { canRecordPayment } from "@/lib/debtUtils";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -146,7 +144,9 @@ function EditDebt({
     borrowerEmail: debt.counterparty_email || "",
     dueDate: dateInput(debt.due_date),
     amount: debt.total_amount,
-    direction: (debt.direction || "receivable") as "receivable" | "payable",
+    direction: (debt.view_direction ||
+      debt.direction ||
+      (receivable ? "receivable" : "payable")) as "receivable" | "payable",
     debtType: debt.debt_type,
     count: Math.max(2, debt.installments?.length || 2),
     firstDate:
@@ -181,13 +181,14 @@ function EditDebt({
     (f.debtType !== "one_time" || f.dueDate) &&
     (f.debtType === "one_time" || f.firstDate);
   const save = async () => {
+    const effectiveDueDate = f.debtType === "one_time" ? f.dueDate : f.firstDate;
     await update({
       id: debt.id,
       title: f.title,
       notes: f.notes,
       personAlias: f.personAlias,
       borrowerEmail: f.borrowerEmail,
-      dueDate: f.dueDate,
+      dueDate: effectiveDueDate,
       amount: f.debtType === "emi" ? emi.total : f.amount,
       direction: f.direction,
       debtType: f.debtType,
@@ -444,7 +445,7 @@ function DebtCard({
       ? Math.min(100, (debt.paid_amount / debt.total_amount) * 100)
       : 0,
     next = debt.installments?.find((i) => i.remaining_amount > 0);
-  const dueDate = next?.due_date || debt.due_date;
+  const dueDate = debt.due_date || next?.due_date;
   const overdue =
     !!dueDate &&
     debt.remaining_amount > 0 &&

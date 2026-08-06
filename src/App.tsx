@@ -1,4 +1,5 @@
 import { ScrollToTop } from "@/components/ScrollToTop";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -38,27 +39,29 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <AuthProvider>
-          <OfflineSyncProvider>
-            <ScrollToTop />
-            <Routes>
-              <Route path="/" element={<Navigate to="/books" replace />} />
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/auth" element={<Auth />} />
-              <Route path="/books" element={<Books />} />
-              <Route path="/books/:bookId" element={<BookDetail />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/debts" element={<Debts />} />
-              <Route path="/debts/:debtId" element={<DebtDetail />} />
-              <Route path="/dues" element={<Navigate to="/debts" replace />} />
-              <Route path="/dues/:dueId" element={<LegacyDueRedirect />} />
-              <Route path="/split-bills" element={<SplitBills />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/reset-password" element={<ResetPassword />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </OfflineSyncProvider>
-        </AuthProvider>
+        <ErrorBoundary>
+          <AuthProvider>
+            <OfflineSyncProvider>
+              <ScrollToTop />
+              <Routes>
+                <Route path="/" element={<Navigate to="/books" replace />} />
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/auth" element={<Auth />} />
+                <Route path="/books" element={<Books />} />
+                <Route path="/books/:bookId" element={<BookDetail />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/debts" element={<Debts />} />
+                <Route path="/debts/:debtId" element={<DebtDetail />} />
+                <Route path="/dues" element={<Navigate to="/debts" replace />} />
+                <Route path="/dues/:dueId" element={<LegacyDueRedirect />} />
+                <Route path="/split-bills" element={<SplitBills />} />
+                <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/reset-password" element={<ResetPassword />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </OfflineSyncProvider>
+          </AuthProvider>
+        </ErrorBoundary>
       </BrowserRouter>
     </TooltipProvider>
     </ThemeProvider>

@@ -31,10 +31,6 @@ const money = (n: number) =>
 const pretty = (s: string) =>
   s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
-export const canRecordPayment = (debt: Debt) =>
-  debt.remaining_amount > 0 &&
-  !["pending", "rejected", "cancelled"].includes(debt.status);
-
 export function RecordDebtPayment({
   debt,
   trigger,
