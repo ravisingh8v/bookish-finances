@@ -437,9 +437,19 @@ function DebtCard({
       : 0,
     next = debt.installments?.find((i) => i.remaining_amount > 0);
   const dueDate = next?.due_date || debt.due_date;
+  const overdue =
+    !!dueDate &&
+    debt.remaining_amount > 0 &&
+    !isCompletedDebt(debt) &&
+    new Date(`${dueDate.slice(0, 10)}T23:59:59`) < new Date();
   return (
-    <Card className="transition-all hover:shadow-sm">
+    <Card
+      className={`transition-all hover:shadow-sm ${
+        overdue ? "border-destructive/50 bg-destructive/5" : ""
+      }`}
+    >
       <CardContent className="space-y-2.5 p-3">
+
         <div className="flex items-center gap-2.5">
           <Avatar className="h-8 w-8 shrink-0">
             <AvatarFallback className="text-xs">
