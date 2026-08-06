@@ -34,17 +34,9 @@ const formatDebtDate = (value?: string | null, withTime = false) => {
 };
 export default function DebtDetail() {
   const { debtId } = useParams();
-  const { debts, isLoading, recordPayment } = useDebts();
-  const { books } = useBooks();
-  const activeBooks = (books ?? []).filter((b) => !b.archived);
+  const { debts, isLoading } = useDebts();
   const debt = debts.find((d) => d.id === debtId);
-  const [open, setOpen] = useState(false),
-    [amount, setAmount] = useState(""),
-    [method, setMethod] = useState("upi"),
-    [reference, setReference] = useState(""),
-    [notes, setNotes] = useState(""),
-    [bookId, setBookId] = useState("none"),
-    [expenseType, setExpenseType] = useState<"credit" | "debit">("debit");
+
   if (isLoading)
     return (
       <DashboardLayout>
