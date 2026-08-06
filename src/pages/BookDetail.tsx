@@ -447,6 +447,72 @@ export default function BookDetail() {
   const [copyTargetIds, setCopyTargetIds] = useState<string[]>([]);
   const copyTargets = books.filter((b) => b.id !== bookId);
 
+  // Bulk selection
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkCopyOpen, setBulkCopyOpen] = useState(false);
+  const [bulkCopyIds, setBulkCopyIds] = useState<string[]>([]);
+  const [bulkCategoryOpen, setBulkCategoryOpen] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState("");
+
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  const exitSelectMode = () => {
+    setSelectMode(false);
+    setSelectedIds([]);
+  };
+  const selectedExpenses = expenses.filter((e) => selectedIds.includes(e.id));
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Delete ${selectedIds.length} selected entr${selectedIds.length > 1 ? "ies" : "y"}?`))
+      return;
+    try {
+      await bulkDeleteExpenses.mutateAsync(selectedIds);
+      toast.success(`Deleted ${selectedIds.length} entries`);
+      exitSelectMode();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  const handleBulkCopy = async () => {
+    if (bulkCopyIds.length === 0) return;
+    try {
+      await bulkCopyExpenses.mutateAsync({
+        items: selectedExpenses,
+        targetBookIds: bulkCopyIds,
+      });
+      toast.success(
+        `Copied ${selectedExpenses.length} entries to ${bulkCopyIds.length} book${bulkCopyIds.length > 1 ? "s" : ""}`,
+      );
+      setBulkCopyOpen(false);
+      setBulkCopyIds([]);
+      exitSelectMode();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  const handleBulkCategory = async () => {
+    if (!bulkCategoryId || selectedIds.length === 0) return;
+    try {
+      await bulkUpdateCategory.mutateAsync({
+        expenseIds: selectedIds,
+        categoryId: bulkCategoryId,
+      });
+      toast.success("Category updated");
+      setBulkCategoryOpen(false);
+      setBulkCategoryId("");
+      exitSelectMode();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+
   const handleConfirmCopy = async () => {
     if (!copyExpenseSource || copyTargetIds.length === 0) return;
     try {
