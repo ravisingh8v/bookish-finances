@@ -489,6 +489,10 @@ export function useExpenses(bookId: string) {
     updateExpense,
     deleteExpense,
     copyExpense,
+    bulkDeleteExpenses,
+    bulkUpdateCategory,
+    bulkCopyExpenses,
+
     fetchNextPage,
     hasNextPage: isOnline && expenses.length >= PAGE_SIZE,
     isFetchingNextPage: false,
