@@ -74,22 +74,58 @@ const formatDebtDate = (value?: string | null) => {
 };
 const dateInput = (value?: string | null) => value?.slice(0, 10) || "";
 const statusTone: Record<string, string> = {
-  paid: "bg-emerald-100 text-emerald-700",
-  overdue: "bg-red-100 text-red-700",
-  pending: "bg-amber-100 text-amber-700",
-  accepted: "bg-emerald-100 text-emerald-700",
-  partially_paid: "bg-blue-100 text-blue-700",
-  rejected: "bg-red-100 text-red-700",
-  cancelled: "bg-slate-100 text-slate-600",
+  paid: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  overdue: "bg-destructive/15 text-destructive",
+  pending: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  accepted: "bg-primary/15 text-primary",
+  partially_paid: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+  rejected: "bg-destructive/15 text-destructive",
+  cancelled: "bg-muted text-muted-foreground",
 };
+const statusLabel: Record<string, string> = {
+  paid: "Settled",
+  accepted: "Active",
+  partially_paid: "Part paid",
+  pending: "Awaiting reply",
+  rejected: "Declined",
+  cancelled: "Cancelled",
+  overdue: "Overdue",
+};
+const planLabel: Record<string, string> = {
+  one_time: "Single payment",
+  custom: "Installments",
+  emi: "Loan / EMI",
+};
+
+/** Plain-English due-date helper: "Due in 3 days", "Overdue by 2 days", "Due today". */
+export function dueInfo(value?: string | null) {
+  if (!value) return null;
+  const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+  const due = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((due.getTime() - today.getTime()) / 86400000);
+  const date = formatDebtDate(value);
+  if (days < 0)
+    return {
+      overdue: true,
+      text: `Overdue by ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`,
+      date,
+    };
+  if (days === 0) return { overdue: false, text: "Due today", date };
+  if (days === 1) return { overdue: false, text: "Due tomorrow", date };
+  return { overdue: false, text: `Due in ${days} days`, date };
+}
 
 function Summary({
   name,
+  hint,
   outstanding,
   active,
   overdue,
 }: {
   name: string;
+  hint?: string;
   outstanding: number;
   active: number;
   overdue: number;
@@ -101,11 +137,13 @@ function Summary({
           {name}
         </p>
         <p className="mt-0.5 text-base font-bold">{money(outstanding)}</p>
-        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-          <span>{active} active</span>
-          <span className={overdue ? "text-destructive" : ""}>
-            {money(overdue)} overdue
-          </span>
+        <div className="mt-1 flex justify-between gap-2 text-[10px] text-muted-foreground">
+          <span className="truncate">{hint ?? `${active} active`}</span>
+          {overdue > 0 && (
+            <span className="shrink-0 text-destructive">
+              {money(overdue)} late
+            </span>
+          )}
         </div>
       </CardContent>
     </Card>
