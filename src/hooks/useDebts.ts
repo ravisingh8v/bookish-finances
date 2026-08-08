@@ -444,7 +444,9 @@ export function useDebts() {
         }
         throw error;
       }
-      return applyDueDateOverrides(((data || []) as Debt[]).map(numberize));
+      return applyDueDateOverrides(
+        ((data || []) as unknown as Debt[]).map(numberize),
+      );
     },
   });
 
