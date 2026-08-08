@@ -391,7 +391,10 @@ async function updateLegacyDebt(input: DebtEditInput) {
   if (rest.debtType === "emi") {
     updates.emi_details = buildLegacyEmiDetails(input) as unknown as Json;
   }
-  const { error } = await supabase.from("dues").update(updates).eq("id", id);
+  const { error } = await supabase
+    .from("dues")
+    .update(updates as never)
+    .eq("id", id);
   if (error) throw error;
 }
 
