@@ -1,4 +1,6 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -11,6 +13,8 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
+import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -19,19 +23,21 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { useAuth } from "@/hooks/useAuth";
 import { useSplitBills, type SplitParticipant } from "@/hooks/useSplitBills";
 import { formatINR } from "@/lib/utils";
 import {
   Check,
   ChevronDown,
-  Loader2,
-  Mail,
-  Pencil,
   Plus,
   SplitSquareHorizontal,
   Trash2,
+  Users,
   X,
 } from "lucide-react";
 import { useState } from "react";
@@ -40,6 +46,30 @@ import { toast } from "sonner";
 const CURRENCIES = ["INR", "USD", "EUR", "GBP", "JPY"];
 const getCurrencySymbol = (c: string) =>
   ({ INR: "₹", USD: "$", EUR: "€", GBP: "£", JPY: "¥" })[c] ?? c + " ";
+
+function SectionTitle({
+  step,
+  title,
+  hint,
+}: {
+  step: number;
+  title: string;
+  hint?: string;
+}) {
+  return (
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+        {step}
+      </span>
+      <div className="min-w-0">
+        <p className="text-sm font-semibold leading-tight">{title}</p>
+        {hint && (
+          <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function SplitBills() {
   const { user, profile } = useAuth();
@@ -66,7 +96,8 @@ export default function SplitBills() {
   const [emails, setEmails] = useState<string[]>([]);
   const [names, setNames] = useState<Record<string, string>>({});
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [activeParticipant, setActiveParticipant] = useState<SplitParticipant | null>(null);
+  const [activeParticipant, setActiveParticipant] =
+    useState<SplitParticipant | null>(null);
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNote, setPaymentNote] = useState("");
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
@@ -214,21 +245,23 @@ export default function SplitBills() {
   const activeSplitCurrency = activeParticipant
     ? getCurrencySymbol(
         splits.find((split) =>
-          split.participants.some((participant) => participant.id === activeParticipant.id),
+          split.participants.some(
+            (participant) => participant.id === activeParticipant.id,
+          ),
         )?.currency ?? "INR",
       )
     : "";
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between gap-3">
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-lg font-display font-bold sm:text-2xl">
+            <h1 className="font-display text-xl font-bold sm:text-2xl">
               Split Bills
             </h1>
-            <p className="text-xs text-muted-foreground sm:text-sm">
-              Divide an expense and share it via email
+            <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+              Share an expense with friends and track who has paid you back.
             </p>
           </div>
           <Dialog
@@ -239,69 +272,90 @@ export default function SplitBills() {
             }}
           >
             <DialogTrigger asChild>
-              <Button className="gap-2 h-9 px-3 sm:px-4">
+              <Button className="h-10 shrink-0 gap-2 px-3 sm:px-4">
                 <Plus className="h-4 w-4" />
-                <span className="hidden sm:inline">New Split</span>
+                <span className="hidden sm:inline">New split</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="w-full max-w-md">
-              <DialogHeader>
-                <DialogTitle>{editingId ? "Edit Split Bill" : "New Split Bill"}</DialogTitle>
+            <DialogContent className="flex max-h-[92vh] w-[calc(100vw-2rem)] max-w-lg flex-col gap-0 p-0">
+              <DialogHeader className="border-b px-5 py-4">
+                <DialogTitle>
+                  {editingId ? "Edit split bill" : "New split bill"}
+                </DialogTitle>
               </DialogHeader>
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="split-title">Title</Label>
-                  <Input
-                    id="split-title"
-                    placeholder="Dinner, trip, rent..."
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
+
+              <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+                {/* 1 — Bill details */}
+                <section className="space-y-4">
+                  <SectionTitle
+                    step={1}
+                    title="Bill details"
+                    hint="What was paid for and how much."
                   />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="split-amount">Total Amount</Label>
-                    <Input
-                      id="split-amount"
-                      type="number"
-                      inputMode="decimal"
-                      placeholder="0.00"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                    />
+                  <div className="space-y-4 pl-9">
+                    <div className="space-y-2">
+                      <Label htmlFor="split-title">Title</Label>
+                      <Input
+                        id="split-title"
+                        placeholder="Dinner, trip, rent…"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                      />
+                    </div>
+                    <div className="grid grid-cols-[1fr_7rem] gap-3">
+                      <div className="space-y-2">
+                        <Label htmlFor="split-amount">Total amount</Label>
+                        <Input
+                          id="split-amount"
+                          type="number"
+                          inputMode="decimal"
+                          placeholder="0.00"
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="split-currency">Currency</Label>
+                        <Select value={currency} onValueChange={setCurrency}>
+                          <SelectTrigger id="split-currency">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CURRENCIES.map((c) => (
+                              <SelectItem key={c} value={c}>
+                                {c}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="split-currency">Currency</Label>
-                    <Select value={currency} onValueChange={setCurrency}>
-                      <SelectTrigger id="split-currency">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {CURRENCIES.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="split-email">Split with</Label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="split-name"
-                      placeholder="Name (optional)"
-                      value={nameInput}
-                      onChange={(e) => setNameInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          addEmail();
-                        }
-                      }}
-                    />
-                    <div className="flex gap-2">
+                </section>
+
+                <Separator />
+
+                {/* 2 — People */}
+                <section className="space-y-4">
+                  <SectionTitle
+                    step={2}
+                    title="Who is splitting?"
+                    hint="You're included automatically. Add everyone else by email."
+                  />
+                  <div className="space-y-3 pl-9">
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Input
+                        id="split-name"
+                        placeholder="Name (optional)"
+                        value={nameInput}
+                        onChange={(e) => setNameInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            addEmail();
+                          }
+                        }}
+                      />
                       <Input
                         id="split-email"
                         type="email"
@@ -315,69 +369,133 @@ export default function SplitBills() {
                           }
                         }}
                       />
-                      <Button type="button" variant="outline" onClick={addEmail}>
-                        Add
-                      </Button>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={addEmail}
+                    >
+                      <Plus className="h-4 w-4" />
+                      Add person
+                    </Button>
+
+                    <div className="rounded-lg border bg-muted/30 p-3">
+                      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                        People in this split ({headCount})
+                      </p>
+                      <div className="mt-2 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2">
+                          <span className="truncate text-sm">
+                            You{profile?.email ? ` · ${profile.email}` : ""}
+                          </span>
+                          <Badge variant="secondary" className="shrink-0">
+                            Payer
+                          </Badge>
+                        </div>
+                        {emails.map((e) => (
+                          <div
+                            key={e}
+                            className="flex items-center justify-between gap-2 rounded-md bg-background px-3 py-2"
+                          >
+                            <div className="min-w-0">
+                              {names[e] && (
+                                <p className="truncate text-sm">{names[e]}</p>
+                              )}
+                              <p
+                                className={`truncate ${names[e] ? "text-[11px] text-muted-foreground" : "text-sm"}`}
+                              >
+                                {e}
+                              </p>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 shrink-0 text-muted-foreground"
+                              onClick={() => {
+                                setEmails((prev) => prev.filter((x) => x !== e));
+                                setNames((prev) => {
+                                  const next = { ...prev };
+                                  delete next[e];
+                                  return next;
+                                });
+                              }}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        ))}
+                        {emails.length === 0 && (
+                          <p className="px-1 py-2 text-xs text-muted-foreground">
+                            No one added yet — add at least one person.
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  {emails.length > 0 && (
-                    <div className="flex flex-wrap gap-1.5 pt-1">
-                      {emails.map((e) => (
-                        <span
-                          key={e}
-                          className="inline-flex items-center gap-1 rounded-full bg-primary/10 text-primary text-xs px-2 py-1"
-                        >
-                          {names[e] ? `${names[e]} (${e})` : e}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setEmails((prev) => prev.filter((x) => x !== e));
-                              setNames((prev) => {
-                                const next = { ...prev };
-                                delete next[e];
-                                return next;
-                              });
-                            }}
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                {perHead > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Splitting {getCurrencySymbol(currency)}
-                    {formatINR(Number(amount))} between {headCount} people ={" "}
-                    <span className="font-semibold text-foreground">
-                      {getCurrencySymbol(currency)}
-                      {formatINR(perHead)}
-                    </span>{" "}
-                    each
-                  </p>
-                )}
-                <div className="space-y-1.5">
-                  <Label htmlFor="split-notes">Notes (optional)</Label>
-                  <Textarea
-                    id="split-notes"
-                    rows={2}
-                    className="resize-none"
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
+                </section>
+
+                <Separator />
+
+                {/* 3 — Summary */}
+                <section className="space-y-4">
+                  <SectionTitle
+                    step={3}
+                    title="Summary"
+                    hint="Everyone pays an equal share."
                   />
-                </div>
+                  <div className="space-y-4 pl-9">
+                    <div className="rounded-lg border bg-muted/40 p-4">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Total</span>
+                        <span className="font-medium">
+                          {getCurrencySymbol(currency)}
+                          {formatINR(Number(amount) || 0)}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">
+                          Split between
+                        </span>
+                        <span className="font-medium">{headCount} people</span>
+                      </div>
+                      <Separator className="my-3" />
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium">Each pays</span>
+                        <span className="text-lg font-bold">
+                          {getCurrencySymbol(currency)}
+                          {formatINR(perHead)}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="split-notes">Notes (optional)</Label>
+                      <Textarea
+                        id="split-notes"
+                        rows={3}
+                        className="resize-none"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </section>
               </div>
-              <DialogFooter>
+
+              <DialogFooter className="gap-2 border-t px-5 py-4 sm:gap-2">
                 <Button
-                  className="w-full"
-                  onClick={handleCreate}
-                  disabled={createSplit.isPending || editSplit.isPending}
+                  variant="outline"
+                  className="sm:w-auto"
+                  onClick={() => setOpen(false)}
                 >
-                  {(createSplit.isPending || editSplit.isPending) && (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  )}
-                  {editingId ? "Save Changes" : "Create Split"}
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreate}
+                  loading={createSplit.isPending || editSplit.isPending}
+                >
+                  {editingId ? "Save changes" : "Create split"}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -387,116 +505,229 @@ export default function SplitBills() {
         {!paymentsEnabled && (
           <Card className="glass border-warning/40 bg-warning/10">
             <CardContent className="p-4">
-              <p className="text-sm font-semibold text-warning">Split payment activity unavailable</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Partial payment tracking is disabled because the required database schema is not available yet. Apply the latest migration and refresh the page to enable payments.
+              <p className="text-sm font-semibold text-warning">
+                Split payment activity unavailable
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Partial payment tracking is disabled because the required
+                database schema is not available yet. Apply the latest migration
+                and refresh the page to enable payments.
               </p>
             </CardContent>
           </Card>
         )}
 
         {isLoading ? (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {[1, 2].map((i) => (
-              <div key={i} className="h-28 rounded-xl bg-muted animate-pulse" />
+              <div key={i} className="h-40 animate-pulse rounded-xl bg-muted" />
             ))}
           </div>
         ) : splits.length === 0 ? (
           <Card className="glass">
-            <CardContent className="p-10 text-center space-y-3">
-              <SplitSquareHorizontal className="h-10 w-10 mx-auto text-muted-foreground" />
-              <p className="text-muted-foreground">
-                No split bills yet. Create one to divide an expense with others.
+            <CardContent className="space-y-3 p-12 text-center">
+              <SplitSquareHorizontal className="mx-auto h-10 w-10 text-muted-foreground" />
+              <p className="font-medium">No split bills yet</p>
+              <p className="text-sm text-muted-foreground">
+                Create one to divide an expense and track repayments.
               </p>
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-5">
             {splits.map((split) => {
               const cur = getCurrencySymbol(split.currency);
               const isOwner = split.created_by === user?.id;
               const settledCount = split.participants.filter(
                 (p) => p.is_settled,
               ).length;
+              const owedTotal = split.participants.reduce(
+                (sum, p) => sum + p.share_amount,
+                0,
+              );
+              const collected = split.participants.reduce(
+                (sum, p) => sum + (p.is_settled ? p.share_amount : p.amount_paid),
+                0,
+              );
+              const pending = Math.max(0, owedTotal - collected);
+              const pct = owedTotal ? (collected / owedTotal) * 100 : 0;
+              const allSettled =
+                split.participants.length > 0 &&
+                settledCount === split.participants.length;
+
               return (
-                <Card key={split.id} className="glass">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="font-semibold truncate">{split.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {cur}
-                          {formatINR(split.total_amount)} •{" "}
-                          {split.participants.length + 1} people •{" "}
-                          {settledCount}/{split.participants.length} settled
-                        </p>
+                <Card key={split.id} className="glass overflow-hidden">
+                  {/* Header */}
+                  <div className="flex items-start justify-between gap-3 p-5">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h2 className="truncate text-base font-semibold">
+                          {split.title}
+                        </h2>
+                        {allSettled && (
+                          <Badge className="shrink-0 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                            Settled
+                          </Badge>
+                        )}
                       </div>
-                      {isOwner && (
-                        <div className="flex items-center gap-1 shrink-0">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-muted-foreground sm:hover:text-foreground"
-                            onClick={() => openEdit(split)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => {
-                              if (confirm("Delete this split bill?"))
-                                deleteSplit.mutate(split.id);
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          {split.participants.length + 1} people
+                        </span>
+                        <span>·</span>
+                        <span>
+                          {settledCount}/{split.participants.length} settled
+                        </span>
+                      </p>
+                      {split.notes && (
+                        <p className="mt-2 text-xs text-muted-foreground">
+                          {split.notes}
+                        </p>
                       )}
                     </div>
-
-                    {split.notes && (
-                      <p className="text-xs text-muted-foreground">
-                        {split.notes}
-                      </p>
+                    {isOwner && (
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8"
+                          onClick={() => openEdit(split)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground sm:hover:text-destructive"
+                          aria-label="Delete split"
+                          onClick={() => {
+                            if (confirm("Delete this split bill?"))
+                              deleteSplit.mutate(split.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     )}
+                  </div>
 
-                    <div className="space-y-2">
-                      {split.participants.map((p) => {
-                        const userEmail = profile?.email?.toLowerCase().trim();
-                        const isSelf =
-                          p.user_id === user?.id ||
-                          (!!userEmail && p.email?.toLowerCase().trim() === userEmail);
-                        const canToggle = isOwner || isSelf;
-                        const canPay =
-                          paymentsEnabled && (isSelf || isOwner) && p.remaining_amount > 0;
-                        return (
-                          <div key={p.id} className="space-y-2">
-                            <div className="flex flex-col gap-2 rounded-lg bg-muted/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <Mail className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                  {/* Money summary */}
+                  <div className="border-y bg-muted/40 px-5 py-4">
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Bill total
+                        </p>
+                        <p className="mt-0.5 text-sm font-semibold">
+                          {cur}
+                          {formatINR(split.total_amount)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Received
+                        </p>
+                        <p className="mt-0.5 text-sm font-semibold text-emerald-600">
+                          {cur}
+                          {formatINR(collected)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Pending
+                        </p>
+                        <p className="mt-0.5 text-sm font-semibold">
+                          {cur}
+                          {formatINR(pending)}
+                        </p>
+                      </div>
+                    </div>
+                    <Progress value={pct} className="mt-3 h-1.5" />
+                  </div>
+
+                  <CardContent className="space-y-3 p-5">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      People
+                    </p>
+                    {split.participants.map((p) => {
+                      const userEmail = profile?.email?.toLowerCase().trim();
+                      const isSelf =
+                        p.user_id === user?.id ||
+                        (!!userEmail &&
+                          p.email?.toLowerCase().trim() === userEmail);
+                      const canToggle = isOwner || isSelf;
+                      const canPay =
+                        paymentsEnabled &&
+                        (isSelf || isOwner) &&
+                        p.remaining_amount > 0;
+                      const label = p.name?.trim() || p.email;
+                      const share = p.share_amount || 0;
+                      const paidPct = share
+                        ? Math.min(
+                            100,
+                            ((p.is_settled ? share : p.amount_paid) / share) *
+                              100,
+                          )
+                        : 0;
+                      return (
+                        <div
+                          key={p.id}
+                          className="rounded-xl border bg-background/60 p-4"
+                        >
+                          <div className="flex items-start gap-3">
+                            <Avatar className="h-9 w-9 shrink-0">
+                              <AvatarFallback className="text-xs">
+                                {label[0]?.toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
-                                  <p className="text-sm truncate">{p.name?.trim() || p.email}</p>
+                                  <p className="truncate text-sm font-medium">
+                                    {label}
+                                    {isSelf && (
+                                      <span className="ml-1 text-xs text-muted-foreground">
+                                        (you)
+                                      </span>
+                                    )}
+                                  </p>
                                   {p.name?.trim() && (
-                                    <p className="text-[11px] text-muted-foreground truncate">{p.email}</p>
-                                  )}
-                                  {!p.is_settled && (
-                                    <p className="text-[11px] text-muted-foreground">
-                                      Paid {cur}{formatINR(p.amount_paid)} • Remaining {cur}{formatINR(p.remaining_amount)}
+                                    <p className="truncate text-[11px] text-muted-foreground">
+                                      {p.email}
                                     </p>
                                   )}
                                 </div>
+                                <div className="shrink-0 text-right">
+                                  <p className="text-sm font-semibold">
+                                    {cur}
+                                    {formatINR(share)}
+                                  </p>
+                                  <p className="text-[11px] text-muted-foreground">
+                                    their share
+                                  </p>
+                                </div>
                               </div>
-                              <div className="flex flex-wrap gap-2 items-center">
-                                <span className="text-sm font-medium shrink-0">
-                                  {cur}
-                                  {formatINR(p.share_amount)}
-                                </span>
+
+                              {!p.is_settled && (
+                                <div className="mt-3 space-y-1.5">
+                                  <Progress value={paidPct} className="h-1.5" />
+                                  <p className="text-[11px] text-muted-foreground">
+                                    Paid {cur}
+                                    {formatINR(p.amount_paid)} · Remaining{" "}
+                                    <span className="font-medium text-foreground">
+                                      {cur}
+                                      {formatINR(p.remaining_amount)}
+                                    </span>
+                                  </p>
+                                </div>
+                              )}
+
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
                                 <Button
                                   variant={p.is_settled ? "default" : "outline"}
                                   size="sm"
-                                  className="h-7 px-2 shrink-0"
+                                  className="h-8"
                                   disabled={!canToggle}
                                   onClick={() =>
                                     toggleSettled.mutate({
@@ -507,59 +738,82 @@ export default function SplitBills() {
                                 >
                                   {p.is_settled ? (
                                     <>
-                                      <Check className="h-3 w-3 mr-1" />
-                                      Paid
+                                      <Check className="mr-1 h-3.5 w-3.5" />
+                                      Settled
                                     </>
                                   ) : (
-                                    "Mark Paid"
+                                    "Mark settled"
                                   )}
                                 </Button>
                                 {canPay && (
                                   <Button
-                                    variant="outline"
+                                    variant="secondary"
                                     size="sm"
-                                    className="h-7 px-2 shrink-0"
+                                    className="h-8"
                                     onClick={() => openPaymentModal(p)}
                                   >
-                                    Add Payment
+                                    <Plus className="mr-1 h-3.5 w-3.5" />
+                                    Add payment
                                   </Button>
                                 )}
                               </div>
-                            </div>
-                            {p.payments.length > 0 && (
-                              <Collapsible open={expandedLogs.has(p.id)} onOpenChange={() => toggleLogs(p.id)}>
-                                <div className="rounded-lg border border-border/70 bg-background/80 px-3 py-2 text-xs text-muted-foreground">
+
+                              {p.payments.length > 0 && (
+                                <Collapsible
+                                  open={expandedLogs.has(p.id)}
+                                  onOpenChange={() => toggleLogs(p.id)}
+                                  className="mt-3"
+                                >
                                   <CollapsibleTrigger asChild>
-                                    <button className="w-full flex items-center justify-between gap-2">
-                                      <span className="font-medium text-[11px] text-foreground">
-                                        Payment Activity ({p.payments.length})
+                                    <button className="flex w-full items-center justify-between gap-2 rounded-md bg-muted/60 px-3 py-2 text-left">
+                                      <span className="text-[11px] font-medium">
+                                        Payment activity ({p.payments.length})
                                       </span>
-                                      <ChevronDown className={`h-3.5 w-3.5 shrink-0 transition-transform ${expandedLogs.has(p.id) ? "rotate-180" : ""}`} />
+                                      <ChevronDown
+                                        className={`h-3.5 w-3.5 shrink-0 transition-transform ${
+                                          expandedLogs.has(p.id)
+                                            ? "rotate-180"
+                                            : ""
+                                        }`}
+                                      />
                                     </button>
                                   </CollapsibleTrigger>
                                   <CollapsibleContent>
-                                    <div className="space-y-1 mt-1">
+                                    <div className="mt-1 divide-y rounded-md border">
                                       {p.payments.map((payment) => (
-                                        <div key={payment.id} className="flex items-center justify-between gap-2">
-                                          <div className="min-w-0 truncate">
-                                            {payment.note ? `${payment.note} — ` : ""}
-                                            {new Date(payment.created_at).toLocaleString("en-IN", {
-                                              day: "2-digit",
-                                              month: "short",
-                                              hour: "2-digit",
-                                              minute: "2-digit",
-                                              hour12: true,
-                                            })}
+                                        <div
+                                          key={payment.id}
+                                          className="flex items-center justify-between gap-3 px-3 py-2"
+                                        >
+                                          <div className="min-w-0">
+                                            {payment.note && (
+                                              <p className="truncate text-xs">
+                                                {payment.note}
+                                              </p>
+                                            )}
+                                            <p className="text-[11px] text-muted-foreground">
+                                              {new Date(
+                                                payment.created_at,
+                                              ).toLocaleString("en-IN", {
+                                                day: "2-digit",
+                                                month: "short",
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                                hour12: true,
+                                              })}
+                                            </p>
                                           </div>
-                                          <div className="flex items-center gap-1 shrink-0">
-                                            <span className="font-medium">
-                                              {cur}{formatINR(payment.amount)}
+                                          <div className="flex shrink-0 items-center gap-1">
+                                            <span className="text-xs font-medium">
+                                              {cur}
+                                              {formatINR(payment.amount)}
                                             </span>
                                             {(isSelf || isOwner) && (
                                               <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="h-6 w-6 text-destructive"
+                                                className="h-7 w-7 text-muted-foreground sm:hover:text-destructive"
+                                                aria-label="Delete payment"
                                                 onClick={() =>
                                                   deletePayment.mutate({
                                                     paymentId: payment.id,
@@ -567,7 +821,7 @@ export default function SplitBills() {
                                                   })
                                                 }
                                               >
-                                                <Trash2 className="h-3 w-3" />
+                                                <Trash2 className="h-3.5 w-3.5" />
                                               </Button>
                                             )}
                                           </div>
@@ -575,13 +829,13 @@ export default function SplitBills() {
                                       ))}
                                     </div>
                                   </CollapsibleContent>
-                                </div>
-                              </Collapsible>
-                            )}
+                                </Collapsible>
+                              )}
+                            </div>
                           </div>
-                        );
-                      })}
-                    </div>
+                        </div>
+                      );
+                    })}
                   </CardContent>
                 </Card>
               );
@@ -597,20 +851,33 @@ export default function SplitBills() {
           setPaymentDialogOpen(value);
         }}
       >
-        <DialogContent className="w-full max-w-md">
-          <DialogHeader>
-            <DialogTitle>Add Payment</DialogTitle>
+        <DialogContent className="w-[calc(100vw-2rem)] max-w-md gap-0 p-0">
+          <DialogHeader className="border-b px-5 py-4">
+            <DialogTitle>Add payment</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Participant</Label>
-              <Input
-                disabled
-                value={activeParticipant?.name?.trim() || activeParticipant?.email || ""}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="payment-amount">Amount</Label>
+          <div className="space-y-5 px-5 py-5">
+            {activeParticipant && (
+              <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 p-3">
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium">
+                    {activeParticipant.name?.trim() || activeParticipant.email}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Share {activeSplitCurrency}
+                    {formatINR(activeParticipant.share_amount)}
+                  </p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-sm font-semibold">
+                    {activeSplitCurrency}
+                    {formatINR(activeParticipant.remaining_amount)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">remaining</p>
+                </div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="payment-amount">Amount received</Label>
               <Input
                 id="payment-amount"
                 type="number"
@@ -620,13 +887,22 @@ export default function SplitBills() {
                 value={paymentAmount}
                 onChange={(e) => setPaymentAmount(e.target.value)}
               />
-              {activeParticipant && (
-                <p className="text-xs text-muted-foreground">
-                  Remaining {activeSplitCurrency}{formatINR(activeParticipant.remaining_amount)}
-                </p>
+              {activeParticipant && activeParticipant.remaining_amount > 0 && (
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs"
+                  onClick={() =>
+                    setPaymentAmount(String(activeParticipant.remaining_amount))
+                  }
+                >
+                  Pay full {activeSplitCurrency}
+                  {formatINR(activeParticipant.remaining_amount)}
+                </Button>
               )}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               <Label htmlFor="payment-note">Note (optional)</Label>
               <Textarea
                 id="payment-note"
@@ -637,16 +913,18 @@ export default function SplitBills() {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="gap-2 border-t px-5 py-4 sm:gap-2">
             <Button
-              className="w-full"
-              onClick={handleCreatePayment}
-              disabled={createPayment.isPending}
+              variant="outline"
+              onClick={() => setPaymentDialogOpen(false)}
             >
-              {createPayment.isPending && (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              )}
-              Record Payment
+              Cancel
+            </Button>
+            <Button
+              onClick={handleCreatePayment}
+              loading={createPayment.isPending}
+            >
+              Record payment
             </Button>
           </DialogFooter>
         </DialogContent>
