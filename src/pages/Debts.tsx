@@ -742,40 +742,48 @@ function AddDebt({ create }: { create: (p: DebtInput) => Promise<unknown> }) {
       </DialogTrigger>
       <DialogContent fullscreen className="flex flex-col">
         <DialogHeader className="border-b p-4">
-          <DialogTitle>Add debt</DialogTitle>
+          <DialogTitle>New debt entry</DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mx-auto max-w-xl space-y-5">
-            <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
-              <Button
-                variant={f.direction === "receivable" ? "default" : "ghost"}
-                onClick={() => setF({ ...f, direction: "receivable" })}
-              >
-                <ArrowDownLeft className="mr-2 h-4 w-4" />
-                I’m owed
-              </Button>
-              <Button
-                variant={f.direction === "payable" ? "default" : "ghost"}
-                onClick={() => setF({ ...f, direction: "payable" })}
-              >
-                <ArrowUpRight className="mr-2 h-4 w-4" />I owe
-              </Button>
-            </div>
-            <Field label="Title">
+            <Field label="What kind of entry is this?">
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+                <Button
+                  variant={f.direction === "receivable" ? "default" : "ghost"}
+                  onClick={() => setF({ ...f, direction: "receivable" })}
+                >
+                  <ArrowDownLeft className="mr-2 h-4 w-4" />
+                  They owe me
+                </Button>
+                <Button
+                  variant={f.direction === "payable" ? "default" : "ghost"}
+                  onClick={() => setF({ ...f, direction: "payable" })}
+                >
+                  <ArrowUpRight className="mr-2 h-4 w-4" />I owe
+                </Button>
+              </div>
+            </Field>
+            <Field label="What is it for?">
               <Input
                 placeholder="e.g. Laptop loan"
                 value={f.title}
                 onChange={(e) => setF({ ...f, title: e.target.value })}
               />
             </Field>
-            <Field label="Amount">
+            <Field
+              label={
+                f.direction === "receivable"
+                  ? "Amount owed to me"
+                  : "Amount I owe"
+              }
+            >
               <Input
                 type="number"
                 value={f.amount || ""}
                 onChange={(e) => setF({ ...f, amount: Number(e.target.value) })}
               />
             </Field>
-            <Field label="Payment type">
+            <Field label="How will it be repaid?">
               <div className="grid grid-cols-3 gap-2">
                 {(["one_time", "custom", "emi"] as DebtType[]).map((t) => (
                   <Button
@@ -784,13 +792,19 @@ function AddDebt({ create }: { create: (p: DebtInput) => Promise<unknown> }) {
                     variant={f.debtType === t ? "default" : "outline"}
                     onClick={() => setF({ ...f, debtType: t })}
                   >
-                    {t === "custom" ? "Installments" : pretty(t)}
+                    {planLabel[t]}
                   </Button>
                 ))}
               </div>
             </Field>
             {f.debtType === "one_time" && (
-              <Field label="Due date">
+              <Field
+                label={
+                  f.direction === "receivable"
+                    ? "To be paid back by"
+                    : "I must pay by"
+                }
+              >
                 <Input
                   type="date"
                   value={f.dueDate}
