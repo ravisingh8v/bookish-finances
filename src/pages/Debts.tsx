@@ -1010,27 +1010,38 @@ export default function Debts() {
   return (
     <DashboardLayout>
       <div className="mx-auto max-w-6xl space-y-4">
-        <div className="flex justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold">Debts</h1>
             <p className="text-sm text-muted-foreground">
-              Everything you owe and are owed.
+              Track money people owe you and money you owe others.
             </p>
           </div>
           <AddDebt create={d.createDebt} />
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <Summary name="Receivables" {...d.receivableSummary} />
-          <Summary name="Payables" {...d.payableSummary} />
+          <Summary
+            name="They owe me"
+            hint={`${d.receivableSummary.active} open`}
+            {...d.receivableSummary}
+          />
+          <Summary
+            name="I owe"
+            hint={`${d.payableSummary.active} open`}
+            {...d.payableSummary}
+          />
           <Card>
             <CardContent className="p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Net balance
+                Net position
               </p>
               <p
                 className={`mt-0.5 text-base font-bold ${net >= 0 ? "text-emerald-600" : "text-destructive"}`}
               >
-                {money(net)}
+                {money(Math.abs(net))}
+              </p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {net >= 0 ? "in your favour" : "you're behind"}
               </p>
             </CardContent>
           </Card>
@@ -1038,13 +1049,14 @@ export default function Debts() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="grid h-12 w-full grid-cols-2">
             <TabsTrigger value="receivables">
-              Receivables{" "}
+              <ArrowDownLeft className="mr-1.5 h-4 w-4" />
+              They owe me
               <Badge className="ml-2" variant="secondary">
                 {d.receivables.filter((x) => !isCompletedDebt(x)).length}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="payables">
-              Payables{" "}
+              <ArrowUpRight className="mr-1.5 h-4 w-4" />I owe
               <Badge className="ml-2" variant="secondary">
                 {d.payables.filter((x) => !isCompletedDebt(x)).length}
               </Badge>
