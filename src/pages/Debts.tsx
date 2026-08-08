@@ -423,12 +423,15 @@ function EditDebt({
           <Card>
             <CardContent className="space-y-4 p-4">
               <div>
-                <Label>Person (optional)</Label>
+                <Label>
+                  {f.direction === "receivable" ? "Who owes you?" : "Who do you owe?"}
+                </Label>
                 <p className="text-xs text-muted-foreground">
-                  No account search. Email links automatically if they join later.
+                  Optional. Add an email and it links automatically if they join later.
                 </p>
               </div>
-              <Field label="Alias / name">
+              <Field label="Name">
+
                 <Input
                   placeholder="e.g. Rahul"
                   value={f.personAlias}
