@@ -98,7 +98,8 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ) : isLoading ? (
           <>
             <Loader2 className="animate-spin" />
-            {children}
+            {/* hide any icon/spinner supplied by the caller so only one loader shows */}
+            <span className="contents [&_svg]:hidden">{children}</span>
           </>
         ) : (
           children

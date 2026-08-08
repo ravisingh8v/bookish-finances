@@ -74,22 +74,58 @@ const formatDebtDate = (value?: string | null) => {
 };
 const dateInput = (value?: string | null) => value?.slice(0, 10) || "";
 const statusTone: Record<string, string> = {
-  paid: "bg-emerald-100 text-emerald-700",
-  overdue: "bg-red-100 text-red-700",
-  pending: "bg-amber-100 text-amber-700",
-  accepted: "bg-emerald-100 text-emerald-700",
-  partially_paid: "bg-blue-100 text-blue-700",
-  rejected: "bg-red-100 text-red-700",
-  cancelled: "bg-slate-100 text-slate-600",
+  paid: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  overdue: "bg-destructive/15 text-destructive",
+  pending: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  accepted: "bg-primary/15 text-primary",
+  partially_paid: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+  rejected: "bg-destructive/15 text-destructive",
+  cancelled: "bg-muted text-muted-foreground",
 };
+const statusLabel: Record<string, string> = {
+  paid: "Settled",
+  accepted: "Active",
+  partially_paid: "Part paid",
+  pending: "Awaiting reply",
+  rejected: "Declined",
+  cancelled: "Cancelled",
+  overdue: "Overdue",
+};
+const planLabel: Record<string, string> = {
+  one_time: "Single payment",
+  custom: "Installments",
+  emi: "Loan / EMI",
+};
+
+/** Plain-English due-date helper: "Due in 3 days", "Overdue by 2 days", "Due today". */
+export function dueInfo(value?: string | null) {
+  if (!value) return null;
+  const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+  const due = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const days = Math.round((due.getTime() - today.getTime()) / 86400000);
+  const date = formatDebtDate(value);
+  if (days < 0)
+    return {
+      overdue: true,
+      text: `Overdue by ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`,
+      date,
+    };
+  if (days === 0) return { overdue: false, text: "Due today", date };
+  if (days === 1) return { overdue: false, text: "Due tomorrow", date };
+  return { overdue: false, text: `Due in ${days} days`, date };
+}
 
 function Summary({
   name,
+  hint,
   outstanding,
   active,
   overdue,
 }: {
   name: string;
+  hint?: string;
   outstanding: number;
   active: number;
   overdue: number;
@@ -101,11 +137,13 @@ function Summary({
           {name}
         </p>
         <p className="mt-0.5 text-base font-bold">{money(outstanding)}</p>
-        <div className="mt-1 flex justify-between text-[10px] text-muted-foreground">
-          <span>{active} active</span>
-          <span className={overdue ? "text-destructive" : ""}>
-            {money(overdue)} overdue
-          </span>
+        <div className="mt-1 flex justify-between gap-2 text-[10px] text-muted-foreground">
+          <span className="truncate">{hint ?? `${active} active`}</span>
+          {overdue > 0 && (
+            <span className="shrink-0 text-destructive">
+              {money(overdue)} late
+            </span>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -235,7 +273,7 @@ function EditDebt({
         </DialogHeader>
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mx-auto max-w-xl space-y-5">
-          <Field label="Direction">
+          <Field label="What kind of entry is this?">
             <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
               <Button
                 variant={f.direction === "receivable" ? "default" : "ghost"}
@@ -243,7 +281,7 @@ function EditDebt({
                 onClick={() => setF({ ...f, direction: "receivable" })}
               >
                 <ArrowDownLeft className="mr-2 h-4 w-4" />
-                I’m owed
+                They owe me
               </Button>
               <Button
                 variant={f.direction === "payable" ? "default" : "ghost"}
@@ -254,13 +292,17 @@ function EditDebt({
               </Button>
             </div>
           </Field>
-          <Field label="Title">
+          <Field label="What is it for?">
             <Input
               value={f.title}
               onChange={(e) => setF({ ...f, title: e.target.value })}
             />
           </Field>
-          <Field label="Amount">
+          <Field
+            label={
+              f.direction === "receivable" ? "Amount owed to me" : "Amount I owe"
+            }
+          >
             <Input
               type="number"
               value={f.amount || ""}
@@ -273,7 +315,7 @@ function EditDebt({
                 " Increasing the amount reopens this debt."}
             </p>
           </Field>
-          <Field label="Payment type">
+          <Field label="How will it be repaid?">
             <div className="grid grid-cols-3 gap-2">
               {(["one_time", "custom", "emi"] as DebtType[]).map((t) => (
                 <Button
@@ -282,13 +324,19 @@ function EditDebt({
                   variant={f.debtType === t ? "default" : "outline"}
                   onClick={() => setF({ ...f, debtType: t })}
                 >
-                  {t === "custom" ? "Installments" : pretty(t)}
+                  {planLabel[t]}
                 </Button>
               ))}
             </div>
           </Field>
           {f.debtType === "one_time" && (
-            <Field label="Due date">
+            <Field
+              label={
+                f.direction === "receivable"
+                  ? "To be paid back by"
+                  : "I must pay by"
+              }
+            >
               <Input
                 type="date"
                 value={f.dueDate}
@@ -375,12 +423,15 @@ function EditDebt({
           <Card>
             <CardContent className="space-y-4 p-4">
               <div>
-                <Label>Person (optional)</Label>
+                <Label>
+                  {f.direction === "receivable" ? "Who owes you?" : "Who do you owe?"}
+                </Label>
                 <p className="text-xs text-muted-foreground">
-                  No account search. Email links automatically if they join later.
+                  Optional. Add an email and it links automatically if they join later.
                 </p>
               </div>
-              <Field label="Alias / name">
+              <Field label="Name">
+
                 <Input
                   placeholder="e.g. Rahul"
                   value={f.personAlias}
@@ -451,82 +502,101 @@ function DebtCard({
     debt.remaining_amount > 0 &&
     !isCompletedDebt(debt) &&
     new Date(`${dueDate.slice(0, 10)}T23:59:59`) < new Date();
+  const due = !isCompletedDebt(debt) ? dueInfo(dueDate) : null;
+  const settled = isCompletedDebt(debt);
+  const statusKey = overdue ? "overdue" : debt.status;
   return (
     <Card
-      className={`transition-all hover:shadow-sm ${
+      className={`flex flex-col transition-all hover:shadow-sm ${
         overdue ? "border-destructive/50 bg-destructive/5" : ""
       }`}
     >
-      <CardContent className="space-y-2.5 p-3">
-
-        <div className="flex items-center gap-2.5">
-          <Avatar className="h-8 w-8 shrink-0">
+      <CardContent className="flex flex-1 flex-col gap-3 p-4">
+        {/* Who + what */}
+        <div className="flex items-start gap-3">
+          <Avatar className="h-9 w-9 shrink-0">
             <AvatarFallback className="text-xs">
               {alias[0]?.toUpperCase() || <UserRound className="h-4 w-4" />}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-sm font-semibold">
-                {debt.description}
-              </p>
-              <b className="shrink-0 text-sm">{money(debt.remaining_amount)}</b>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-xs text-muted-foreground">{alias}</p>
-              <Badge
-                className={`shrink-0 px-1.5 py-0 text-[10px] ${statusTone[debt.status]}`}
-              >
-                {pretty(debt.status)}
-              </Badge>
-            </div>
+            <p className="truncate text-sm font-semibold leading-tight">
+              {debt.description}
+            </p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {receivable ? "Owed to you by" : "You owe"}{" "}
+              <span className="font-medium text-foreground">{alias}</span>
+            </p>
           </div>
+          <Badge
+            className={`shrink-0 px-2 py-0.5 text-[10px] font-medium ${statusTone[statusKey] ?? ""}`}
+          >
+            {statusLabel[statusKey] ?? pretty(debt.status)}
+          </Badge>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Progress value={pct} className="h-1.5 flex-1" />
-          <span className="shrink-0 text-[10px] text-muted-foreground">
-            {Math.round(pct)}%
-          </span>
+        {/* The number that matters */}
+        <div className="rounded-lg bg-muted/60 p-3">
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {settled ? "Settled amount" : "Still outstanding"}
+              </p>
+              <p className="text-xl font-bold leading-tight">
+                {money(settled ? debt.total_amount : debt.remaining_amount)}
+              </p>
+            </div>
+            <p className="text-right text-[11px] text-muted-foreground">
+              <span className="font-medium text-emerald-600">
+                {money(debt.paid_amount)}
+              </span>{" "}
+              paid of {money(debt.total_amount)}
+            </p>
+          </div>
+          <Progress value={pct} className="mt-2 h-1.5" />
         </div>
 
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>
-            <span className="text-emerald-600">{money(debt.paid_amount)}</span>
-            {" / "}
-            {money(debt.total_amount)}
+        {/* Plan + due date */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <WalletCards className="h-3 w-3" />
+            {planLabel[debt.debt_type] ?? pretty(debt.debt_type)}
           </span>
-          <span className="flex items-center gap-2">
-            <span className="capitalize">{pretty(debt.debt_type)}</span>
-            {dueDate && (
-              <span
-                className={`flex items-center gap-0.5 ${overdue ? "font-semibold text-destructive" : ""}`}
-              >
-                <Calendar className="h-3 w-3" />
-                {overdue ? "Overdue " : ""}
-                {formatDebtDate(dueDate)}
-              </span>
-            )}
-
-          </span>
+          {due && (
+            <span
+              className={`inline-flex items-center gap-1 ${
+                due.overdue ? "font-semibold text-destructive" : ""
+              }`}
+            >
+              <Calendar className="h-3 w-3" />
+              {due.text} · {due.date}
+            </span>
+          )}
+          {!due && dueDate && (
+            <span className="inline-flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {formatDebtDate(dueDate)}
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {/* Actions */}
+        <div className="mt-auto flex items-center gap-1.5 pt-1">
           <Button
             size="sm"
             variant="secondary"
-            className="h-8 flex-1"
+            className="h-9 flex-1"
             onClick={() => nav(`/debts/${debt.id}`)}
           >
-            View
+            Details
           </Button>
           {canRecordPayment(debt) && (
             <RecordDebtPayment
               debt={debt}
               trigger={
-                <Button size="sm" className="h-8 flex-1">
+                <Button size="sm" className="h-9 flex-1">
                   <CreditCard className="mr-1 h-3.5 w-3.5" />
-                  Pay
+                  {receivable ? "Received" : "Pay"}
                 </Button>
               }
             />
@@ -537,7 +607,7 @@ function DebtCard({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8"
+                className="h-9"
                 onClick={() => act("accept")}
               >
                 Accept
@@ -545,7 +615,7 @@ function DebtCard({
               <Button
                 size="sm"
                 variant="destructive"
-                className="h-8"
+                className="h-9"
                 onClick={() => act("reject")}
               >
                 Reject
@@ -556,7 +626,7 @@ function DebtCard({
             <Button
               size="sm"
               variant="outline"
-              className="h-8"
+              className="h-9"
               onClick={() => act("cancel")}
             >
               Cancel
@@ -569,8 +639,9 @@ function DebtCard({
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 shrink-0"
+              className="h-9 w-9 shrink-0 text-muted-foreground sm:hover:text-destructive"
               onClick={remove}
+              aria-label="Delete"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
@@ -671,40 +742,48 @@ function AddDebt({ create }: { create: (p: DebtInput) => Promise<unknown> }) {
       </DialogTrigger>
       <DialogContent fullscreen className="flex flex-col">
         <DialogHeader className="border-b p-4">
-          <DialogTitle>Add debt</DialogTitle>
+          <DialogTitle>New debt entry</DialogTitle>
         </DialogHeader>
         <div className="flex-1 overflow-y-auto p-4">
           <div className="mx-auto max-w-xl space-y-5">
-            <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
-              <Button
-                variant={f.direction === "receivable" ? "default" : "ghost"}
-                onClick={() => setF({ ...f, direction: "receivable" })}
-              >
-                <ArrowDownLeft className="mr-2 h-4 w-4" />
-                I’m owed
-              </Button>
-              <Button
-                variant={f.direction === "payable" ? "default" : "ghost"}
-                onClick={() => setF({ ...f, direction: "payable" })}
-              >
-                <ArrowUpRight className="mr-2 h-4 w-4" />I owe
-              </Button>
-            </div>
-            <Field label="Title">
+            <Field label="What kind of entry is this?">
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-muted p-1">
+                <Button
+                  variant={f.direction === "receivable" ? "default" : "ghost"}
+                  onClick={() => setF({ ...f, direction: "receivable" })}
+                >
+                  <ArrowDownLeft className="mr-2 h-4 w-4" />
+                  They owe me
+                </Button>
+                <Button
+                  variant={f.direction === "payable" ? "default" : "ghost"}
+                  onClick={() => setF({ ...f, direction: "payable" })}
+                >
+                  <ArrowUpRight className="mr-2 h-4 w-4" />I owe
+                </Button>
+              </div>
+            </Field>
+            <Field label="What is it for?">
               <Input
                 placeholder="e.g. Laptop loan"
                 value={f.title}
                 onChange={(e) => setF({ ...f, title: e.target.value })}
               />
             </Field>
-            <Field label="Amount">
+            <Field
+              label={
+                f.direction === "receivable"
+                  ? "Amount owed to me"
+                  : "Amount I owe"
+              }
+            >
               <Input
                 type="number"
                 value={f.amount || ""}
                 onChange={(e) => setF({ ...f, amount: Number(e.target.value) })}
               />
             </Field>
-            <Field label="Payment type">
+            <Field label="How will it be repaid?">
               <div className="grid grid-cols-3 gap-2">
                 {(["one_time", "custom", "emi"] as DebtType[]).map((t) => (
                   <Button
@@ -713,13 +792,19 @@ function AddDebt({ create }: { create: (p: DebtInput) => Promise<unknown> }) {
                     variant={f.debtType === t ? "default" : "outline"}
                     onClick={() => setF({ ...f, debtType: t })}
                   >
-                    {t === "custom" ? "Installments" : pretty(t)}
+                    {planLabel[t]}
                   </Button>
                 ))}
               </div>
             </Field>
             {f.debtType === "one_time" && (
-              <Field label="Due date">
+              <Field
+                label={
+                  f.direction === "receivable"
+                    ? "To be paid back by"
+                    : "I must pay by"
+                }
+              >
                 <Input
                   type="date"
                   value={f.dueDate}
@@ -818,13 +903,18 @@ function AddDebt({ create }: { create: (p: DebtInput) => Promise<unknown> }) {
             <Card>
               <CardContent className="space-y-4 p-4">
                 <div>
-                  <Label>Person (optional)</Label>
+                  <Label>
+                    {f.direction === "receivable"
+                      ? "Who owes you?"
+                      : "Who do you owe?"}
+                  </Label>
                   <p className="text-xs text-muted-foreground">
-                    No account search. Email links automatically if they join
-                    later.
+                    Optional. Add an email and it links automatically if they
+                    join later.
                   </p>
                 </div>
-                <Field label="Alias / name">
+                <Field label="Name">
+
                   <Input
                     placeholder="e.g. Rahul"
                     value={f.personAlias}
@@ -895,9 +985,16 @@ function DebtTab({
           open.map(card)
         ) : (
           <Card className="md:col-span-2 xl:col-span-3">
-            <CardContent className="flex flex-col items-center p-10">
-              <WalletCards className="mb-2 h-8 w-8 text-muted-foreground" />
-              <p>No active {receivable ? "receivables" : "payables"}</p>
+            <CardContent className="flex flex-col items-center gap-1 p-10 text-center">
+              <WalletCards className="mb-1 h-8 w-8 text-muted-foreground" />
+              <p className="font-medium">
+                {receivable
+                  ? "Nobody owes you right now"
+                  : "You don't owe anyone right now"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Add an entry to start tracking who owes what and when it's due.
+              </p>
             </CardContent>
           </Card>
         )}
@@ -945,27 +1042,38 @@ export default function Debts() {
   return (
     <DashboardLayout>
       <div className="mx-auto max-w-6xl space-y-4">
-        <div className="flex justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-2xl font-bold">Debts</h1>
             <p className="text-sm text-muted-foreground">
-              Everything you owe and are owed.
+              Track money people owe you and money you owe others.
             </p>
           </div>
           <AddDebt create={d.createDebt} />
         </div>
         <div className="grid grid-cols-3 gap-2">
-          <Summary name="Receivables" {...d.receivableSummary} />
-          <Summary name="Payables" {...d.payableSummary} />
+          <Summary
+            name="They owe me"
+            hint={`${d.receivableSummary.active} open`}
+            {...d.receivableSummary}
+          />
+          <Summary
+            name="I owe"
+            hint={`${d.payableSummary.active} open`}
+            {...d.payableSummary}
+          />
           <Card>
             <CardContent className="p-3">
               <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Net balance
+                Net position
               </p>
               <p
                 className={`mt-0.5 text-base font-bold ${net >= 0 ? "text-emerald-600" : "text-destructive"}`}
               >
-                {money(net)}
+                {money(Math.abs(net))}
+              </p>
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                {net >= 0 ? "in your favour" : "you're behind"}
               </p>
             </CardContent>
           </Card>
@@ -973,13 +1081,14 @@ export default function Debts() {
         <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="grid h-12 w-full grid-cols-2">
             <TabsTrigger value="receivables">
-              Receivables{" "}
+              <ArrowDownLeft className="mr-1.5 h-4 w-4" />
+              They owe me
               <Badge className="ml-2" variant="secondary">
                 {d.receivables.filter((x) => !isCompletedDebt(x)).length}
               </Badge>
             </TabsTrigger>
             <TabsTrigger value="payables">
-              Payables{" "}
+              <ArrowUpRight className="mr-1.5 h-4 w-4" />I owe
               <Badge className="ml-2" variant="secondary">
                 {d.payables.filter((x) => !isCompletedDebt(x)).length}
               </Badge>
