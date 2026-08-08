@@ -489,82 +489,101 @@ function DebtCard({
     debt.remaining_amount > 0 &&
     !isCompletedDebt(debt) &&
     new Date(`${dueDate.slice(0, 10)}T23:59:59`) < new Date();
+  const due = !isCompletedDebt(debt) ? dueInfo(dueDate) : null;
+  const settled = isCompletedDebt(debt);
+  const statusKey = overdue ? "overdue" : debt.status;
   return (
     <Card
-      className={`transition-all hover:shadow-sm ${
+      className={`flex flex-col transition-all hover:shadow-sm ${
         overdue ? "border-destructive/50 bg-destructive/5" : ""
       }`}
     >
-      <CardContent className="space-y-2.5 p-3">
-
-        <div className="flex items-center gap-2.5">
-          <Avatar className="h-8 w-8 shrink-0">
+      <CardContent className="flex flex-1 flex-col gap-3 p-4">
+        {/* Who + what */}
+        <div className="flex items-start gap-3">
+          <Avatar className="h-9 w-9 shrink-0">
             <AvatarFallback className="text-xs">
               {alias[0]?.toUpperCase() || <UserRound className="h-4 w-4" />}
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-sm font-semibold">
-                {debt.description}
-              </p>
-              <b className="shrink-0 text-sm">{money(debt.remaining_amount)}</b>
-            </div>
-            <div className="flex items-center justify-between gap-2">
-              <p className="truncate text-xs text-muted-foreground">{alias}</p>
-              <Badge
-                className={`shrink-0 px-1.5 py-0 text-[10px] ${statusTone[debt.status]}`}
-              >
-                {pretty(debt.status)}
-              </Badge>
-            </div>
+            <p className="truncate text-sm font-semibold leading-tight">
+              {debt.description}
+            </p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {receivable ? "Owed to you by" : "You owe"}{" "}
+              <span className="font-medium text-foreground">{alias}</span>
+            </p>
           </div>
+          <Badge
+            className={`shrink-0 px-2 py-0.5 text-[10px] font-medium ${statusTone[statusKey] ?? ""}`}
+          >
+            {statusLabel[statusKey] ?? pretty(debt.status)}
+          </Badge>
         </div>
 
-        <div className="flex items-center gap-1.5">
-          <Progress value={pct} className="h-1.5 flex-1" />
-          <span className="shrink-0 text-[10px] text-muted-foreground">
-            {Math.round(pct)}%
-          </span>
+        {/* The number that matters */}
+        <div className="rounded-lg bg-muted/60 p-3">
+          <div className="flex items-end justify-between gap-2">
+            <div>
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {settled ? "Settled amount" : "Still outstanding"}
+              </p>
+              <p className="text-xl font-bold leading-tight">
+                {money(settled ? debt.total_amount : debt.remaining_amount)}
+              </p>
+            </div>
+            <p className="text-right text-[11px] text-muted-foreground">
+              <span className="font-medium text-emerald-600">
+                {money(debt.paid_amount)}
+              </span>{" "}
+              paid of {money(debt.total_amount)}
+            </p>
+          </div>
+          <Progress value={pct} className="mt-2 h-1.5" />
         </div>
 
-        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-          <span>
-            <span className="text-emerald-600">{money(debt.paid_amount)}</span>
-            {" / "}
-            {money(debt.total_amount)}
+        {/* Plan + due date */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-muted-foreground">
+          <span className="inline-flex items-center gap-1">
+            <WalletCards className="h-3 w-3" />
+            {planLabel[debt.debt_type] ?? pretty(debt.debt_type)}
           </span>
-          <span className="flex items-center gap-2">
-            <span className="capitalize">{pretty(debt.debt_type)}</span>
-            {dueDate && (
-              <span
-                className={`flex items-center gap-0.5 ${overdue ? "font-semibold text-destructive" : ""}`}
-              >
-                <Calendar className="h-3 w-3" />
-                {overdue ? "Overdue " : ""}
-                {formatDebtDate(dueDate)}
-              </span>
-            )}
-
-          </span>
+          {due && (
+            <span
+              className={`inline-flex items-center gap-1 ${
+                due.overdue ? "font-semibold text-destructive" : ""
+              }`}
+            >
+              <Calendar className="h-3 w-3" />
+              {due.text} · {due.date}
+            </span>
+          )}
+          {!due && dueDate && (
+            <span className="inline-flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              {formatDebtDate(dueDate)}
+            </span>
+          )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        {/* Actions */}
+        <div className="mt-auto flex items-center gap-1.5 pt-1">
           <Button
             size="sm"
             variant="secondary"
-            className="h-8 flex-1"
+            className="h-9 flex-1"
             onClick={() => nav(`/debts/${debt.id}`)}
           >
-            View
+            Details
           </Button>
           {canRecordPayment(debt) && (
             <RecordDebtPayment
               debt={debt}
               trigger={
-                <Button size="sm" className="h-8 flex-1">
+                <Button size="sm" className="h-9 flex-1">
                   <CreditCard className="mr-1 h-3.5 w-3.5" />
-                  Pay
+                  {receivable ? "Received" : "Pay"}
                 </Button>
               }
             />
@@ -575,7 +594,7 @@ function DebtCard({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-8"
+                className="h-9"
                 onClick={() => act("accept")}
               >
                 Accept
@@ -583,7 +602,7 @@ function DebtCard({
               <Button
                 size="sm"
                 variant="destructive"
-                className="h-8"
+                className="h-9"
                 onClick={() => act("reject")}
               >
                 Reject
@@ -594,7 +613,7 @@ function DebtCard({
             <Button
               size="sm"
               variant="outline"
-              className="h-8"
+              className="h-9"
               onClick={() => act("cancel")}
             >
               Cancel
@@ -607,8 +626,9 @@ function DebtCard({
             <Button
               size="icon"
               variant="ghost"
-              className="h-8 w-8 shrink-0"
+              className="h-9 w-9 shrink-0 text-muted-foreground sm:hover:text-destructive"
               onClick={remove}
+              aria-label="Delete"
             >
               <Trash2 className="h-4 w-4" />
             </Button>
