@@ -953,9 +953,16 @@ function DebtTab({
           open.map(card)
         ) : (
           <Card className="md:col-span-2 xl:col-span-3">
-            <CardContent className="flex flex-col items-center p-10">
-              <WalletCards className="mb-2 h-8 w-8 text-muted-foreground" />
-              <p>No active {receivable ? "receivables" : "payables"}</p>
+            <CardContent className="flex flex-col items-center gap-1 p-10 text-center">
+              <WalletCards className="mb-1 h-8 w-8 text-muted-foreground" />
+              <p className="font-medium">
+                {receivable
+                  ? "Nobody owes you right now"
+                  : "You don't owe anyone right now"}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Add an entry to start tracking who owes what and when it's due.
+              </p>
             </CardContent>
           </Card>
         )}
