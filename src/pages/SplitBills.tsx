@@ -80,6 +80,8 @@ export default function SplitBills() {
     editSplit,
     deleteSplit,
     deletePayment,
+    removeParticipant,
+
     toggleSettled,
     createPayment,
     paymentsEnabled,
