@@ -375,6 +375,14 @@ export default function DueDetail() {
           </Card>
         </div>
       </div>
+
+      <DueForm
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        due={due}
+        onSubmit={(payload: DuePayload) => updateDue({ id: due.id, ...payload })}
+      />
     </DashboardLayout>
+
   );
 }
