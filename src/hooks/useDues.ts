@@ -490,11 +490,17 @@ export function useDues() {
   }, [dues]);
 
   const addDue = useCallback(
-    (payload: Omit<DueEntry, "id" | "createdAt" | "payments" | "people">) => {
-      addDueMutation.mutate(payload);
-    },
+    (payload: Omit<DueEntry, "id" | "createdAt" | "payments" | "people">) =>
+      addDueMutation.mutateAsync(payload),
     [addDueMutation],
   );
+
+  const updateDue = useCallback(
+    (payload: Omit<DueEntry, "createdAt" | "payments" | "people">) =>
+      updateDueMutation.mutateAsync(payload),
+    [updateDueMutation],
+  );
+
 
   const deleteDue = useCallback(
     (dueId: string) => deleteDueMutation.mutate(dueId),
