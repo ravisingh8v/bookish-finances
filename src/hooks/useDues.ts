@@ -560,6 +560,8 @@ export function useDues() {
     totals,
     isLoading: duesQuery.isLoading,
     addDue,
+    updateDue,
+
     deleteDue,
     addPayment,
     deletePayment,
