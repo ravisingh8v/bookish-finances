@@ -318,7 +318,8 @@ export function useDues() {
         due_date: payload.dueDate || null,
         frequency: payload.frequency,
         notes: payload.notes ?? null,
-        emi_details: (payload.emiDetails ?? null) as unknown as Json,
+        emi_details: ((payload.emiDetails ?? payload.installmentPlan) ??
+          null) as unknown as Json,
       });
       if (error) throw error;
     },
@@ -328,6 +329,33 @@ export function useDues() {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
+  const updateDueMutation = useMutation({
+    mutationFn: async ({
+      id,
+      ...payload
+    }: Omit<DueEntry, "createdAt" | "payments" | "people">) => {
+      const { error } = await supabase
+        .from("dues")
+        .update({
+          title: payload.title,
+          total_amount: payload.totalAmount,
+          due_date: payload.dueDate || null,
+          frequency: payload.frequency,
+          notes: payload.notes ?? null,
+          emi_details: ((payload.emiDetails ?? payload.installmentPlan) ??
+            null) as unknown as Json,
+        })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      invalidate();
+      toast.success("Due updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
 
   const deleteDueMutation = useMutation({
     mutationFn: async (dueId: string) => {
