@@ -539,7 +539,45 @@ export function useSplitBills() {
     onSuccess: invalidate,
     onError: (e: Error) => toast.error(e.message),
   });
+  const removeParticipant = useMutation({
+    mutationFn: async ({
+      participantId,
+      splitBillId,
+    }: {
+      participantId: string;
+      splitBillId: string;
+    }) => {
+      assertOnline(isOnline);
+      const { error } = await db
+        .from("split_participants")
+        .delete()
+        .eq("id", participantId);
+      if (error) throw error;
 
+      // Re-balance the equal split across the people who remain.
+      const [{ data: bill }, { data: remaining }] = await Promise.all([
+        db.from("split_bills").select("total_amount").eq("id", splitBillId).single(),
+        db.from("split_participants").select("id").eq("split_bill_id", splitBillId),
+      ]);
+      const rows = remaining ?? [];
+      if (bill && rows.length > 0) {
+        const share =
+          Math.round((Number(bill.total_amount) / (rows.length + 1)) * 100) / 100;
+        await db
+          .from("split_participants")
+          .update({ share_amount: share })
+          .in(
+            "id",
+            rows.map((r: any) => r.id),
+          );
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      toast("Person removed from split");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   return {
     splits: (splitsQuery.data ?? []) as SplitBill[],
@@ -548,9 +586,11 @@ export function useSplitBills() {
     editSplit,
     deleteSplit,
     deletePayment,
+    removeParticipant,
     toggleSettled,
     createPayment,
     paymentsEnabled,
   };
 }
+
 
