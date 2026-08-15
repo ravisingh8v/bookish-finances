@@ -258,7 +258,15 @@ export function useDues() {
             (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
           ),
           people: peopleByDue.get(row.id) ?? [],
-          emiDetails: (row.emi_details as unknown as EmiDetails | null) ?? undefined,
+          emiDetails:
+            row.emi_details && !("installments" in (row.emi_details as object))
+              ? (row.emi_details as unknown as EmiDetails)
+              : undefined,
+          installmentPlan:
+            row.emi_details && "installments" in (row.emi_details as object)
+              ? (row.emi_details as unknown as InstallmentPlan)
+              : undefined,
+
         }))
         .sort(
           (a, b) =>
