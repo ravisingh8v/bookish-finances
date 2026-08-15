@@ -1,15 +1,24 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { DueForm, type DuePayload } from "@/components/DueForm";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { useDues } from "@/hooks/useDues";
-import { ArrowLeft, Delete, ShieldAlert, Trash, UserPlus } from "lucide-react";
+import {
+  buildDueSchedule,
+  daysUntil,
+  dueDateLabel,
+  formatDueDate,
+  getNextScheduleEntry,
+  useDues,
+} from "@/hooks/useDues";
+import { ArrowLeft, CalendarClock, CheckCircle2, Circle, Pencil, ShieldAlert, Trash, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -22,12 +31,14 @@ function formatCurrency(value: number) {
 export default function DueDetail() {
   const { dueId } = useParams<{ dueId: string }>();
   const navigate = useNavigate();
-  const { getDueById, addPayment, deletePayment, addPerson, removePerson, updatePersonRole, deleteDue } = useDues();
+  const { getDueById, addPayment, deletePayment, addPerson, removePerson, updatePersonRole, deleteDue, updateDue } = useDues();
   const due = getDueById(dueId ?? "");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("viewer");
+  const [editOpen, setEditOpen] = useState(false);
+
 
   const payments = due?.payments ?? [];
   const people = due?.people ?? [];
@@ -56,18 +67,53 @@ export default function DueDetail() {
     );
   }
 
+  const schedule = buildDueSchedule(due);
+  const nextEntry = getNextScheduleEntry(due);
+  const nextDays = nextEntry ? daysUntil(nextEntry.date) : null;
+  const dateCopy = dueDateLabel(due.frequency);
+
+
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigate("/dues")}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
-            <h1 className="mt-4 text-2xl font-display font-bold">{due.title}</h1>
-            <p className="text-sm text-muted-foreground">Due date {due.dueDate} • {due.frequency.toUpperCase()}</p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <h1 className="text-2xl font-display font-bold">{due.title}</h1>
+              <Badge variant="secondary">
+                {due.frequency === "emi"
+                  ? "EMI"
+                  : due.frequency === "installment"
+                    ? "Installments"
+                    : "One-time"}
+              </Badge>
+            </div>
+            <p className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CalendarClock className="h-3.5 w-3.5" />
+              {nextEntry
+                ? `Next payment ${formatCurrency(nextEntry.amount)} on ${formatDueDate(nextEntry.date)}${
+                    nextDays === null
+                      ? ""
+                      : nextDays < 0
+                        ? ` · overdue by ${Math.abs(nextDays)} day${Math.abs(nextDays) === 1 ? "" : "s"}`
+                        : nextDays === 0
+                          ? " · due today"
+                          : ` · in ${nextDays} day${nextDays === 1 ? "" : "s"}`
+                  }`
+                : "All payments completed"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {dateCopy.label}: {formatDueDate(due.dueDate)} — {dateCopy.help}
+            </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-2 h-4 w-4" /> Edit
+            </Button>
             <Button variant="destructive"  onClick={() => {
               if (confirm("Delete this due?")) {
                 deleteDue(due.id);
@@ -89,6 +135,57 @@ export default function DueDetail() {
             </Card>
           ))}
         </div>
+
+        {schedule.length > 0 && (
+          <Card className="glass">
+            <CardContent className="space-y-3 p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-lg font-semibold">Payment schedule</h2>
+                <p className="text-xs text-muted-foreground">
+                  Built from the {dateCopy.label.toLowerCase()}
+                </p>
+              </div>
+              <div className="divide-y rounded-xl border">
+                {schedule.map((entry) => {
+                  const covered = schedule
+                    .slice(0, entry.number)
+                    .reduce((s, e) => s + e.amount, 0);
+                  const isPaid = paid >= covered - 0.01;
+                  const isNext = nextEntry?.number === entry.number;
+                  return (
+                    <div
+                      key={entry.number}
+                      className={`flex items-center justify-between gap-3 px-3 py-2.5 text-sm ${isNext ? "bg-primary/5" : ""}`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        {isPaid ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                        ) : (
+                          <Circle className="h-4 w-4 text-muted-foreground" />
+                        )}
+                        <div>
+                          <p className="font-medium">
+                            {schedule.length > 1
+                              ? `Payment ${entry.number} of ${schedule.length}`
+                              : "Full payment"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatDueDate(entry.date)}
+                            {isNext ? " · next up" : ""}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="font-semibold">
+                        {formatCurrency(entry.amount)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
 
         {due.emiDetails ? (
           <Card className="glass">
@@ -278,6 +375,14 @@ export default function DueDetail() {
           </Card>
         </div>
       </div>
+
+      <DueForm
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        due={due}
+        onSubmit={(payload: DuePayload) => updateDue({ id: due.id, ...payload })}
+      />
     </DashboardLayout>
+
   );
 }

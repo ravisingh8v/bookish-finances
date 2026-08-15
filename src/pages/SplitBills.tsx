@@ -80,6 +80,8 @@ export default function SplitBills() {
     editSplit,
     deleteSplit,
     deletePayment,
+    removeParticipant,
+
     toggleSettled,
     createPayment,
     paymentsEnabled,
@@ -756,7 +758,29 @@ export default function SplitBills() {
                                     Add payment
                                   </Button>
                                 )}
+                                {isOwner && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 text-muted-foreground sm:hover:text-destructive"
+                                    onClick={() => {
+                                      if (
+                                        confirm(
+                                          "Remove this person and their payments from the split?",
+                                        )
+                                      )
+                                        removeParticipant.mutate({
+                                          participantId: p.id,
+                                          splitBillId: split.id,
+                                        });
+                                    }}
+                                  >
+                                    <Trash2 className="mr-1 h-3.5 w-3.5" />
+                                    Remove
+                                  </Button>
+                                )}
                               </div>
+
 
                               {p.payments.length > 0 && (
                                 <Collapsible

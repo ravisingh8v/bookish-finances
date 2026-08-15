@@ -1,315 +1,260 @@
 import { useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { DueForm, type DuePayload } from "@/components/DueForm";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { calculateEmiDetails, useDues, DueFrequency } from "@/hooks/useDues";
-import { Plus, Wallet } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import {
+  buildDueSchedule,
+  daysUntil,
+  formatDueDate,
+  getNextScheduleEntry,
+  getTotalPaid,
+  useDues,
+  type DueEntry,
+} from "@/hooks/useDues";
+import { CalendarClock, Pencil, Plus, Trash2, Wallet } from "lucide-react";
 
-const FREQUENCIES: { value: DueFrequency; label: string }[] = [
-  { value: "one-time", label: "One-time" },
-  { value: "installment", label: "Installment" },
-  { value: "emi", label: "EMI" },
-];
-
-function formatCurrency(value: number) {
+function money(value: number) {
   return new Intl.NumberFormat("en-IN", {
     style: "currency",
     currency: "INR",
     maximumFractionDigits: 0,
-  }).format(value);
+  }).format(value || 0);
 }
 
-function getStatus(totalAmount: number, paid: number) {
-  return paid >= totalAmount ? "Paid" : "Pending";
+const TYPE_LABEL: Record<string, string> = {
+  "one-time": "One-time",
+  installment: "Installments",
+  emi: "EMI",
+};
+
+function dueTiming(due: DueEntry) {
+  const next = getNextScheduleEntry(due);
+  if (!next) return { text: "Fully paid", tone: "settled" as const, next };
+  const days = daysUntil(next.date);
+  if (days === null) return { text: "No date set", tone: "muted" as const, next };
+  if (days < 0)
+    return {
+      text: `Overdue by ${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"}`,
+      tone: "late" as const,
+      next,
+    };
+  if (days === 0) return { text: "Due today", tone: "soon" as const, next };
+  if (days === 1) return { text: "Due tomorrow", tone: "soon" as const, next };
+  return { text: `Due in ${days} days`, tone: "ok" as const, next };
 }
+
+const TONE_CLASS: Record<string, string> = {
+  late: "bg-destructive/10 text-destructive",
+  soon: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  ok: "bg-muted text-muted-foreground",
+  muted: "bg-muted text-muted-foreground",
+  settled: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+};
 
 export default function Dues() {
-  const navigate = useNavigate();
-  const { dues, totals, addDue, deleteDue } = useDues();
-  const [open, setOpen] = useState(false);
-  const [title, setTitle] = useState("");
-  const [amount, setAmount] = useState("");
-  const [dueDate, setDueDate] = useState("");
-  const [frequency, setFrequency] = useState<DueFrequency>("one-time");
-  const [notes, setNotes] = useState("");
-  const [processingFeePercent, setProcessingFeePercent] = useState("2");
-  const [interestRate, setInterestRate] = useState("12");
-  const [tenureMonths, setTenureMonths] = useState("12");
+  const { dues, totals, addDue, updateDue, deleteDue } = useDues();
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<DueEntry | null>(null);
 
-  const amountValue = Number(amount);
-  const emiPreview =
-    frequency === "emi" && amountValue > 0
-      ? calculateEmiDetails(amountValue, Number(processingFeePercent), Number(interestRate), Number(tenureMonths))
-      : null;
-
-  const canSave =
-    title.trim() &&
-    amount.trim() &&
-    dueDate.trim() &&
-    (frequency !== "emi" || (processingFeePercent.trim() && interestRate.trim() && tenureMonths.trim()));
-
-  const debtSummary = useMemo(
-    () => [
-      { label: "Total dues", value: totals.count },
-      { label: "Outstanding", value: formatCurrency(totals.outstanding) },
-      { label: "Paid", value: formatCurrency(totals.paid) },
-    ],
-    [totals],
+  const overdueCount = useMemo(
+    () => dues.filter((d) => dueTiming(d).tone === "late").length,
+    [dues],
   );
+
+  const summary = [
+    { label: "Outstanding", value: money(totals.outstanding) },
+    { label: "Paid", value: money(totals.paid) },
+    { label: "Overdue", value: String(overdueCount) },
+  ];
+
+  const handleSubmit = async (payload: DuePayload) => {
+    if (editing) await updateDue({ id: editing.id, ...payload });
+    else await addDue(payload);
+    setEditing(null);
+  };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h1 className="text-2xl font-display font-bold">Dues</h1>
-            <p className="text-sm text-muted-foreground max-w-2xl">
-              Track pending dues, partial payments, and EMI schedules in one place.
+      <div className="mx-auto max-w-4xl space-y-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="font-display text-xl font-bold sm:text-2xl">Dues</h1>
+            <p className="mt-1 text-xs text-muted-foreground sm:text-sm">
+              What you owe, when the next payment lands, and how much is left.
             </p>
           </div>
-          <Dialog open={open} onOpenChange={(value) => setOpen(value)}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" /> Add Due
-              </Button>
-            </DialogTrigger>
-            <DialogContent fullscreen className="flex flex-col">
-              <DialogHeader className="pb-4 sticky top-0 bg-background/95 backdrop-blur-sm pt-2 px-4 sm:px-6 z-40 border-b">
-                <DialogTitle>Add Due</DialogTitle>
-              </DialogHeader>
-              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="due-title">Title</Label>
-                    <Input
-                      id="due-title"
-                      value={title}
-                      onChange={(event) => setTitle(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="due-amount">Amount</Label>
-                    <Input
-                      id="due-amount"
-                      value={amount}
-                      onChange={(event) => setAmount(event.target.value)}
-                      type="number"
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label htmlFor="due-date">Due date</Label>
-                    <Input
-                      id="due-date"
-                      type="date"
-                      value={dueDate}
-                      onChange={(event) => setDueDate(event.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="due-frequency">Frequency</Label>
-                    <Select
-                      value={frequency}
-                      onValueChange={(value) => setFrequency(value as DueFrequency)}
-                    >
-                      <SelectTrigger id="due-frequency" className="h-11">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FREQUENCIES.map((entry) => (
-                          <SelectItem key={entry.value} value={entry.value}>
-                            {entry.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="due-notes">Notes</Label>
-                  <Textarea
-                    id="due-notes"
-                    rows={4}
-                    value={notes}
-                    onChange={(event) => setNotes(event.target.value)}
-                  />
-                </div>
-
-                {frequency === "emi" ? (
-                  <div className="space-y-4 rounded-3xl border border-muted/70 bg-muted/10 p-4">
-                    <h3 className="text-base font-semibold">EMI details</h3>
-                    <div className="grid gap-4 sm:grid-cols-3">
-                      <div className="space-y-2">
-                        <Label htmlFor="processing-fee">Processing fee %</Label>
-                        <Input
-                          id="processing-fee"
-                          type="number"
-                          min={0}
-                          value={processingFeePercent}
-                          onChange={(event) => setProcessingFeePercent(event.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="interest-rate">Interest rate %</Label>
-                        <Input
-                          id="interest-rate"
-                          type="number"
-                          min={0}
-                          value={interestRate}
-                          onChange={(event) => setInterestRate(event.target.value)}
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="tenure-months">Tenure (months)</Label>
-                        <Input
-                          id="tenure-months"
-                          type="number"
-                          min={1}
-                          value={tenureMonths}
-                          onChange={(event) => setTenureMonths(event.target.value)}
-                        />
-                      </div>
-                    </div>
-                    {emiPreview ? (
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-2xl bg-background p-3">
-                          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Monthly EMI</p>
-                          <p className="mt-2 text-lg font-semibold">{formatCurrency(emiPreview.monthlyEmi)}</p>
-                        </div>
-                        <div className="rounded-2xl bg-background p-3">
-                          <p className="text-xs uppercase tracking-[0.2em] text-muted-foreground">Total payable</p>
-                          <p className="mt-2 text-lg font-semibold">{formatCurrency(emiPreview.totalPayable)}</p>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setOpen(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  disabled={!canSave}
-                  onClick={() => {
-                    if (!canSave) return;
-                    const newDue = {
-                      title: title.trim(),
-                      totalAmount:
-                        frequency === "emi" && emiPreview
-                          ? emiPreview.totalPayable
-                          : Number(amount),
-                      dueDate,
-                      frequency,
-                      notes: notes.trim() || undefined,
-                      emiDetails: frequency === "emi" ? emiPreview ?? undefined : undefined,
-                    } as const;
-                    addDue(newDue);
-                    setTitle("");
-                    setAmount("");
-                    setDueDate("");
-                    setFrequency("one-time");
-                    setNotes("");
-                    setProcessingFeePercent("2");
-                    setInterestRate("12");
-                    setTenureMonths("12");
-                    setOpen(false);
-                  }}
-                >
-                  Save Due
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button
+            className="h-10 shrink-0 gap-2 px-3 sm:px-4"
+            onClick={() => {
+              setEditing(null);
+              setFormOpen(true);
+            }}
+          >
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">Add due</span>
+          </Button>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          {debtSummary.map((item) => (
+        <div className="grid grid-cols-3 gap-2 sm:gap-4">
+          {summary.map((item) => (
             <Card key={item.label} className="glass">
-              <CardContent className="space-y-2 p-4">
-                <p className="text-sm text-muted-foreground">{item.label}</p>
-                <p className="font-display font-bold text-lg">{item.value}</p>
+              <CardContent className="p-3 sm:p-4">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground sm:text-xs">
+                  {item.label}
+                </p>
+                <p className="mt-1 text-sm font-bold sm:text-lg">
+                  {item.value}
+                </p>
               </CardContent>
             </Card>
           ))}
         </div>
 
-        <div className="space-y-4">
-          {dues.length === 0 ? (
-            <Card className="glass">
-              <CardContent className="p-8 text-center">
-                <Wallet className="mx-auto mb-4 h-10 w-10 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  No dues tracked yet. Add dues to manage payments and EMIs.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {dues.map((due) => {
-                const paid = (due.payments ?? []).reduce((sum, payment) => sum + payment.amount, 0);
-                const status = getStatus(due.totalAmount, paid);
-                return (
-                  <Card key={due.id} className="glass">
-                    <CardContent className="p-4 sm:p-5">
-                      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h2 className="text-lg font-semibold">{due.title}</h2>
-                            <span className="rounded-full px-2 py-1 text-xs font-medium bg-muted text-muted-foreground">
-                              {status}
-                            </span>
-                          </div>
-                          <p className="mt-2 text-sm text-muted-foreground">
-                            {formatCurrency(due.totalAmount)} due on {due.dueDate}
-                          </p>
-                          {due.notes ? (
-                            <p className="mt-2 text-sm text-muted-foreground">{due.notes}</p>
-                          ) : null}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button variant="outline" size="sm" asChild>
-                            <Link to={`/dues/${due.id}`}>View</Link>
-                          </Button>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            onClick={() => deleteDue(due.id)}
-                          >
-                            Delete
-                          </Button>
-                        </div>
-                      </div>
-                      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-xl bg-muted/70 p-3">
-                          <p className="text-sm text-muted-foreground">Paid</p>
-                          <p className="font-semibold">{formatCurrency(paid)}</p>
-                        </div>
-                        <div className="rounded-xl bg-muted/70 p-3">
-                          <p className="text-sm text-muted-foreground">Outstanding</p>
-                          <p className="font-semibold">{formatCurrency(due.totalAmount - paid)}</p>
-                        </div>
-                        <div className="rounded-xl bg-muted/70 p-3">
-                          <p className="text-sm text-muted-foreground">Payments</p>
-                          <p className="font-semibold">{due.payments.length}</p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-        </div>
+        {dues.length === 0 ? (
+          <Card className="glass">
+            <CardContent className="space-y-3 p-10 text-center">
+              <Wallet className="mx-auto h-10 w-10 text-muted-foreground" />
+              <p className="font-medium">No dues tracked yet</p>
+              <p className="text-sm text-muted-foreground">
+                Add a due to plan one-time payments, installments or EMIs.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {dues.map((due) => {
+              const paid = getTotalPaid(due);
+              const outstanding = Math.max(0, due.totalAmount - paid);
+              const pct = due.totalAmount
+                ? Math.min(100, (paid / due.totalAmount) * 100)
+                : 0;
+              const timing = dueTiming(due);
+              const schedule = buildDueSchedule(due);
+              const paidCount = schedule.filter((_, i) => {
+                const cumulative = schedule
+                  .slice(0, i + 1)
+                  .reduce((s, e) => s + e.amount, 0);
+                return paid >= cumulative - 0.01;
+              }).length;
 
+              return (
+                <Card key={due.id} className="glass overflow-hidden">
+                  <CardContent className="p-4 sm:p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="truncate text-base font-semibold">
+                            {due.title}
+                          </h2>
+                          <Badge variant="secondary" className="shrink-0">
+                            {TYPE_LABEL[due.frequency] ?? due.frequency}
+                          </Badge>
+                        </div>
+                        <p
+                          className={`mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium ${TONE_CLASS[timing.tone]}`}
+                        >
+                          <CalendarClock className="h-3 w-3" />
+                          {timing.text}
+                          {timing.next && ` · ${formatDueDate(timing.next.date)}`}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          aria-label="Edit due"
+                          onClick={() => {
+                            setEditing(due);
+                            setFormOpen(true);
+                          }}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-muted-foreground sm:hover:text-destructive"
+                          aria-label="Delete due"
+                          onClick={() => {
+                            if (confirm("Delete this due?")) deleteDue(due.id);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {timing.next && schedule.length > 1 && (
+                      <div className="mt-3 rounded-lg border bg-muted/40 px-3 py-2 text-xs">
+                        Next payment{" "}
+                        <span className="font-semibold text-foreground">
+                          {money(timing.next.amount)}
+                        </span>{" "}
+                        on {formatDueDate(timing.next.date)} · payment{" "}
+                        {timing.next.number} of {schedule.length}
+                      </div>
+                    )}
+
+                    <div className="mt-4 grid grid-cols-3 gap-2 sm:gap-3">
+                      <div className="rounded-lg bg-muted/60 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Total
+                        </p>
+                        <p className="text-sm font-semibold">
+                          {money(due.totalAmount)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-muted/60 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Paid
+                        </p>
+                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                          {money(paid)}
+                        </p>
+                      </div>
+                      <div className="rounded-lg bg-muted/60 p-2.5">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                          Left
+                        </p>
+                        <p className="text-sm font-semibold">
+                          {money(outstanding)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <Progress value={pct} className="mt-3 h-1.5" />
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <p className="text-[11px] text-muted-foreground">
+                        {schedule.length > 1
+                          ? `${paidCount}/${schedule.length} payments done`
+                          : `${Math.round(pct)}% paid`}
+                      </p>
+                      <Button variant="outline" size="sm" className="h-8" asChild>
+                        <Link to={`/dues/${due.id}`}>Open</Link>
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      <DueForm
+        open={formOpen}
+        onOpenChange={(v) => {
+          setFormOpen(v);
+          if (!v) setEditing(null);
+        }}
+        due={editing}
+        onSubmit={handleSubmit}
+      />
     </DashboardLayout>
   );
 }
