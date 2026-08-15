@@ -1,15 +1,24 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
+import { DueForm, type DuePayload } from "@/components/DueForm";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { useDues } from "@/hooks/useDues";
-import { ArrowLeft, Delete, ShieldAlert, Trash, UserPlus } from "lucide-react";
+import {
+  buildDueSchedule,
+  daysUntil,
+  dueDateLabel,
+  formatDueDate,
+  getNextScheduleEntry,
+  useDues,
+} from "@/hooks/useDues";
+import { ArrowLeft, CalendarClock, CheckCircle2, Circle, Pencil, ShieldAlert, Trash, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat("en-IN", {
