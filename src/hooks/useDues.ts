@@ -35,6 +35,11 @@ export interface EmiDetails {
   totalPayable: number;
 }
 
+export interface InstallmentPlan {
+  installments: number;
+  everyMonths: number;
+}
+
 export interface DueEntry {
   id: string;
   title: string;
@@ -46,6 +51,7 @@ export interface DueEntry {
   payments: DuePayment[];
   people: DuePerson[];
   emiDetails?: EmiDetails;
+  installmentPlan?: InstallmentPlan;
 }
 
 function normalizeFrequency(value: unknown): DueFrequency {
@@ -53,6 +59,104 @@ function normalizeFrequency(value: unknown): DueFrequency {
     ? value
     : "one-time";
 }
+
+/** Adds whole months to a `yyyy-mm-dd` date string, clamping to month end. */
+export function addMonths(dateStr: string, months: number): string {
+  if (!dateStr) return "";
+  const [y, m, d] = dateStr.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return dateStr;
+  const base = new Date(y, m - 1 + months, 1);
+  const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+  base.setDate(Math.min(d, lastDay));
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${base.getFullYear()}-${pad(base.getMonth() + 1)}-${pad(base.getDate())}`;
+}
+
+export interface ScheduleEntry {
+  number: number;
+  date: string;
+  amount: number;
+}
+
+/**
+ * Turns a due into an explicit payment schedule so the selected date always
+ * has a visible, meaningful consequence.
+ */
+export function buildDueSchedule(due: DueEntry): ScheduleEntry[] {
+  if (!due.dueDate) return [];
+  if (due.frequency === "emi" && due.emiDetails) {
+    const months = Math.max(1, due.emiDetails.tenureMonths);
+    return Array.from({ length: months }, (_, i) => ({
+      number: i + 1,
+      date: addMonths(due.dueDate, i),
+      amount: due.emiDetails!.monthlyEmi,
+    }));
+  }
+  if (due.frequency === "installment") {
+    const count = Math.max(1, due.installmentPlan?.installments ?? 1);
+    const every = Math.max(1, due.installmentPlan?.everyMonths ?? 1);
+    const per = due.totalAmount / count;
+    return Array.from({ length: count }, (_, i) => ({
+      number: i + 1,
+      date: addMonths(due.dueDate, i * every),
+      amount: per,
+    }));
+  }
+  return [{ number: 1, date: due.dueDate, amount: due.totalAmount }];
+}
+
+/** The next unpaid schedule entry, based on how much has been paid so far. */
+export function getNextScheduleEntry(due: DueEntry): ScheduleEntry | null {
+  const paid = getTotalPaid(due);
+  let cumulative = 0;
+  for (const entry of buildDueSchedule(due)) {
+    cumulative += entry.amount;
+    if (paid < cumulative - 0.01) return entry;
+  }
+  return null;
+}
+
+export function daysUntil(dateStr: string): number | null {
+  if (!dateStr) return null;
+  const [y, m, d] = dateStr.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return null;
+  const target = new Date(y, m - 1, d);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((target.getTime() - today.getTime()) / 86400000);
+}
+
+export function formatDueDate(dateStr: string): string {
+  if (!dateStr) return "No date set";
+  const [y, m, d] = dateStr.slice(0, 10).split("-").map(Number);
+  if (!y || !m || !d) return dateStr;
+  return new Date(y, m - 1, d).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+export function dueDateLabel(frequency: DueFrequency): {
+  label: string;
+  help: string;
+} {
+  if (frequency === "emi")
+    return {
+      label: "First EMI date",
+      help: "Every EMI after this repeats monthly on the same day. This drives your EMI schedule.",
+    };
+  if (frequency === "installment")
+    return {
+      label: "First installment date",
+      help: "The remaining installments are scheduled from this date at the interval you choose.",
+    };
+  return {
+    label: "Payment due date",
+    help: "The full amount is expected on or before this date.",
+  };
+}
+
 
 export function calculateEmiDetails(
   productPrice: number,
