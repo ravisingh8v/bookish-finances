@@ -31,12 +31,14 @@ function formatCurrency(value: number) {
 export default function DueDetail() {
   const { dueId } = useParams<{ dueId: string }>();
   const navigate = useNavigate();
-  const { getDueById, addPayment, deletePayment, addPerson, removePerson, updatePersonRole, deleteDue } = useDues();
+  const { getDueById, addPayment, deletePayment, addPerson, removePerson, updatePersonRole, deleteDue, updateDue } = useDues();
   const due = getDueById(dueId ?? "");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentNotes, setPaymentNotes] = useState("");
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<"editor" | "viewer">("viewer");
+  const [editOpen, setEditOpen] = useState(false);
+
 
   const payments = due?.payments ?? [];
   const people = due?.people ?? [];
