@@ -67,6 +67,13 @@ export default function DueDetail() {
     );
   }
 
+  const schedule = buildDueSchedule(due);
+  const nextEntry = getNextScheduleEntry(due);
+  const nextDays = nextEntry ? daysUntil(nextEntry.date) : null;
+  const dateCopy = dueDateLabel(due.frequency);
+
+
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
