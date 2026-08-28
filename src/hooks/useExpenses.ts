@@ -502,6 +502,7 @@ export function useExpenses(bookId: string) {
     deleteExpense,
     copyExpense,
     bulkDeleteExpenses,
+    clearBookExpenses,
     bulkUpdateCategory,
     bulkCopyExpenses,
 
