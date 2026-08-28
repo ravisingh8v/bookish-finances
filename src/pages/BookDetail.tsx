@@ -246,6 +246,7 @@ export default function BookDetail() {
     deleteExpense,
     copyExpense,
     bulkDeleteExpenses,
+    clearBookExpenses,
     bulkUpdateCategory,
     bulkCopyExpenses,
 
