@@ -1125,13 +1125,23 @@ export default function BookDetail() {
                   </div>
                 </div>
               ) : (
-                <div className="flex justify-end">
+                <div className="flex items-center justify-end gap-1">
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="h-8 text-xs text-destructive sm:hover:text-destructive"
+                    onClick={handleClearBook}
+                  >
+                    <Trash2 className="mr-1 h-3.5 w-3.5" />
+                    Clear all entries
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className="h-8 text-xs"
                     onClick={() => setSelectMode(true)}
                   >
+                    <CheckSquare className="mr-1 h-3.5 w-3.5" />
                     Select
                   </Button>
                 </div>
