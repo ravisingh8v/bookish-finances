@@ -482,6 +482,23 @@ export default function BookDetail() {
     }
   };
 
+  const handleClearBook = async () => {
+    if (!bookId) return;
+    if (
+      !confirm(
+        "Delete ALL entries in this book? This cannot be undone.",
+      )
+    )
+      return;
+    try {
+      await clearBookExpenses.mutateAsync(bookId);
+      toast.success("All entries deleted");
+      exitSelectMode();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   const handleBulkCopy = async () => {
     if (bulkCopyIds.length === 0) return;
     try {
