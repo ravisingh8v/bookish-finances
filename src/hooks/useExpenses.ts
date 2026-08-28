@@ -396,6 +396,18 @@ export function useExpenses(bookId: string) {
     onSuccess: invalidateAll,
   });
 
+  const clearBookExpenses = useMutation({
+    mutationFn: async (targetBookId: string) => {
+      assertOnline(isOnline);
+      const { error } = await supabase
+        .from("expenses")
+        .delete()
+        .eq("book_id", targetBookId);
+      if (error) throw error;
+    },
+    onSuccess: invalidateAll,
+  });
+
   const bulkUpdateCategory = useMutation({
     mutationFn: async ({
       expenseIds,
