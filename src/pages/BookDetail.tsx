@@ -49,6 +49,7 @@ import {
   ArrowLeft,
   Edit,
   BookOpen,
+  CheckSquare,
   Copy,
   EllipsisVertical,
   Filter,
@@ -246,6 +247,7 @@ export default function BookDetail() {
     deleteExpense,
     copyExpense,
     bulkDeleteExpenses,
+    clearBookExpenses,
     bulkUpdateCategory,
     bulkCopyExpenses,
 
@@ -476,6 +478,23 @@ export default function BookDetail() {
     try {
       await bulkDeleteExpenses.mutateAsync(selectedIds);
       toast.success(`Deleted ${selectedIds.length} entries`);
+      exitSelectMode();
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
+  const handleClearBook = async () => {
+    if (!bookId) return;
+    if (
+      !confirm(
+        "Delete ALL entries in this book? This cannot be undone.",
+      )
+    )
+      return;
+    try {
+      await clearBookExpenses.mutateAsync(bookId);
+      toast.success("All entries deleted");
       exitSelectMode();
     } catch (e: any) {
       toast.error(e.message);
@@ -1075,21 +1094,15 @@ export default function BookDetail() {
                   <span className="px-1 text-sm font-medium">
                     {selectedIds.length} selected
                   </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setSelectedIds(
-                        selectedIds.length === filtered.length
-                          ? []
-                          : filtered.map((e) => e.id),
-                      )
-                    }
-                  >
-                    {selectedIds.length === filtered.length
-                      ? "Clear all"
-                      : "Select all"}
-                  </Button>
+                  {selectedIds.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedIds([])}
+                    >
+                      Clear
+                    </Button>
+                  )}
                   <div className="ml-auto flex flex-wrap items-center gap-2">
                     <Button
                       size="sm"
@@ -1131,13 +1144,23 @@ export default function BookDetail() {
                   </div>
                 </div>
               ) : (
-                <div className="flex justify-end">
+                <div className="flex items-center justify-end gap-1">
                   <Button
                     size="sm"
                     variant="ghost"
+                    className="h-8 text-xs text-destructive sm:hover:text-destructive"
+                    onClick={handleClearBook}
+                  >
+                    <Trash2 className="mr-1 h-3.5 w-3.5" />
+                    Clear all entries
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
                     className="h-8 text-xs"
                     onClick={() => setSelectMode(true)}
                   >
+                    <CheckSquare className="mr-1 h-3.5 w-3.5" />
                     Select
                   </Button>
                 </div>
