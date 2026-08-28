@@ -696,9 +696,28 @@ export default function Books() {
                             )}
                           </div>
                         </div>
-                        <Badge variant="secondary" className="shrink-0">
-                          Archived
-                        </Badge>
+                        <div className="flex shrink-0 items-center gap-1">
+                          <Badge variant="secondary" className="shrink-0">
+                            Archived
+                          </Badge>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 opacity-100 text-muted-foreground sm:hover:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (
+                                confirm(
+                                  "Delete this book and all its expenses?",
+                                )
+                              )
+                                deleteBook.mutate(book.id);
+                            }}
+                            title="Delete this book"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between text-sm">
                         <span
