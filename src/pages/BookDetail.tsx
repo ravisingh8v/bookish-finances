@@ -1075,21 +1075,15 @@ export default function BookDetail() {
                   <span className="px-1 text-sm font-medium">
                     {selectedIds.length} selected
                   </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() =>
-                      setSelectedIds(
-                        selectedIds.length === filtered.length
-                          ? []
-                          : filtered.map((e) => e.id),
-                      )
-                    }
-                  >
-                    {selectedIds.length === filtered.length
-                      ? "Clear all"
-                      : "Select all"}
-                  </Button>
+                  {selectedIds.length > 0 && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setSelectedIds([])}
+                    >
+                      Clear
+                    </Button>
+                  )}
                   <div className="ml-auto flex flex-wrap items-center gap-2">
                     <Button
                       size="sm"
