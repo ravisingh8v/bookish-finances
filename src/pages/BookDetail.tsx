@@ -49,6 +49,7 @@ import {
   ArrowLeft,
   Edit,
   BookOpen,
+  CheckSquare,
   Copy,
   EllipsisVertical,
   Filter,
