@@ -29,6 +29,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
@@ -88,6 +89,7 @@ export default function Books() {
   const [description, setDescription] = useState("");
   const [currency, setCurrency] = useState("INR");
   const [color, setColor] = useState(COLORS[0]);
+  const [includeInReports, setIncludeInReports] = useState(true);
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
   const [duplicateBookId, setDuplicateBookId] = useState<string | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
@@ -101,6 +103,7 @@ export default function Books() {
     setDescription("");
     setCurrency("INR");
     setColor(COLORS[0]);
+    setIncludeInReports(true);
     setEditingBook(null);
   };
   const bookIdsKey = books
@@ -169,6 +172,7 @@ export default function Books() {
     setDescription(book.description ?? "");
     setCurrency(book.currency);
     setColor(book.color);
+    setIncludeInReports(book.include_in_reports ?? true);
     setEditingBook(book);
     setOpen(true);
   };
@@ -249,6 +253,7 @@ export default function Books() {
           description: description.trim() || undefined,
           currency,
           color,
+          include_in_reports: includeInReports,
         });
         toast.success("Book updated!");
       } else {
@@ -257,6 +262,7 @@ export default function Books() {
           description: description.trim() || "",
           currency,
           color,
+          include_in_reports: includeInReports,
         });
         toast.success("Book created!");
       }
@@ -380,6 +386,16 @@ export default function Books() {
                           />
                         ))}
                       </div>
+                    </div>
+                    <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+                      <Label htmlFor="book-include-reports" className="text-sm font-medium">
+                        Include in Reports
+                      </Label>
+                      <Switch
+                        id="book-include-reports"
+                        checked={includeInReports}
+                        onCheckedChange={setIncludeInReports}
+                      />
                     </div>
                   </div>
                 </div>

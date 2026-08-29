@@ -18,6 +18,7 @@ import { hardRefresh } from "@/lib/hardRefresh";
 import {
   BarChart3,
   BookOpen,
+  CircleDollarSign,
   LayoutDashboard,
   LogOut,
   Moon,
@@ -33,8 +34,9 @@ import { useNavigate } from "react-router-dom";
 const mainItems = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Books", url: "/books", icon: BookOpen },
-  { title: "Debts", url: "/debts", icon: Wallet },
   { title: "Split Bills", url: "/split-bills", icon: SplitSquareHorizontal },
+  { title: "Debts", url: "/debts", icon: Wallet },
+  { title: "Money Tracker", url: "/money-tracker", icon: CircleDollarSign },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

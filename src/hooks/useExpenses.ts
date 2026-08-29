@@ -30,6 +30,9 @@ export interface Expense {
   tags: string[] | null;
   paid_by: string;
   created_by: string;
+  source_type: string | null;
+  source_id: string | null;
+  source_occurrence_date: string | null;
   created_at: string;
   updated_at: string;
   categories: Pick<Category, "name" | "icon" | "color"> | null;
@@ -54,6 +57,9 @@ type ExpensePayload = {
   payment_method?: string;
   notes?: string;
   tags?: string[];
+  source_type?: string | null;
+  source_id?: string | null;
+  source_occurrence_date?: string | null;
 };
 
 type ExpenseUpdate = {
@@ -286,6 +292,9 @@ export function useExpenses(bookId: string) {
           tags: payload.tags ?? [],
           paid_by: uid,
           created_by: uid,
+          source_type: payload.source_type ?? null,
+          source_id: payload.source_id ?? null,
+          source_occurrence_date: payload.source_occurrence_date ?? null,
         })
         .select("*")
         .single();
@@ -366,9 +375,12 @@ export function useExpenses(bookId: string) {
         payment_method: expense.payment_method ?? "cash",
         notes: expense.notes ?? null,
         tags: expense.tags ?? [],
-        paid_by: uid,
-        created_by: uid,
-      }));
+          paid_by: uid,
+          created_by: uid,
+          source_type: expense.source_type ?? null,
+          source_id: expense.source_id ?? null,
+          source_occurrence_date: expense.source_occurrence_date ?? null,
+        }));
       const { error } = await supabase.from("expenses").insert(rows);
       if (error) throw error;
       return targetBookIds;
@@ -454,6 +466,9 @@ export function useExpenses(bookId: string) {
           tags: expense.tags ?? [],
           paid_by: uid,
           created_by: uid,
+          source_type: expense.source_type ?? null,
+          source_id: expense.source_id ?? null,
+          source_occurrence_date: expense.source_occurrence_date ?? null,
         })),
       );
       const { error } = await supabase.from("expenses").insert(rows);

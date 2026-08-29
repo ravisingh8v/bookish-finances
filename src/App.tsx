@@ -13,6 +13,7 @@ import Auth from "./pages/Auth";
 import BookDetail from "./pages/BookDetail";
 import Books from "./pages/Books";
 import Dashboard from "./pages/Dashboard";
+import MoneyTracker from "./pages/MoneyTracker";
 import DebtDetail from "./pages/DebtDetail";
 import Debts from "./pages/Debts";
 import NotFound from "./pages/NotFound";
@@ -52,6 +53,7 @@ const App = () => (
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/debts" element={<Debts />} />
                 <Route path="/debts/:debtId" element={<DebtDetail />} />
+                <Route path="/money-tracker" element={<MoneyTracker />} />
                 <Route path="/dues" element={<Navigate to="/debts" replace />} />
                 <Route path="/dues/:dueId" element={<LegacyDueRedirect />} />
                 <Route path="/split-bills" element={<SplitBills />} />

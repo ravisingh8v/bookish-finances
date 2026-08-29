@@ -349,6 +349,7 @@ export default function BookDetail() {
   const [editBookDesc, setEditBookDesc] = useState("");
   const [editBookCurrency, setEditBookCurrency] = useState("INR");
   const [editBookColor, setEditBookColor] = useState("#10B981");
+  const [editBookIncludeInReports, setEditBookIncludeInReports] = useState(true);
 
   const openEditBook = () => {
     if (!book) return;
@@ -357,6 +358,7 @@ export default function BookDetail() {
     setEditBookDesc(book.description ?? "");
     setEditBookCurrency(book.currency ?? "INR");
     setEditBookColor(book.color ?? "#10B981");
+    setEditBookIncludeInReports(book.include_in_reports ?? true);
     setEditBookOpen(true);
   };
 
@@ -373,6 +375,7 @@ export default function BookDetail() {
         description: editBookDesc.trim() || "",
         currency: editBookCurrency,
         color: editBookColor,
+        include_in_reports: editBookIncludeInReports,
       });
       toast.success("Book updated");
       setEditBookOpen(false);
@@ -1454,6 +1457,8 @@ export default function BookDetail() {
                 setCurrency={setEditBookCurrency}
                 color={editBookColor}
                 setColor={setEditBookColor}
+                includeInReports={editBookIncludeInReports}
+                setIncludeInReports={setEditBookIncludeInReports}
                 onSave={saveEditBook}
                 isSaving={updateBook.isPending}
                 buttonText="Save Changes"

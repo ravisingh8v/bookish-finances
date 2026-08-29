@@ -14,6 +14,7 @@ export interface Book {
   icon: string;
   sort_order: number;
   archived: boolean;
+  include_in_reports: boolean;
   created_at: string;
   updated_at: string;
   created_by: string;
@@ -27,6 +28,7 @@ type BookInput = {
   currency?: string;
   color?: string;
   icon?: string;
+  include_in_reports?: boolean;
 };
 
 type BookUpdate = BookInput & {
@@ -144,6 +146,7 @@ export function useBooks() {
           currency: book.currency ?? "INR",
           color: book.color ?? "#10B981",
           icon: book.icon ?? "wallet",
+          include_in_reports: book.include_in_reports ?? true,
           created_by: userId,
         })
         .select()
@@ -168,6 +171,8 @@ export function useBooks() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["books"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["analytics"] });
     },
   });
 
@@ -182,6 +187,7 @@ export function useBooks() {
           currency: params.currency,
           color: params.color,
           icon: params.icon,
+          include_in_reports: params.include_in_reports ?? true,
         })
         .eq("id", params.bookId);
       if (error) throw error;
@@ -238,6 +244,7 @@ export function useBooks() {
           currency: source.currency,
           color: source.color,
           icon: source.icon,
+          include_in_reports: source.include_in_reports,
           created_by: userId,
         })
         .select()

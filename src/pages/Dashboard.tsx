@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/hooks/useAuth";
 import { Book, useBooks } from "@/hooks/useBooks";
 import { useOfflineSync } from "@/hooks/useOfflineSync";
@@ -74,6 +75,7 @@ export default function Dashboard() {
   const [editDescription, setEditDescription] = useState("");
   const [editCurrency, setEditCurrency] = useState("INR");
   const [editColor, setEditColor] = useState(COLORS[0]);
+  const [editIncludeInReports, setEditIncludeInReports] = useState(true);
 
   // Duplicate dialog state
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false);
@@ -86,6 +88,7 @@ export default function Dashboard() {
     setEditDescription("");
     setEditCurrency("INR");
     setEditColor(COLORS[0]);
+    setEditIncludeInReports(true);
     setEditingBook(null);
   };
 
@@ -96,6 +99,7 @@ export default function Dashboard() {
     setEditDescription(book.description ?? "");
     setEditCurrency(book.currency);
     setEditColor(book.color);
+    setEditIncludeInReports(book.include_in_reports ?? true);
     setEditingBook(book);
     setOpenEdit(true);
   };
@@ -115,6 +119,7 @@ export default function Dashboard() {
         description: editDescription.trim() || undefined,
         currency: editCurrency,
         color: editColor,
+        include_in_reports: editIncludeInReports,
       });
       toast.success("Book updated!");
       setOpenEdit(false);
@@ -163,9 +168,10 @@ export default function Dashboard() {
       const { data: expenses, error } = await supabase
         .from("expenses")
         .select(
-          "amount , expense_type,  expense_books!inner(id,name,book_members!inner(user_id,role))",
+          "amount, expense_type, expense_books!inner(id,name,include_in_reports,book_members!inner(user_id,role))",
         )
         .eq("expense_books.book_members.user_id", user.id)
+        .eq("expense_books.include_in_reports", true)
         .eq("paid_by", user.id);
       if (error) throw error;
       const totalExpense =
@@ -523,6 +529,16 @@ export default function Dashboard() {
                       />
                     ))}
                   </div>
+                </div>
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+                  <Label htmlFor="edit-book-include-reports" className="text-sm font-medium">
+                    Include in Reports
+                  </Label>
+                  <Switch
+                    id="edit-book-include-reports"
+                    checked={editIncludeInReports}
+                    onCheckedChange={setEditIncludeInReports}
+                  />
                 </div>
               </div>
             </div>

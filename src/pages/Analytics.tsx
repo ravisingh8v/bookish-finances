@@ -53,9 +53,10 @@ export default function Analytics() {
       let query = supabase
         .from("expenses")
         .select(
-          "*, categories(name, color), expense_books!inner(id,name,book_members!inner(user_id,role))",
+          "*, categories(name, color), expense_books!inner(id,name,include_in_reports,book_members!inner(user_id,role))",
         )
         .eq("expense_books.book_members.user_id", user.id)
+        .eq("expense_books.include_in_reports", true)
         .eq("paid_by", user.id);
       if (selectedBook !== "all") query = query.eq("book_id", selectedBook);
       if (selectedMember !== "all")

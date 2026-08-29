@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -22,6 +23,8 @@ interface EditBookFormProps {
   setCurrency: (value: string) => void;
   color: string;
   setColor: (value: string) => void;
+  includeInReports: boolean;
+  setIncludeInReports: (value: boolean) => void;
   onSave: () => Promise<void>;
   isSaving: boolean;
   buttonText?: string;
@@ -37,6 +40,8 @@ export function EditBookForm({
   setCurrency,
   color,
   setColor,
+  includeInReports,
+  setIncludeInReports,
   onSave,
   isSaving,
   buttonText = "Save Changes",
@@ -111,6 +116,16 @@ export function EditBookForm({
             />
           ))}
         </div>
+      </div>
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-3">
+        <Label htmlFor="book-include-reports" className="text-sm font-medium">
+          Include in Reports
+        </Label>
+        <Switch
+          id="book-include-reports"
+          checked={includeInReports}
+          onCheckedChange={setIncludeInReports}
+        />
       </div>
       <div className="flex gap-3 pt-2">
         <Button

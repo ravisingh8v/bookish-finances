@@ -461,6 +461,7 @@ export type Database = {
           description: string | null
           icon: string
           id: string
+          include_in_reports: boolean
           name: string
           sort_order: number
           updated_at: string
@@ -474,6 +475,7 @@ export type Database = {
           description?: string | null
           icon?: string
           id?: string
+          include_in_reports?: boolean
           name: string
           sort_order?: number
           updated_at?: string
@@ -487,6 +489,7 @@ export type Database = {
           description?: string | null
           icon?: string
           id?: string
+          include_in_reports?: boolean
           name?: string
           sort_order?: number
           updated_at?: string
@@ -506,6 +509,9 @@ export type Database = {
           notes: string | null
           paid_by: string
           payment_method: string | null
+          source_id: string | null
+          source_occurrence_date: string | null
+          source_type: string | null
           tags: string[] | null
           title: string
           updated_at: string
@@ -522,6 +528,9 @@ export type Database = {
           notes?: string | null
           paid_by: string
           payment_method?: string | null
+          source_id?: string | null
+          source_occurrence_date?: string | null
+          source_type?: string | null
           tags?: string[] | null
           title: string
           updated_at?: string
@@ -538,6 +547,9 @@ export type Database = {
           notes?: string | null
           paid_by?: string
           payment_method?: string | null
+          source_id?: string | null
+          source_occurrence_date?: string | null
+          source_type?: string | null
           tags?: string[] | null
           title?: string
           updated_at?: string
@@ -555,6 +567,87 @@ export type Database = {
             columns: ["category_id"]
             isOneToOne: false
             referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      money_tracker_items: {
+        Row: {
+          account: string | null
+          active: boolean
+          amount: number
+          automation_preference: string
+          category_id: string | null
+          created_at: string
+          end_date: string | null
+          frequency: string
+          id: string
+          item_type: string
+          last_processed_date: string | null
+          metadata: Json
+          name: string
+          notes: string | null
+          schedule_day: number | null
+          start_date: string | null
+          target_book_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          account?: string | null
+          active?: boolean
+          amount?: number
+          automation_preference?: string
+          category_id?: string | null
+          created_at?: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          item_type: string
+          last_processed_date?: string | null
+          metadata?: Json
+          name: string
+          notes?: string | null
+          schedule_day?: number | null
+          start_date?: string | null
+          target_book_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          account?: string | null
+          active?: boolean
+          amount?: number
+          automation_preference?: string
+          category_id?: string | null
+          created_at?: string
+          end_date?: string | null
+          frequency?: string
+          id?: string
+          item_type?: string
+          last_processed_date?: string | null
+          metadata?: Json
+          name?: string
+          notes?: string | null
+          schedule_day?: number | null
+          start_date?: string | null
+          target_book_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "money_tracker_items_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "money_tracker_items_target_book_id_fkey"
+            columns: ["target_book_id"]
+            isOneToOne: false
+            referencedRelation: "expense_books"
             referencedColumns: ["id"]
           },
         ]
