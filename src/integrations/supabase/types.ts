@@ -461,7 +461,6 @@ export type Database = {
           description: string | null
           icon: string
           id: string
-          include_in_reports: boolean
           name: string
           sort_order: number
           updated_at: string
@@ -475,7 +474,6 @@ export type Database = {
           description?: string | null
           icon?: string
           id?: string
-          include_in_reports?: boolean
           name: string
           sort_order?: number
           updated_at?: string
@@ -489,7 +487,6 @@ export type Database = {
           description?: string | null
           icon?: string
           id?: string
-          include_in_reports?: boolean
           name?: string
           sort_order?: number
           updated_at?: string
@@ -509,9 +506,6 @@ export type Database = {
           notes: string | null
           paid_by: string
           payment_method: string | null
-          source_id: string | null
-          source_occurrence_date: string | null
-          source_type: string | null
           tags: string[] | null
           title: string
           updated_at: string
@@ -528,9 +522,6 @@ export type Database = {
           notes?: string | null
           paid_by: string
           payment_method?: string | null
-          source_id?: string | null
-          source_occurrence_date?: string | null
-          source_type?: string | null
           tags?: string[] | null
           title: string
           updated_at?: string
@@ -547,9 +538,6 @@ export type Database = {
           notes?: string | null
           paid_by?: string
           payment_method?: string | null
-          source_id?: string | null
-          source_occurrence_date?: string | null
-          source_type?: string | null
           tags?: string[] | null
           title?: string
           updated_at?: string
