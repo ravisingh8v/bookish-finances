@@ -80,6 +80,10 @@ function numberValue(value: unknown) {
   return Number(value) || 0;
 }
 
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function errorMessage(error: unknown) {
   if (error instanceof Error) return error.message;
   if (
@@ -210,23 +214,30 @@ export default function MoneyTracker() {
                 </p>
               </div>
               <div className="flex items-center gap-1 shrink-0">
-                {item.automation_preference === "auto_entry" && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={async (event) => {
-                      event.stopPropagation();
-                      try {
-                        await generateBookEntry.mutateAsync(item);
-                        toast.success("Book entry created");
-                      } catch (error) {
-                        toast.error(errorMessage(error));
-                      }
-                    }}
-                  >
-                    Create Entry
-                  </Button>
-                )}
+                {item.automation_preference === "auto_entry" &&
+                  item.target_book_id &&
+                  numberValue(item.amount) > 0 &&
+                  item.last_processed_date !== todayKey() && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async (event) => {
+                        event.stopPropagation();
+                        try {
+                          await generateBookEntry.mutateAsync(item);
+                          toast.success("Book entry created");
+                        } catch (error: any) {
+                          if (error?.isDuplicateSource) {
+                            toast("An entry for this occurrence already exists");
+                            return;
+                          }
+                          toast.error(errorMessage(error));
+                        }
+                      }}
+                    >
+                      Create Entry
+                    </Button>
+                  )}
                 <Button
                   size="icon"
                   variant="ghost"
