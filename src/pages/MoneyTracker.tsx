@@ -40,6 +40,7 @@ import {
   Receipt,
   Trash2,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -283,22 +284,28 @@ export default function MoneyTracker() {
 
           <TabsContent value="overview" className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                ["Total Invested", overview.totalInvested, PiggyBank],
-                ["Current Value", overview.currentValue, Landmark],
-                ["Monthly Commitments", overview.recurringExpenses + overview.emis + overview.recurringInvestments, CalendarClock],
-                ["EMIs", overview.emis, CreditCard],
-              ].map(([label, value, Icon]) => (
+              {([
+                { label: "Total Invested", value: overview.totalInvested, Icon: PiggyBank },
+                { label: "Current Value", value: overview.currentValue, Icon: Landmark },
+                {
+                  label: "Monthly Commitments",
+                  value: overview.recurringExpenses + overview.emis + overview.recurringInvestments,
+                  Icon: CalendarClock,
+                },
+                { label: "EMIs", value: overview.emis, Icon: CreditCard },
+              ] satisfies { label: string; value: number; Icon: LucideIcon }[]).map(
+                ({ label, value, Icon }) => (
                 <Card key={label as string} className="glass">
                   <CardContent className="p-4 flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-sm text-muted-foreground">{label as string}</p>
-                      <p className="font-display font-bold text-xl">₹{formatINR(value as number)}</p>
+                      <p className="text-sm text-muted-foreground">{label}</p>
+                      <p className="font-display font-bold text-xl">₹{formatINR(value)}</p>
                     </div>
                     <Icon className="h-5 w-5 text-primary" />
                   </CardContent>
                 </Card>
-              ))}
+                ),
+              )}
             </div>
             <Card className="glass">
               <CardHeader>
