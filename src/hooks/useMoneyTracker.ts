@@ -1,5 +1,9 @@
 import { supabase } from "@/integrations/supabase/client";
-import type { Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+import type {
+  Json,
+  TablesInsert,
+  TablesUpdate,
+} from "@/integrations/supabase/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { useAuth } from "./useAuth";
@@ -235,7 +239,7 @@ export function useMoneyTracker() {
             tags: ["money-tracker", item.item_type],
             paid_by: user.id,
             created_by: user.id,
-            source_type: "money_tracker",
+            source_type: item.item_type,
             source_id: item.id,
             source_occurrence_date: occurrenceDate,
           } as never)

@@ -18,6 +18,7 @@ import {
   EyeOff,
   Loader2,
   Lock,
+  Chrome,
   Mail,
   User,
 } from "lucide-react";
@@ -37,7 +38,7 @@ export default function Auth() {
   const [showForgot, setShowForgot] = useState(false);
   const [forgotEmail, setForgotEmail] = useState("");
   const [forgotLoading, setForgotLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const { signIn, signInWithGoogle, signUp } = useAuth();
 
   if (authLoading)
     return (
@@ -82,6 +83,15 @@ export default function Auth() {
     if (error) toast.error(error.message);
     else toast.success("Password reset email sent! Check your inbox.");
     setForgotLoading(false);
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    const { error } = await signInWithGoogle();
+    if (error) {
+      toast.error(error.message);
+      setLoading(false);
+    }
   };
 
   return (
@@ -320,6 +330,28 @@ export default function Auth() {
                         <ArrowRight className="h-4 w-4 ml-2" />
                       </Button>
                     </form>
+                    {isLogin && (
+                      <>
+                        <div className="relative my-5">
+                          <div className="absolute inset-0 flex items-center">
+                            <span className="w-full border-t border-border" />
+                          </div>
+                          <div className="relative flex justify-center text-xs uppercase">
+                            <span className="bg-card px-2 text-muted-foreground">Or continue with</span>
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          onClick={handleGoogleSignIn}
+                          disabled={loading}
+                        >
+                          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Chrome className="h-4 w-4" />}
+                          Continue with Google
+                        </Button>
+                      </>
+                    )}
                     <div className="mt-6 text-center">
                       <button
                         type="button"
