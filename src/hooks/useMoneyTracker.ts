@@ -64,6 +64,37 @@ function isActiveToday(item: MoneyTrackerItem, today: string) {
   return true;
 }
 
+function shouldGenerateToday(item: MoneyTrackerItem, today: Date) {
+  const todayKeyValue = today.toISOString().slice(0, 10);
+  if (!isActiveToday(item, todayKeyValue)) return false;
+
+  if (!item.schedule_day) {
+    return item.item_type === "investment";
+  }
+
+  if (item.frequency === "weekly") {
+    const start = item.start_date ? new Date(`${item.start_date}T00:00:00`) : today;
+    const days = Math.floor((today.getTime() - start.getTime()) / 86400000);
+    return days >= 0 && days % 7 === 0;
+  }
+
+  const dayOfMonth = Math.min(
+    item.schedule_day,
+    new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate(),
+  );
+  if (today.getDate() !== dayOfMonth) return false;
+
+  if (item.frequency === "quarterly" || item.frequency === "yearly") {
+    const start = item.start_date ? new Date(`${item.start_date}T00:00:00`) : today;
+    const monthDistance =
+      (today.getFullYear() - start.getFullYear()) * 12 +
+      (today.getMonth() - start.getMonth());
+    return monthDistance >= 0 && monthDistance % (item.frequency === "yearly" ? 12 : 3) === 0;
+  }
+
+  return true;
+}
+
 function assertOnline(isOnline: boolean) {
   if (!isOnline) {
     throw new Error("You're offline. Connect to the internet to continue.");
@@ -299,20 +330,12 @@ export function useMoneyTracker() {
         item.automation_preference !== "auto_entry" ||
         !item.target_book_id ||
         numberValue(item.amount) <= 0 ||
-        !item.schedule_day ||
-        !isActiveToday(item, todayDate) ||
+        !shouldGenerateToday(item, today) ||
         item.last_processed_date === todayDate ||
         processingRef.current.has(key)
       ) {
         continue;
       }
-      // Compute occurrence day for this month (clamped to month's last day)
-      const lastDayThisMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
-      const occurrenceDay = Math.min(item.schedule_day ?? today.getDate(), lastDayThisMonth);
-      if (occurrenceDay !== today.getDate()) {
-        continue;
-      }
-
       processingRef.current.add(key);
       generateBookEntry.mutate(item, {
         onSettled: () => processingRef.current.delete(key),
