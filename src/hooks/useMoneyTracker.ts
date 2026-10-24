@@ -1,4 +1,5 @@
 import { supabase } from "@/integrations/supabase/client";
+import type { Json, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { useAuth } from "./useAuth";
@@ -53,6 +54,12 @@ function occurrenceForToday(item: MoneyTrackerItem) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function isActiveToday(item: MoneyTrackerItem, today: string) {
+  if (item.start_date && item.start_date > today) return false;
+  if (item.end_date && item.end_date < today) return false;
+  return true;
+}
+
 function assertOnline(isOnline: boolean) {
   if (!isOnline) {
     throw new Error("You're offline. Connect to the internet to continue.");
@@ -80,6 +87,27 @@ export function useMoneyTracker() {
     enabled: !!user && isOnline,
   });
 
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel(`money-tracker-${user.id}-${Math.random().toString(36).slice(2)}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "money_tracker_items",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => queryClient.invalidateQueries({ queryKey: ["money-tracker", user.id] }),
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient, user]);
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["money-tracker"] });
     queryClient.invalidateQueries({ queryKey: ["book-totals"] });
@@ -91,9 +119,27 @@ export function useMoneyTracker() {
     mutationFn: async (payload: MoneyTrackerInput) => {
       assertOnline(isOnline);
       if (!user) throw new Error("User ID not available. Please log in again.");
+      const row: TablesInsert<"money_tracker_items"> = {
+        item_type: payload.item_type,
+        name: payload.name,
+        amount: numberValue(payload.amount),
+        frequency: payload.frequency,
+        schedule_day: payload.schedule_day ?? null,
+        start_date: payload.start_date ?? null,
+        end_date: payload.end_date ?? null,
+        active: payload.active,
+        automation_preference: payload.automation_preference,
+        target_book_id: payload.target_book_id ?? null,
+        category_id: payload.category_id ?? null,
+        account: payload.account ?? null,
+        notes: payload.notes ?? null,
+        metadata: payload.metadata as Json,
+        last_processed_date: payload.last_processed_date ?? null,
+        user_id: user.id,
+      };
       const { data, error } = await supabase
         .from("money_tracker_items")
-        .insert({ ...payload, user_id: user.id })
+        .insert(row)
         .select("*")
         .single();
       if (error) throw error;
@@ -108,9 +154,30 @@ export function useMoneyTracker() {
       ...payload
     }: Partial<MoneyTrackerInput> & { itemId: string }) => {
       assertOnline(isOnline);
+      const update: TablesUpdate<"money_tracker_items"> = {
+        ...(payload.item_type !== undefined ? { item_type: payload.item_type } : {}),
+        ...(payload.name !== undefined ? { name: payload.name } : {}),
+        ...(payload.amount !== undefined ? { amount: numberValue(payload.amount) } : {}),
+        ...(payload.frequency !== undefined ? { frequency: payload.frequency } : {}),
+        ...(payload.schedule_day !== undefined ? { schedule_day: payload.schedule_day } : {}),
+        ...(payload.start_date !== undefined ? { start_date: payload.start_date } : {}),
+        ...(payload.end_date !== undefined ? { end_date: payload.end_date } : {}),
+        ...(payload.active !== undefined ? { active: payload.active } : {}),
+        ...(payload.automation_preference !== undefined
+          ? { automation_preference: payload.automation_preference }
+          : {}),
+        ...(payload.target_book_id !== undefined ? { target_book_id: payload.target_book_id } : {}),
+        ...(payload.category_id !== undefined ? { category_id: payload.category_id } : {}),
+        ...(payload.account !== undefined ? { account: payload.account } : {}),
+        ...(payload.notes !== undefined ? { notes: payload.notes } : {}),
+        ...(payload.metadata !== undefined ? { metadata: payload.metadata as Json } : {}),
+        ...(payload.last_processed_date !== undefined
+          ? { last_processed_date: payload.last_processed_date }
+          : {}),
+      };
       const { error } = await supabase
         .from("money_tracker_items")
-        .update(payload)
+        .update(update)
         .eq("id", itemId);
       if (error) throw error;
     },
@@ -139,6 +206,9 @@ export function useMoneyTracker() {
       }
 
       const occurrenceDate = occurrenceForToday(item);
+      if (!isActiveToday(item, occurrenceDate)) {
+        throw new Error("This tracker item is outside its active date range.");
+      }
       const title =
         item.item_type === "investment"
           ? `Investment: ${item.name}`
@@ -146,6 +216,11 @@ export function useMoneyTracker() {
             ? `EMI: ${item.name}`
             : item.name;
       try {
+        const expenseType = item.metadata.expenseType === "credit" ? "credit" : "debit";
+        const paymentMethod =
+          typeof item.metadata.paymentMethod === "string" && item.metadata.paymentMethod.trim()
+            ? item.metadata.paymentMethod
+            : "bank_transfer";
         const { data, error } = await supabase
           .from("expenses")
           .insert({
@@ -154,13 +229,13 @@ export function useMoneyTracker() {
             amount: item.amount,
             date: new Date(`${occurrenceDate}T09:00:00`).toISOString(),
             category_id: item.category_id,
-            expense_type: "debit",
-            payment_method: "bank_transfer",
+            expense_type: expenseType,
+            payment_method: paymentMethod,
             notes: item.notes,
             tags: ["money-tracker", item.item_type],
             paid_by: user.id,
             created_by: user.id,
-            source_type: item.item_type,
+            source_type: "money_tracker",
             source_id: item.id,
             source_occurrence_date: occurrenceDate,
           } as never)
@@ -172,6 +247,8 @@ export function useMoneyTracker() {
           .from("money_tracker_items")
           .update({ last_processed_date: todayKey() })
           .eq("id", item.id);
+        queryClient.invalidateQueries({ queryKey: ["expenses", item.target_book_id] });
+        queryClient.invalidateQueries({ queryKey: ["book-detail-totals", item.target_book_id] });
         return data;
       } catch (e: any) {
         // If the insert failed because an entry for this source + occurrence
@@ -219,6 +296,7 @@ export function useMoneyTracker() {
         !item.target_book_id ||
         numberValue(item.amount) <= 0 ||
         !item.schedule_day ||
+        !isActiveToday(item, todayDate) ||
         item.last_processed_date === todayDate ||
         processingRef.current.has(key)
       ) {
