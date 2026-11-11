@@ -15,6 +15,20 @@
       "when": 1787983072645,
       "tag": "0001_grant_category_access",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794378191110,
+      "tag": "0002_recurring_expense_checklist",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794378446959,
+      "tag": "0003_clamp_debt_installment_month_dates",
+      "breakpoints": true
     }
   ]
 }

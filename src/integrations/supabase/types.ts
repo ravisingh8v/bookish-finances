@@ -682,6 +682,65 @@ export type Database = {
         }
         Relationships: []
       }
+      recurring_expense_checklist_completions: {
+        Row: {
+          completed_at: string
+          item_id: string
+          month_start: string
+        }
+        Insert: {
+          completed_at?: string
+          item_id: string
+          month_start: string
+        }
+        Update: {
+          completed_at?: string
+          item_id?: string
+          month_start?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_expense_checklist_completions_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "recurring_expense_checklist_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recurring_expense_checklist_items: {
+        Row: {
+          amount: number | null
+          created_at: string
+          id: string
+          notes: string | null
+          sort_order: number
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          sort_order?: number
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          sort_order?: number
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       split_bills: {
         Row: {
           created_at: string
