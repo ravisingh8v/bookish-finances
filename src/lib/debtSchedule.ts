@@ -31,14 +31,14 @@ export function getDebtDueState(
     return null;
   }
 
-  const nextUnpaid = debt.installments
+  const unpaidInstallments = debt.installments
     .filter((installment) => installment.remaining_amount > 0)
-    .sort(
-      (a, b) =>
-        a.installment_number - b.installment_number ||
-        a.due_date.localeCompare(b.due_date),
-    )[0];
-  const rawDueDate = debt.debt_type === "one_time" ? debt.due_date : nextUnpaid?.due_date;
+    .sort((a, b) => a.installment_number - b.installment_number);
+  const rawDueDate =
+    debt.debt_type === "one_time"
+      ? debt.due_date
+      : unpaidInstallments.find((installment) => installment.due_date.slice(0, 10) <= today)?.due_date ??
+        unpaidInstallments[0]?.due_date;
   if (!rawDueDate) return null;
 
   const dueDate = rawDueDate.slice(0, 10);

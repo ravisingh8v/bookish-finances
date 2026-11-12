@@ -3,6 +3,7 @@ import type { Json } from "@/integrations/supabase/types";
 import { useAuth } from "@/hooks/useAuth";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { getDebtDueState } from "@/lib/debtSchedule";
 
 export type DebtType = "one_time" | "emi" | "custom";
 export type DebtStatus =
@@ -673,6 +674,8 @@ export function useDebts() {
     onError: (error: Error) => toast.error(error.message),
   });
 
+  const currentDate = new Date();
+  const today = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(currentDate.getDate()).padStart(2, "0")}`;
   const summaryOf = (list: Debt[]) => ({
     outstanding: list
       .filter(
@@ -684,15 +687,17 @@ export function useDebts() {
         debt.status,
       ),
     ).length,
-    overdue: list
-      .filter(
-        (debt) =>
-          debt.status === "overdue" ||
-          (!!debt.due_date &&
-            new Date(debt.due_date) < new Date() &&
-            debt.remaining_amount > 0),
-      )
-      .reduce((sum, debt) => sum + debt.remaining_amount, 0),
+    overdue: list.reduce((sum, debt) => {
+      const dueState = getDebtDueState(debt, today);
+      if (!dueState || dueState.kind !== "overdue") return sum;
+      if (debt.debt_type === "one_time") return sum + debt.remaining_amount;
+      const installment = debt.installments.find(
+        (candidate) =>
+          candidate.remaining_amount > 0 &&
+          candidate.due_date.slice(0, 10) === dueState.dueDate,
+      );
+      return sum + (installment?.remaining_amount ?? 0);
+    }, 0),
   });
 
   return {

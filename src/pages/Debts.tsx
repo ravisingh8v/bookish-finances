@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/DashboardLayout";
 import { RecordDebtPayment } from "@/components/RecordDebtPayment";
 import { canRecordPayment } from "@/lib/debtUtils";
+import { getDebtDueState, monthlyScheduleDate } from "@/lib/debtSchedule";
 
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -209,7 +210,7 @@ function EditDebt({
     const each = Math.floor((f.amount * 100) / f.count) / 100;
     return Array.from({ length: f.count }, (_, i) => ({
       amount: i === f.count - 1 ? f.amount - each * i : each,
-      due_date: monthDate(f.firstDate, i),
+      due_date: monthlyScheduleDate(f.firstDate, i),
     }));
   }, [f.amount, f.count, f.firstDate]);
   const valid =
@@ -496,13 +497,12 @@ function DebtCard({
       ? Math.min(100, (debt.paid_amount / debt.total_amount) * 100)
       : 0,
     next = debt.installments?.find((i) => i.remaining_amount > 0);
-  const dueDate = debt.due_date || next?.due_date;
-  const overdue =
-    !!dueDate &&
-    debt.remaining_amount > 0 &&
-    !isCompletedDebt(debt) &&
-    new Date(`${dueDate.slice(0, 10)}T23:59:59`) < new Date();
-  const due = !isCompletedDebt(debt) ? dueInfo(dueDate) : null;
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const dueState = getDebtDueState(debt, today);
+  const dueDate = dueState?.dueDate ?? (debt.debt_type === "one_time" ? debt.due_date : next?.due_date);
+  const overdue = dueState?.kind === "overdue";
+  const due = dueState && dueState.kind !== "upcoming" ? dueInfo(dueState.dueDate) : null;
   const settled = isCompletedDebt(debt);
   const statusKey = overdue ? "overdue" : debt.status;
   return (
@@ -520,7 +520,7 @@ function DebtCard({
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold leading-tight">
+            <p className="break-words [overflow-wrap:anywhere] text-sm font-semibold leading-tight">
               {debt.description}
             </p>
             <p className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -575,7 +575,7 @@ function DebtCard({
           {!due && dueDate && (
             <span className="inline-flex items-center gap-1">
               <Calendar className="h-3 w-3" />
-              {formatDebtDate(dueDate)}
+              {dueState?.kind === "upcoming" ? "Next · " : ""}{formatDebtDate(dueDate)}
             </span>
           )}
         </div>
@@ -674,12 +674,6 @@ const blank: Form = {
   interest: 0,
   months: 6,
 };
-const monthDate = (date: string, n: number) => {
-  const d = new Date(`${date}T12:00:00`);
-  d.setMonth(d.getMonth() + n);
-  return d.toISOString().slice(0, 10);
-};
-
 function AddDebt({ create }: { create: (p: DebtInput) => Promise<unknown> }) {
   const [open, setOpen] = useState(false),
     [f, setF] = useState(blank);
@@ -694,7 +688,7 @@ function AddDebt({ create }: { create: (p: DebtInput) => Promise<unknown> }) {
     const each = Math.floor((f.amount * 100) / f.count) / 100;
     return Array.from({ length: f.count }, (_, i) => ({
       amount: i === f.count - 1 ? f.amount - each * i : each,
-      due_date: monthDate(f.firstDate, i),
+      due_date: monthlyScheduleDate(f.firstDate, i),
     }));
   }, [f.amount, f.count, f.firstDate]);
   const valid =

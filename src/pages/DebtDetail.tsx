@@ -107,7 +107,7 @@ export default function DebtDetail() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold">{debt.description}</h1>
+              <h1 className="min-w-0 break-words [overflow-wrap:anywhere] text-2xl font-bold">{debt.description}</h1>
               <Badge>{pretty(debt.status)}</Badge>
             </div>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -216,14 +216,14 @@ export default function DebtDetail() {
                 {debt.installments.length ? (
                   debt.installments.map((i) => (
                     <div
-                      className="flex items-center justify-between py-3"
+                      className="flex flex-wrap items-start justify-between gap-3 py-3"
                       key={i.id}
                     >
-                      <div>
+                      <div className="min-w-0 flex-1">
                         <p className="font-medium">
                           Installment {i.installment_number}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="break-words [overflow-wrap:anywhere] text-xs text-muted-foreground">
                           Due {formatDebtDate(i.due_date)}
                         </p>
                       </div>
