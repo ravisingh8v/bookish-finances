@@ -23,6 +23,7 @@ import {
   LogOut,
   Moon,
   RefreshCw,
+  Repeat,
   Settings,
   SplitSquareHorizontal,
   Sun,
@@ -37,6 +38,7 @@ const mainItems = [
   { title: "Split Bills", url: "/split-bills", icon: SplitSquareHorizontal },
   { title: "Debts", url: "/debts", icon: Wallet },
   { title: "Money Tracker", url: "/money-tracker", icon: CircleDollarSign },
+  { title: "Recurring Checklist", url: "/recurring-checklist", icon: Repeat },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
   { title: "Settings", url: "/settings", icon: Settings },
 ];

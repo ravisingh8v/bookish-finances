@@ -105,7 +105,7 @@ export default function DebtDetail() {
           </Link>
         </Button>
         <div className="flex items-start justify-between gap-3">
-          <div>
+          <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <h1 className="min-w-0 break-words [overflow-wrap:anywhere] text-2xl font-bold">{debt.description}</h1>
               <Badge>{pretty(debt.status)}</Badge>

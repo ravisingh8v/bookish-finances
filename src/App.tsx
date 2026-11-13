@@ -20,6 +20,7 @@ import NotFound from "./pages/NotFound";
 import ResetPassword from "./pages/ResetPassword";
 import SettingsPage from "./pages/SettingsPage";
 import SplitBills from "./pages/SplitBills";
+import RecurringChecklist from "./pages/RecurringChecklist";
 
 import queryClient from "@/lib/queryClient";
 
@@ -54,6 +55,7 @@ const App = () => (
                 <Route path="/debts" element={<Debts />} />
                 <Route path="/debts/:debtId" element={<DebtDetail />} />
                 <Route path="/money-tracker" element={<MoneyTracker />} />
+                <Route path="/recurring-checklist" element={<RecurringChecklist />} />
                 <Route path="/dues" element={<Navigate to="/debts" replace />} />
                 <Route path="/dues/:dueId" element={<LegacyDueRedirect />} />
                 <Route path="/split-bills" element={<SplitBills />} />

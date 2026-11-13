@@ -7,14 +7,15 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useBooks } from "@/hooks/useBooks";
 import { useExpenses } from "@/hooks/useExpenses";
 import { ChecklistItem, ChecklistSourceExpense, useRecurringExpenseChecklist } from "@/hooks/useRecurringExpenseChecklist";
 import { formatINR } from "@/lib/utils";
-import { ArrowLeft, ArrowRight, Check, CircleDollarSign, Loader2, Plus, RotateCcw, Trash2 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ArrowLeft, ArrowRight, CircleDollarSign, Loader2, Pencil, Plus, RotateCcw, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
@@ -36,6 +37,13 @@ function ChecklistEditor({
   const [title, setTitle] = useState(item?.title ?? "");
   const [amount, setAmount] = useState(item?.amount == null ? "" : String(item.amount));
   const [notes, setNotes] = useState(item?.notes ?? "");
+
+  useEffect(() => {
+    if (!open) return;
+    setTitle(item?.title ?? "");
+    setAmount(item?.amount == null ? "" : String(item.amount));
+    setNotes(item?.notes ?? "");
+  }, [item, open]);
 
   const start = () => {
     setTitle(item?.title ?? "");
@@ -198,8 +206,8 @@ export default function RecurringChecklist() {
             <p className="mt-1 max-w-xl text-sm text-muted-foreground">A reusable list for regular expenses. Mark payments as you make them, then reset the month without rebuilding your list.</p>
           </div>
           <div className="flex shrink-0 gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => { setEditing(null); setEditorOpen(true); }}><Plus className="h-4 w-4" /><span className="hidden sm:inline">Add expense</span></Button>
-            <Button variant="secondary" className="gap-2" onClick={() => setImportOpen(true)}>Copy from Book</Button>
+            <Button variant="outline" className="gap-2" disabled={!isOnline} onClick={() => { setEditing(null); setEditorOpen(true); }}><Plus className="h-4 w-4" /><span className="hidden sm:inline">Add expense</span></Button>
+            <Button variant="secondary" className="gap-2" disabled={!isOnline} onClick={() => setImportOpen(true)}>Copy from Book</Button>
           </div>
         </div>
 
@@ -212,18 +220,18 @@ export default function RecurringChecklist() {
           </div>
           <div className="flex items-center gap-3">
             <Badge variant={remainingCount === 0 && items.length > 0 ? "default" : "secondary"}>{completedCount} / {items.length} paid</Badge>
-            {completedCount > 0 && <Button variant="ghost" size="sm" disabled={isUpdating} onClick={() => setResetOpen(true)}><RotateCcw className="mr-1.5 h-4 w-4" />Reset month</Button>}
+            {items.length > 0 && remainingCount === 0 && <Button variant="ghost" size="sm" disabled={isUpdating} onClick={() => setResetOpen(true)}><RotateCcw className="mr-1.5 h-4 w-4" />Reset month</Button>}
           </div>
         </div>
 
-        {items.length > 0 && <div className="h-1.5 overflow-hidden rounded-full bg-secondary"><div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress}%` }} /></div>}
+        {items.length > 0 && <Progress value={progress} className="h-1.5" />}
 
         {!isOnline && <p className="text-sm text-destructive">Connect to the internet to manage this checklist.</p>}
         {isLoading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div> : items.length === 0 ? (
           <Card><CardContent className="flex flex-col items-center gap-3 py-14 text-center">
             <CircleDollarSign className="h-10 w-10 text-muted-foreground" />
             <div><h2 className="font-semibold">Your reusable list starts here</h2><p className="mt-1 max-w-md text-sm text-muted-foreground">Add regular expenses yourself or copy entries from any Book. Mark each one paid every month.</p></div>
-            <Button onClick={() => { setEditing(null); setEditorOpen(true); }}><Plus className="mr-2 h-4 w-4" />Add first expense</Button>
+            <Button disabled={!isOnline} onClick={() => { setEditing(null); setEditorOpen(true); }}><Plus className="mr-2 h-4 w-4" />Add first expense</Button>
           </CardContent></Card>
         ) : (
           <div className="divide-y">
@@ -237,7 +245,7 @@ export default function RecurringChecklist() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {item.amount != null && <span className={`text-sm font-semibold ${complete ? "text-muted-foreground" : ""}`}>{formatINR(Number(item.amount) || 0)}</span>}
-                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Edit ${item.title}`} disabled={!isOnline} onClick={() => { setEditing(item); setEditorOpen(true); }}><Check className="hidden" /><span className="sr-only">Edit</span><Plus className="h-4 w-4 rotate-45" /></Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" aria-label={`Edit ${item.title}`} disabled={!isOnline} onClick={() => { setEditing(item); setEditorOpen(true); }}><Pencil className="h-4 w-4" /></Button>
                   <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground sm:hover:text-destructive" aria-label={`Delete ${item.title}`} disabled={!isOnline} onClick={() => {
                     if (window.confirm(`Remove “${item.title}” from your reusable list?`)) void deleteItem(item.id);
                   }}><Trash2 className="h-4 w-4" /></Button>

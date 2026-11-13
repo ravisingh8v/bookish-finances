@@ -504,7 +504,11 @@ function DebtCard({
   const overdue = dueState?.kind === "overdue";
   const due = dueState && dueState.kind !== "upcoming" ? dueInfo(dueState.dueDate) : null;
   const settled = isCompletedDebt(debt);
-  const statusKey = overdue ? "overdue" : debt.status;
+  const statusKey = overdue
+    ? "overdue"
+    : debt.status === "overdue" && dueState?.kind !== "overdue"
+      ? "accepted"
+      : debt.status;
   return (
     <Card
       className={`flex flex-col transition-all hover:shadow-sm ${

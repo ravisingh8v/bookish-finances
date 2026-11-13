@@ -97,7 +97,9 @@ export function useRecurringExpenseChecklist(monthStart: string) {
         return;
       }
       const row: TablesInsert<"recurring_expense_checklist_items"> = {
-        ...values,
+        title: input.title.trim(),
+        ...(input.amount === null ? {} : { amount: input.amount }),
+        ...(input.notes === null ? {} : { notes: input.notes }),
         user_id: user.id,
         sort_order: (checklistQuery.data?.items.length ?? 0),
       };
