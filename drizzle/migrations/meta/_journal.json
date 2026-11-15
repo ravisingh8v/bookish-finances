@@ -29,6 +29,13 @@
       "when": 1794378446959,
       "tag": "0003_clamp_debt_installment_month_dates",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794718087013,
+      "tag": "0004_fix_custom_installment_anchor",
+      "breakpoints": true
     }
   ]
 }
